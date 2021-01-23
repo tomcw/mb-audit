@@ -1,0 +1,223 @@
+;ACME 0.96.4
+
+!cpu 6502	; Compatible with all Apple2's
+!to "mb-audit", plain
+!sl "mb-audit.labels"
+*=$2000
+
+;------------------------------------------------------------------------------
+
+!source "AppleDefs.a"
+!source "MockingboardDefs.a"
+
+;------------------------------------------------------------------------------
+
+ZP_BASE = $f0
+
+MBBase	= $fc		; Mockingboard base
+MBBaseL	= MBBase
+MBBaseH	= MBBase+1
+
+;------------------------------------------------------------------------------
+
+!zone code
+
+entrypoint
+
+	ldx		#($ff-ZP_BASE)
+-		lda		ZP_BASE,x
+		sta		saveZP,x
+		dex
+		bpl		-
+		
+	;
+
+	jsr		GetSlotInfo
+	bne		+
+		lda		#<msg_NoMB
+		ldx		#>msg_NoMB
+		jsr		Print
+		jmp		exit
+
++	jsr		HOME
+	jsr		Display
+
+	lda		#7
+	sta		slotUnderTest
+.nextSlot
+		ldx		slotUnderTest
+		lda		slotInfo,x
+		beq		+
+		jsr		TestCard
+		bne		+
+			lda		#<msg_CardFailed
+			ldx		#>msg_CardFailed
+			jsr		Print
+			jmp		exit
++		dec		slotUnderTest
+		bne		.nextSlot
+
+	lda		#<msg_OK
+	ldx		#>msg_OK
+	jsr		Print
+
+	;
+
+exit
+
+	ldx		#($ff-ZP_BASE)
+-		lda		saveZP,x
+		sta		ZP_BASE,x
+		dex
+		bpl		-
+
+	rts
+
+;------------------------------------------------------------------------------
+
+; Post: Z=0(BNE):OK, Z=1(BEQ):Failed
+TestCard
+	lda		#1
+	rts
+
+;------------------------------------------------------------------------------
+
+Display
+;              1234567
+;          $00:    MP		;V=6522(VIA), M=MB-C, P=Phasor
+;          $80:   VMP
+
+	lda		#$80+'$'
+	sta		$480+$1d
+	sta		$500+$1d
+	lda		#$80+'0'
+	sta		$480+$1e
+	sta		$480+$1f
+	sta		$500+$1f
+	lda		#$80+'8'
+	sta		$500+$1e
+	lda		#$80+':'
+	sta		$480+$20
+	sta		$500+$20
+
+	ldx		#7
+
+-		txa
+		ora		#$B0
+		sta		$400+$20,x		; '1234567'
+
+		lda		slotInfo,x
+		lsr
+		pha
+		lda		#$80+' '		; C not affected
+		bcc		+
+		lda		#$80+'V'
++		sta		$480+$20,x		; 'V' or ' '
+
+		pla
+		lsr
+		lda		#$80+' '		; C not affected
+		bcc		+
+		lda		#$80+'V'
++		sta		$500+$20,x		; 'V' or ' '
+
+		dex
+		bne		-
+
+	rts
+
+;------------------------------------------------------------------------------
+
+; Post: Z=1 (BEQ) if nothing found
+GetSlotInfo
+	ldx		#7
+-		lda		#0
+		sta		slotInfo,x
+		jsr		Detect
+		dex
+		bne		-
+
+	lda		#0
+	ldx		#7
+-		ora		slotInfo,x
+		dex
+		bne		-
+	tax
+	rts
+
+;
+
+; Pre: x=slot#
+; TODO: FastChip read of T1C_L is 1 cycle less - see "4cade" detection code
+Detect
+	txa
+	ora		#$c0
+	sta		MBBaseH
+	lda		#0
+	sta		MBBaseL
+
+.check_00
+	ldy		#SY6522_A_BASE+SY6522_TIMER1L_COUNTER
+	jsr		SF_GetTimerL
+	bne		.check_80
+
+	inc		slotInfo,x		; bit0=1
+
+.check_80
+	ldy		#SY6522_A_BASE+SY6522_TIMER1L_COUNTER
+	jsr		SF_GetTimerL
+	bne		+
+
+	inc		slotInfo,x
+	inc		slotInfo,x		; bit1=1
+
++	rts
+
+SF_GetTimerL:
+	lda		(MBBase),y
+	cmp		MBBaseL
+	sbc		(MBBase),y
+	cmp		#$08
+	rts
+
+;------------------------------------------------------------------------------
+
+; Pre: A(l),X(h) = msg addr
+Print
+	sta		$fe
+	stx		$ff
+	ldy		#0
+.loop	lda		($fe),y
+		beq		.pdone
+		ora		#$80	; set high bit
+		tax
+		tya
+		pha
+		txa
+		jsr		COUT
+		pla
+		tay
+		iny
+		bne 	.loop
+.pdone
+	rts
+
+;------------------------------------------------------------------------------
+
+!zone data
+
+!align 15, 0, 0		; align to 16 bytes (pad with 0's)
+
+saveZP			!fill ($100-ZP_BASE),0
+slotInfo		!fill 8,0	; slot[0..7] : bits: 0=6522/$00, 1=6522/$80
+
+slotUnderTest	!byte 0
+
+msg_NoMB !text "No Mockingboard detected!",0xd,0xa
+msg_NoMBEnd !text 0
+
+msg_CardFailed !text "Mockingboard failed tests!",0xd,0xa
+msg_CardFailedEnd !text 0
+
+msg_OK !text "All tests passed",0xd,0xa
+msg_OKEnd !text 0

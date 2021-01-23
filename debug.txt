@@ -1,0 +1,5 @@
+// run "debug.txt"
+bload "mb-audit",2000
+
+asc msg0:msg0End
+asc msg_NoMB:msg_NoMBEnd
