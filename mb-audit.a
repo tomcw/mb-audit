@@ -396,20 +396,21 @@ DetectSubunits
 
 @detectSSI263
 	; SSI263 is only on MB-C & Phasor, both of which have 2x 6522's
+	; - Speech using 6522 PCR w/o IRQ (Willy Byte's SSI263 detection code)
 
 	lda		zpTmp1
 	and		#1
 	beq		@detectSC01
 
 	lda		#IxR_SSI263
-	ldy		#SY6522_IER+SY6522_B_BASE
+	ldy		#SY6522_B_BASE+SY6522_IER
 	sta		(MBBase),y				; disable CA1(Speech) IRQ
-	ldy		#SY6522_IFR+SY6522_B_BASE
+	ldy		#SY6522_B_BASE+SY6522_IFR
 	sta		(MBBase),y				; clear CA1(Speech) IRQ
 
 	lda		#$0C					; Peripheral for PA port Control: CA2 = low output (Pin18: Power Down/Reset)
 									; CA1 = negative active edge (input) (Pin4: A/!R)
-	ldy		#SY6522_PCR+SY6522_B_BASE
+	ldy		#SY6522_B_BASE+SY6522_PCR
 	sta		(MBBase),y
 
 	lda		#CONTROL_H
@@ -428,13 +429,10 @@ DetectSubunits
 	lda		#$FF
 	jsr		WAIT					; delay for 0x28882 (166018) cycles / ~163ms
 
-	ldy		#SY6522_IFR+SY6522_B_BASE
-	lda		(MBBase),y
-	and		#IxR_SSI263				; check CA1(Speech) IRQ
+	ldy		#SY6522_B_BASE+SY6522_IFR
+	lda		#IxR_SSI263				; check CA1(Speech) IRQ
+	and		(MBBase),y
 	beq		+
-
-	lda		#IxR_SSI263
-	ldy		#SY6522_IFR+SY6522_B_BASE
 	sta		(MBBase),y				; clear CA1(Speech) IRQ
 
 	jsr		DisableSSI263
@@ -447,6 +445,38 @@ DetectSubunits
 
 @detectSC01
 	; SC01 is only on MB-Speech, MB-Sound/Speech + AppleWin's hybrid MB
+	; - Speech using 6522 PCR w/o IRQ (Crimewave's SC01 detection code)
+
+	lda		#IxR_VOTRAX
+	ldy		#SY6522_A_BASE+SY6522_IER
+	sta		(MBBase),y				; disable CB1(Speech) IRQ
+	ldy		#SY6522_A_BASE+SY6522_IFR
+	sta		(MBBase),y				; clear CB1(Speech) IRQ
+
+	ldy		#SY6522_A_BASE+SY6522_DDRB
+	lda		#$FF
+	sta		(MBBase),y
+
+	lda		#$B0
+	ldy		#SY6522_A_BASE+SY6522_PCR
+	sta		(MBBase),y
+
+	ldy		#SY6522_A_BASE+SY6522_ORB
+	lda		#$03					; PAUSE0
+	sta		(MBBase),y
+
+	lda		#$FF
+	jsr		WAIT					; delay for 0x28882 (166018) cycles / ~163ms
+
+	ldy		#SY6522_A_BASE+SY6522_IFR
+	lda		#IxR_VOTRAX				; check CA1(Speech) IRQ
+	and		(MBBase),y
+	beq		+
+	sta		(MBBase),y				; clear CA1(Speech) IRQ
+
+	inc		hasSC01
+
++
 
 	;
 
@@ -561,12 +591,6 @@ DisplayCardUpdate
 	; Update cards
 	;
 
-	lda		isPhasorCard
-	beq		+
-		lda		#$80+'P'
-		sta		$480+$20,x
-		sta		$500+$20,x
-
 +	lda		zpTmp1
 	cmp		#1
 	bne		+
@@ -581,13 +605,21 @@ DisplayCardUpdate
 +	lda		zpTmp1
 	cmp		#3
 	bne		+
+		lda		hasSSI263
+		bne		+++
 		lda		hasSC01
 		beq		+++
-			lda		#$80+'2'	; MB-Sound II has 2x 6522 (and maybe w/SC01?)
+			lda		#$80+'2'	; MB-Sound II has 2x 6522 (and maybe w/SC01?), but no SSI263
 			bne		++
 +++			lda		#$80+'C'	; MB-Sound II or MB-C
 			bne		++
 ++		sta		$480+$20,x
+		sta		$500+$20,x
+
+	lda		isPhasorCard		; Phasor trumps MB-C
+	beq		+
+		lda		#$80+'P'
+		sta		$480+$20,x
 		sta		$500+$20,x
 
 	;
