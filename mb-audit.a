@@ -49,6 +49,9 @@ entrypoint
 		jmp		exit
 
 +	jsr		HOME
+	lda		#<msg_mbaudit
+	ldx		#>msg_mbaudit
+	jsr		Print
 	jsr		Display
 
 	lda		#7
@@ -59,9 +62,17 @@ entrypoint
 		beq		+
 		jsr		Diagnose6522
 		bne		+
-			lda		#<msg_CardFailed
-			ldx		#>msg_CardFailed
+			lda		#<msg_TestFailed
+			ldx		#>msg_TestFailed
 			jsr		Print
+			ldx		testNum
+			jsr		PRNTX
+			lda		#$80+':'
+			jsr		COUT
+			ldx		subTestNum
+			jsr		PRNTX
+			lda		#$80+$0d
+			jsr		COUT
 			jmp		exit
 +		dec		slotUnderTest
 		bne		@nextSlot
@@ -98,9 +109,16 @@ Diagnose6522
 	lda		#0
 	sta		MBBaseL
 
+	lda		#1
+	sta		testNum
+	lda		#0
+	sta		subTestNum					; test #01.00
+
 	lda		slotInfo,x
 	and		#3							; just 6522's
 	sta		zpTmp1
+
+	inc		subTestNum					; test #01.01
 
 	jsr		Diag6522Datalines
 	bne		+
@@ -240,7 +258,7 @@ Diag6522IRQ
 	ldy		#SY6522_A_BASE+SY6522_ACR
 	sta		(MBBase),y
 
-	lda		#IxR_ENA|IxR_TIMER1
+	lda		#IxR_SET|IxR_TIMER1
 	ldy		#SY6522_A_BASE+SY6522_IER
 	sta		(MBBase),y
 
@@ -253,7 +271,6 @@ Diag6522IRQ
 	beq		@6522_err
 
 	cli
-	nop
 	sei
 
 	and		isrIFR_A
@@ -273,7 +290,7 @@ Diag6522IRQ
 	ldy		#SY6522_B_BASE+SY6522_ACR
 	sta		(MBBase),y
 
-	lda		#IxR_ENA|IxR_TIMER1
+	lda		#IxR_SET|IxR_TIMER1
 	ldy		#SY6522_B_BASE+SY6522_IER
 	sta		(MBBase),y
 
@@ -286,7 +303,6 @@ Diag6522IRQ
 	beq		@6522_err
 
 	cli
-	nop
 	sei
 
 	and		isrIFR_B
@@ -380,6 +396,13 @@ Display
 
 		dex
 		bne		-
+
+	lda		#$80+$0a
+	jsr		COUT
+	lda		#$80+$0a
+	jsr		COUT
+	lda		#$80+$0a
+	jsr		COUT
 
 	rts
 
@@ -487,11 +510,14 @@ isrIFR_B		!byte 0
 saveIRQL		!byte 0
 saveIRQH		!byte 0
 
-msg_NoMB !text "No Mockingboard detected!",0xd,0xa
+msg_mbaudit	!text "mb-audit v0.01, 2021",0xd
+msg_mbauditEnd !text 0
+
+msg_NoMB !text "No Mockingboard detected!",0xd
 msg_NoMBEnd !text 0
 
-msg_CardFailed !text "Mockingboard failed tests!",0xd,0xa
-msg_CardFailedEnd !text 0
+msg_TestFailed !text "Mockingboard failed test #"	; 00:00 (testNum:subTestNum)
+msg_TestFailedEnd !text 0
 
-msg_OK !text "All tests passed",0xd,0xa
+msg_OK !text "All tests passed",0xd
 msg_OKEnd !text 0

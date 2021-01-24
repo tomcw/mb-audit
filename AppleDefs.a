@@ -13,6 +13,8 @@ SW_SLOTC3ROM_R = $C017	; Active high
 
 ;--------------------------------------
 
+PRNTYX = $F940
+PRNTX = $F944
 HOME = $FC58
 WAIT = $FCA8
 COUT = $FDED

@@ -24,11 +24,11 @@ SY6522_IER = $E
 ACR_ONESHOT     = 0<<6
 ACR_FREERUNNING = 1<<6
 
-IxR_ENA    = 1<<7
+IxR_SET    = 1<<7	; b7=0: CLEAR
 IxR_TIMER1 = 1<<6
 IxR_TIMER2 = 1<<5
-IxR_VOTRAX = 1<<4
-IxR_SSI263 = 1<<1	; 6522 Peripheral
+IxR_VOTRAX = 1<<4	; 6522 CB1
+IxR_SSI263 = 1<<1	; 6522 CA1/Peripheral
 
 AY_AFINE	= 0
 AY_ACOARSE	= 1
