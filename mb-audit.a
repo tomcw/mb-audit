@@ -26,12 +26,19 @@ MBBaseH	= MBBase+1
 
 entrypoint
 
+	sei
+
 	ldx		#($ff-ZP_BASE)
 -		lda		ZP_BASE,x
 		sta		saveZP,x
 		dex
 		bpl		-
-		
+
+	lda		IRQL
+	sta		saveIRQL
+	lda		IRQH
+	sta		saveIRQH
+
 	;
 
 	jsr		GetSlotInfo
@@ -50,7 +57,7 @@ entrypoint
 		ldx		slotUnderTest
 		lda		slotInfo,x
 		beq		+
-		jsr		TestCard
+		jsr		Diagnose6522
 		bne		+
 			lda		#<msg_CardFailed
 			ldx		#>msg_CardFailed
@@ -67,6 +74,11 @@ entrypoint
 
 exit
 
+	lda		saveIRQL
+	sta		IRQL
+	lda		saveIRQH
+	sta		IRQH
+
 	ldx		#($ff-ZP_BASE)
 -		lda		saveZP,x
 		sta		ZP_BASE,x
@@ -79,7 +91,7 @@ exit
 
 ; Pre: X=slot#
 ; Post: Z=0(BNE):OK, Z=1(BEQ):Failed
-TestCard
+Diagnose6522
 	txa
 	ora		#$c0
 	sta		MBBaseH
@@ -89,11 +101,24 @@ TestCard
 	lda		slotInfo,x
 	and		#3							; just 6522's
 	sta		zpTmp1
-	lda		#0
-	sta		zpTmp2
 
-	; Check r/w of all data lines
+	jsr		Diag6522Datalines
+	bne		+
+	rts
+
++	jsr		Diag6522IRQ
+	rts
+
+;------------------
+
+Diag6522Datalines
+; Pre: zpTmp1 = slotInfo[slot]
+; Post: Z=0(BNE):OK, Z=1(BEQ):Failed
+
+	;
+	; Check r/w of all 8 data lines
 	; (NB. my real Phasor occasionally powers-on with r/w to 2nd 6522's DDRA with b7=1!)
+	;
 	;                 1st loop  2nd loop
 	; 6522-A:  DDRB =   $55       $AA
 	; 6522-A:  DDRA =   $AA       $55
@@ -103,6 +128,9 @@ TestCard
 	; check A: DDRA ==  $AA       $55
 	; check B: DDRB ==  $69       $96
 	; check B: DDRA ==  $96       $69
+
+	lda		#0
+	sta		zpTmp2
 
 @loop
 ;@6522_A_w
@@ -142,12 +170,12 @@ TestCard
 		lda		#$55
 		eor		zpTmp2
 		cmp		(MBBase),y
-		bne		@data_err
+		bne		@6522_err
 		lda		#$aa
 		eor		zpTmp2
 		iny								; Y=SY6522_DDRA
 		cmp		(MBBase),y
-		bne		@data_err
+		bne		@6522_err
 
 @6522_B_r
 		lda		zpTmp1
@@ -158,12 +186,12 @@ TestCard
 		lda		#$69
 		eor		zpTmp2
 		cmp		(MBBase),y
-		bne		@data_err
+		bne		@6522_err
 		lda		#$96
 		eor		zpTmp2
 		iny								; Y=SY6522_DDRA
 		cmp		(MBBase),y
-		bne		@data_err
+		bne		@6522_err
 
 @next
 	lda		#$ff
@@ -171,13 +199,143 @@ TestCard
 	sta		zpTmp2
 	bne		@loop
 
-;@data_ok
+;
+
+@6522_ok
 	lda		#1
 	rts
 
-@data_err
+@6522_err
 	lda		#0
 	rts
+
+;------------------
+
+Diag6522IRQ
+; Pre: zpTmp1 = slotInfo[slot]
+; Post: Z=0(BNE):OK, Z=1(BEQ):Failed
+
+	;
+	; Check interrupt line
+	;
+
+	sei
+
+	lda		#<ISR
+	sta		IRQL
+	lda		#>ISR
+	sta		IRQH
+
+;@6522_A_int
+	lda		zpTmp1
+	and		#1
+	beq		@6522_B_int
+
+	ldy		#SY6522_A_BASE+SY6522_TIMER1L_COUNTER
+	sta		(MBBase),y
+	iny									; Y=SY6522_TIMER1H_COUNTER
+	sta		(MBBase),y					; T1C=0x0101
+
+	lda		#ACR_ONESHOT
+	ldy		#SY6522_A_BASE+SY6522_ACR
+	sta		(MBBase),y
+
+	lda		#IxR_ENA|IxR_TIMER1
+	ldy		#SY6522_A_BASE+SY6522_IER
+	sta		(MBBase),y
+
+	lda		#$f							; wait 0x304 cycles
+	jsr		WAIT
+
+	ldy		#SY6522_A_BASE+SY6522_IFR
+	lda		#IxR_TIMER1
+	and		(MBBase),y
+	beq		@6522_err
+
+	cli
+	nop
+	sei
+
+	and		isrIFR_A
+	beq		@6522_err
+
+@6522_B_int
+	lda		zpTmp1
+	and		#2
+	beq		@6522_ok
+
+	ldy		#SY6522_B_BASE+SY6522_TIMER1L_COUNTER
+	sta		(MBBase),y
+	iny									; Y=SY6522_TIMER1H_COUNTER
+	sta		(MBBase),y					; T1C=0x0202
+
+	lda		#ACR_ONESHOT
+	ldy		#SY6522_B_BASE+SY6522_ACR
+	sta		(MBBase),y
+
+	lda		#IxR_ENA|IxR_TIMER1
+	ldy		#SY6522_B_BASE+SY6522_IER
+	sta		(MBBase),y
+
+	lda		#$f							; wait 0x304 cycles
+	jsr		WAIT
+
+	ldy		#SY6522_B_BASE+SY6522_IFR
+	lda		#IxR_TIMER1
+	and		(MBBase),y
+	beq		@6522_err
+
+	cli
+	nop
+	sei
+
+	and		isrIFR_B
+	beq		@6522_err
+
+;
+
+@6522_ok
+	lda		#1
+	rts
+
+@6522_err
+	lda		#0
+	rts
+
+;------------------------------------------------------------------------------
+
+ISR
+; Pre:
+;	6502 has pushed P
+;	Apple ROM has stored A to $45 (not Apple //e ROM!)
+;
+
+	txa
+	pha
+	tya
+	pha
+
+	;------
+
+	ldy		#SY6522_A_BASE+SY6522_IFR
+	lda		(MBBase),y
+	sta		(MBBase),y
+	sta		isrIFR_A
+
+	ldy		#SY6522_B_BASE+SY6522_IFR
+	lda		(MBBase),y
+	sta		(MBBase),y
+	sta		isrIFR_B
+
+	;------
+
+	pla
+	tay
+	pla
+	tax
+
+	lda		$45		; for Apple II/II+
+	rti
 
 ;------------------------------------------------------------------------------
 
@@ -322,6 +480,12 @@ slotUnderTest	!byte 0
 
 testNum			!byte 0
 subTestNum		!byte 0
+
+isrIFR_A		!byte 0
+isrIFR_B		!byte 0
+
+saveIRQL		!byte 0
+saveIRQH		!byte 0
 
 msg_NoMB !text "No Mockingboard detected!",0xd,0xa
 msg_NoMBEnd !text 0
