@@ -60,20 +60,13 @@ entrypoint
 		ldx		slotUnderTest
 		lda		slotInfo,x
 		beq		+
-		jsr		Diagnose6522
-		bne		+
-			lda		#<msg_TestFailed
-			ldx		#>msg_TestFailed
-			jsr		Print
-			ldx		testNum
-			jsr		PRNTX
-			lda		#$80+':'
-			jsr		COUT
-			ldx		subTestNum
-			jsr		PRNTX
-			lda		#$80+$0d
-			jsr		COUT
-			jmp		exit
+			jsr		Diagnose6522
+			bne		++
+				jsr		PrintTestFailed
+				jmp		exit
+++			jsr		DetectSubunits	; AY8913 & speech chips
+			ldx		slotUnderTest
+			jsr		DisplayCardUpdate
 +		dec		slotUnderTest
 		bne		@nextSlot
 
@@ -100,9 +93,10 @@ exit
 
 ;------------------------------------------------------------------------------
 
+Diagnose6522
 ; Pre: X=slot#
 ; Post: Z=0(BNE):OK, Z=1(BEQ):Failed
-Diagnose6522
+
 	txa
 	ora		#$c0
 	sta		MBBaseH
@@ -239,9 +233,9 @@ Diag6522IRQ
 
 	sei
 
-	lda		#<ISR
+	lda		#<Diag6522ISR
 	sta		IRQL
-	lda		#>ISR
+	lda		#>Diag6522ISR
 	sta		IRQH
 
 ;@6522_A_int
@@ -320,7 +314,7 @@ Diag6522IRQ
 
 ;------------------------------------------------------------------------------
 
-ISR
+Diag6522ISR
 ; Pre:
 ;	6502 has pushed P
 ;	Apple ROM has stored A to $45 (not Apple //e ROM!)
@@ -353,12 +347,158 @@ ISR
 	lda		$45		; for Apple II/II+
 	rti
 
+
+;------------------------------------------------------------------------------
+
+DetectSubunits
+; Detect Phasor card, AY8913, SSI263 & SC01
+; Pre: zpTmp1 = slotInfo[slot]
+
+	lda		#0
+	sta		isPhasorCard			; assume Mockingboard
+	sta		hasSSI263				; ... no SSI263's
+	sta		hasSC01					; ... no SC01
+	sta		hasAY8913				; ... no AY81913's
+
+	; Determine if this is a Mockingboard or Phasor card
+
+	lda		zpTmp1
+	and		#1
+	beq		@detectSSI263
+
+	lda		#$55
+	ldy		#SY6522_DDRB
+	sta		(MBBase),y
+	asl								; A=$AA
+	iny								; SY6522_DDRA
+	sta		(MBBase),y
+
+	lda		#PH_PHASOR
+	jsr		SetPhasorMode
+
+	; Phasor card in Phasor mode has floating-bus at $Cn00-$Cn0F
+	ldy		#SY6522_DDRB
+	lda		#$55
+	cmp		(MBBase),y
+	bne		+
+	asl								; A=$AA
+	iny								; SY6522_DDRA
+	cmp		(MBBase),y
+	bne		+
+	ldy		#SY6522_TIMER1L_COUNTER
+	jsr		SF_GetTimerL
+	beq		++
++		inc		isPhasorCard
+++	lda		#PH_MOCKINGBOARD
+	jsr		SetPhasorMode
+
+	;
+
+@detectSSI263
+	; SSI263 is only on MB-C & Phasor, both of which have 2x 6522's
+
+	lda		zpTmp1
+	and		#1
+	beq		@detectSC01
+
+	lda		#IxR_SSI263
+	ldy		#SY6522_IER+SY6522_B_BASE
+	sta		(MBBase),y				; disable CA1(Speech) IRQ
+	ldy		#SY6522_IFR+SY6522_B_BASE
+	sta		(MBBase),y				; clear CA1(Speech) IRQ
+
+	lda		#$0C					; Peripheral for PA port Control: CA2 = low output (Pin18: Power Down/Reset)
+									; CA1 = negative active edge (input) (Pin4: A/!R)
+	ldy		#SY6522_PCR+SY6522_B_BASE
+	sta		(MBBase),y
+
+	lda		#CONTROL_H
+	ldy		#SSI_CTTRAMP
+	sta		(MBBase),y
+
+	; Warning: stepping this won't yield an IRQ, since the phoneme completes before H->L (assuming prev mode=MODE_IRQ_DISABLED)
+	lda		#MODE_PHONEME_TRANSITIONED_INFLECTION+$00	; DR1:DR0=3 , P5:P0=$00
+	ldy		#SSI_DURPHON
+	sta		(MBBase),y
+
+	lda		#$70					; H->L sets SSI263 operation mode = DR1:DR0, ie. IRQ active (also set Articulation=7, as Willy Byte does)
+	ldy		#SSI_CTTRAMP
+	sta		(MBBase),y
+
+	lda		#$FF
+	jsr		WAIT					; delay for 0x28882 (166018) cycles / ~163ms
+
+	ldy		#SY6522_IFR+SY6522_B_BASE
+	lda		(MBBase),y
+	and		#IxR_SSI263				; check CA1(Speech) IRQ
+	beq		+
+
+	lda		#IxR_SSI263
+	ldy		#SY6522_IFR+SY6522_B_BASE
+	sta		(MBBase),y				; clear CA1(Speech) IRQ
+
+	jsr		DisableSSI263
+
+	inc		hasSSI263
+
++
+
+	;
+
+@detectSC01
+	; SC01 is only on MB-Speech, MB-Sound/Speech + AppleWin's hybrid MB
+
+	;
+
+@detectAY8913
+
+	;
+
+	lda		#1
+	rts
+
+;------------------------------------------------------------------------------
+
+SetPhasorMode
+; Pre: A=phasorMode
+
+	sta		phasorMode
+	lda		MBBaseH
+	asl
+	asl
+	asl
+	asl								; slot * 16
+	clc
+	adc		phasorMode
+	tax
+	lda		$c080,x
+	rts
+
+;--------------------------------------
+
+DisableSSI263
+
+	lda		#CONTROL_H
+	ldy		#SSI_CTTRAMP
+	sta		(MBBase),y
+
+	lda		#MODE_IRQ_DISABLED+$00	; DR1:DR0=3 , P5:P0=$00
+	ldy		#SSI_DURPHON
+	sta		(MBBase),y
+
+	lda		#CONTROL_L				; H->L sets SSI263 operation mode = DR1:DR0, ie. IRQ inactive
+	ldy		#SSI_CTTRAMP
+	sta		(MBBase),y
+
+	rts
+
 ;------------------------------------------------------------------------------
 
 Display
 ;              1234567
-;          $00:    MP		;V=6522(VIA), M=MB-C, P=Phasor
-;          $80:   VMP
+;          $00:  1 CP		;V=6522(VIA), 1=Sound-I, C=MB-C, P=Phasor
+;          $80:   VCP
+;           SP:    S2		;V(ortax)=SC01, S(SI263)=SSI263, H(ybrid)=V+S, 2=S+S, 3=V+S+S
 
 	lda		#$80+'$'
 	sta		$480+$1d
@@ -372,6 +512,11 @@ Display
 	lda		#$80+':'
 	sta		$480+$20
 	sta		$500+$20
+	sta		$580+$20
+	lda		#$80+'S'
+	sta		$580+$1e
+	lda		#$80+'P'
+	sta		$580+$1f
 
 	ldx		#7
 
@@ -406,10 +551,82 @@ Display
 
 	rts
 
+;--------------------------------------
+
+DisplayCardUpdate
+; Pre: X=slot#
+;	zpTmp1 = slotInfo[slot]
+
+	;
+	; Update cards
+	;
+
+	lda		isPhasorCard
+	beq		+
+		lda		#$80+'P'
+		sta		$480+$20,x
+		sta		$500+$20,x
+
++	lda		zpTmp1
+	cmp		#1
+	bne		+
+		lda		#$80+'1'		; MB-Sound I or MB-Sound/Speech only has a 6522 at $00(?)
+		sta		$480+$20,x
+
+;+	lda		zpTmp1
+;	cmp		#2
+;	bne		+
+;		...						; ?? only has a 6522 at $80
+
++	lda		zpTmp1
+	cmp		#3
+	bne		+
+		lda		hasSC01
+		beq		+++
+			lda		#$80+'2'	; MB-Sound II has 2x 6522 (and maybe w/SC01?)
+			bne		++
++++			lda		#$80+'C'	; MB-Sound II or MB-C
+			bne		++
+++		sta		$480+$20,x
+		sta		$500+$20,x
+
+	;
++	; Add info about any speech chips
+	;
+
+	lda		hasSC01
+	beq		@noSC01
+		lda		hasSSI263
+		bne		++
+			lda		#$80+'V'	; SC01
+			bne		+++
+++		cmp		#1
+		bne		++
+			lda		#$80+'H'	; SC01 && 1x SSI263
+			bne		+++
+++		lda		#$80+'3'		; SC01 && 2x SSI263
++++		sta		$580+$20,x
+	jmp		@done
+
+@noSC01
+	lda		hasSSI263
+	beq		@done
+
+	cmp		#1
+	bne		+
+		lda		#$80+'S'		; 1x SSI263
+		bne		++
++		lda		#$80+'2'		; 2x SSI263
+++		sta		$580+$20,x
+
+@done
+	rts
+
 ;------------------------------------------------------------------------------
 
-; Post: Z=1 (BEQ) if nothing found
 GetSlotInfo
+; Post: Z=1 (BEQ) if nothing found
+
 	ldx		#7
 -		lda		#0
 		sta		slotInfo,x
@@ -427,10 +644,11 @@ GetSlotInfo
 
 ;
 
+Detect
 ; Pre: X=slot#
 ; Post: X=slot#
 ; TODO: FASTChip //e read of T1C_L is 1 cycle more - see "4cade" detection code
-Detect
+
 	txa
 	ora		#$c0
 	sta		MBBaseH
@@ -471,8 +689,24 @@ SF_GetTimerL:
 
 ;------------------------------------------------------------------------------
 
-; Pre: A(l),X(h) = msg addr
+PrintTestFailed
+	lda		#<msg_TestFailed
+	ldx		#>msg_TestFailed
+	jsr		Print
+	ldx		testNum
+	jsr		PRNTX
+	lda		#$80+':'
+	jsr		COUT
+	ldx		subTestNum
+	jsr		PRNTX
+	lda		#$80+$0d
+	jmp		COUT
+
+;------------------------------------------------------------------------------
+
 Print
+; Pre: A(l),X(h) = msg addr
+
 	sta		$fe
 	stx		$ff
 	ldy		#0
@@ -503,6 +737,13 @@ slotUnderTest	!byte 0
 
 testNum			!byte 0
 subTestNum		!byte 0
+
+isPhasorCard	!byte 0
+phasorMode:		!byte PH_MOCKINGBOARD
+
+hasAY8913		!byte 0
+hasSSI263		!byte 0
+hasSC01			!byte 0
 
 isrIFR_A		!byte 0
 isrIFR_B		!byte 0
