@@ -469,10 +469,10 @@ DetectSubunits
 	jsr		WAIT					; delay for 0x28882 (166018) cycles / ~163ms
 
 	ldy		#SY6522_A_BASE+SY6522_IFR
-	lda		#IxR_VOTRAX				; check CA1(Speech) IRQ
+	lda		#IxR_VOTRAX				; check CB1(Speech) IRQ
 	and		(MBBase),y
 	beq		+
-	sta		(MBBase),y				; clear CA1(Speech) IRQ
+	sta		(MBBase),y				; clear CB1(Speech) IRQ
 
 	inc		hasSC01
 
@@ -526,7 +526,7 @@ DisableSSI263
 
 Display
 ;              1234567
-;          $00:  1 CP		;V=6522(VIA), 1=Sound-I, C=MB-C, P=Phasor
+;          $00:  1 CP		;V=6522(VIA), 1=Sound-I, S=Sound/Speech, C=MB-C(or Sound-II), P=Phasor
 ;          $80:   VCP
 ;           SP:    S2		;V(ortax)=SC01, S(SI263)=SSI263, H(ybrid)=V+S, 2=S+S, 3=V+S+S
 
@@ -594,7 +594,7 @@ DisplayCardUpdate
 +	lda		zpTmp1
 	cmp		#1
 	bne		+
-		lda		#$80+'1'		; MB-Sound I or MB-Sound/Speech only has a 6522 at $00(?)
+		lda		#$80+'1'		; MB-Sound I (has a 6522/AY8913 at $00)
 		sta		$480+$20,x
 
 ;+	lda		zpTmp1
@@ -605,21 +605,18 @@ DisplayCardUpdate
 +	lda		zpTmp1
 	cmp		#3
 	bne		+
-		lda		hasSSI263
-		bne		+++
+		lda		isPhasorCard
+		beq		++
+			lda		#$80+'P'
+			bne		@out
+++		lda		hasSSI263
+		bne		@isIIorC
 		lda		hasSC01
-		beq		+++
-			lda		#$80+'2'	; MB-Sound II has 2x 6522 (and maybe w/SC01?), but no SSI263
-			bne		++
-+++			lda		#$80+'C'	; MB-Sound II or MB-C
-			bne		++
-++		sta		$480+$20,x
-		sta		$500+$20,x
-
-	lda		isPhasorCard		; Phasor trumps MB-C
-	beq		+
-		lda		#$80+'P'
-		sta		$480+$20,x
+		beq		@isIIorC		; no SC01? so must be MB-Sound II (ie. == MB-C)
+			lda		#$80+'S'	; MB-Sound/Speech I has a 6522/SC01 at $00; and a 6522/AY8913 at $80
+			bne		@out
+@isIIorC	lda		#$80+'C'	; MB-C or MB-Sound II (has 2x 6522/AY8913, but no SC01 nor SSI263)
+@out:	sta		$480+$20,x
 		sta		$500+$20,x
 
 	;
@@ -631,13 +628,13 @@ DisplayCardUpdate
 		lda		hasSSI263
 		bne		++
 			lda		#$80+'V'	; SC01
-			bne		+++
+			bne		@outSP
 ++		cmp		#1
-		bne		++
+		bne		+++
 			lda		#$80+'H'	; SC01 && 1x SSI263
-			bne		+++
-++		lda		#$80+'3'		; SC01 && 2x SSI263
-+++		sta		$580+$20,x
+			bne		@outSP
++++		lda		#$80+'3'		; SC01 && 2x SSI263
+@outSP	sta		$580+$20,x
 	jmp		@done
 
 @noSC01
