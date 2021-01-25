@@ -243,6 +243,7 @@ Diag6522IRQ
 	and		#1
 	beq		@6522_B_int
 
+	lda		#1
 	ldy		#SY6522_A_BASE+SY6522_TIMER1L_COUNTER
 	sta		(MBBase),y
 	iny									; Y=SY6522_TIMER1H_COUNTER
@@ -275,10 +276,11 @@ Diag6522IRQ
 	and		#2
 	beq		@6522_ok
 
+	lda		#1
 	ldy		#SY6522_B_BASE+SY6522_TIMER1L_COUNTER
 	sta		(MBBase),y
 	iny									; Y=SY6522_TIMER1H_COUNTER
-	sta		(MBBase),y					; T1C=0x0202
+	sta		(MBBase),y					; T1C=0x0101
 
 	lda		#ACR_ONESHOT
 	ldy		#SY6522_B_BASE+SY6522_ACR
@@ -684,30 +686,39 @@ Detect
 	lda		#0
 	sta		MBBaseL
 
-	lda		#4				; need 4 successful checks (avoid floating bus giving a false-positive)
+;@check_A
+	lda		#4				; try 4 checks (avoid floating bus giving a false-positive, and avoid T1C_L underflow giving a false-negative!)
 	sta		zpTmp1
-@check_A
-		ldy		#SY6522_A_BASE+SY6522_TIMER1L_COUNTER
-		jsr		SF_GetTimerL
-		bne		@check_B
-		dec		zpTmp1
-		bne		@check_A
+	lda		#1				; failures (can have 1 failure)
+	sta		zpTmp2
+	ldy		#SY6522_A_BASE+SY6522_TIMER1L_COUNTER
+-		jsr		SF_GetTimerL
+		beq		+
+			dec		zpTmp2
+			bmi		@check_B
++		dec		zpTmp1
+		bne		-
 
 	inc		slotInfo,x		; bit0=1
 
-	lda		#4				; need 4 successful checks (avoid floating bus giving a false-positive)
-	sta		zpTmp1
 @check_B
-		ldy		#SY6522_B_BASE+SY6522_TIMER1L_COUNTER
-		jsr		SF_GetTimerL
-		bne		+
-		dec		zpTmp1
-		bne		@check_B
+	lda		#4				; try 4 checks (avoid floating bus giving a false-positive, and avoid T1C_L underflow giving a false-negative!)
+	sta		zpTmp1
+	lda		#1				; failures (can have 1 failure)
+	sta		zpTmp2
+	ldy		#SY6522_B_BASE+SY6522_TIMER1L_COUNTER
+-		jsr		SF_GetTimerL
+		beq		+
+			dec		zpTmp2
+			bmi		@out
++		dec		zpTmp1
+		bne		-
 
 	inc		slotInfo,x
 	inc		slotInfo,x		; bit1=1
 
-+	rts
+@out
+	rts
 
 SF_GetTimerL:
 	lda		(MBBase),y
