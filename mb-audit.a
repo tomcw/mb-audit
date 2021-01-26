@@ -693,40 +693,39 @@ Detect
 	rts
 
 @check_A
-	lda		#4				; try 4 checks (avoid floating bus giving a false-positive, and avoid T1C_L underflow giving a false-negative!)
-	sta		zpTmp1
-	lda		#1				; failures (can have 1 failure)
-	sta		zpTmp2
 	ldy		#SY6522_A_BASE+SY6522_TIMER1L_COUNTER
--		jsr		SF_GetTimerL
-		beq		+
-			dec		zpTmp2
-			bmi		@check_B
-+		dec		zpTmp1
-		bne		-
-
-	inc		slotInfo,x		; bit0=1
+	jsr		Check6522
+	bne		+
+		inc		slotInfo,x	; bit0=1
++
 
 @check_B
+	ldy		#SY6522_B_BASE+SY6522_TIMER1L_COUNTER
+	jsr		Check6522
+	bne		+
+		inc		slotInfo,x
+		inc		slotInfo,x	; bit1=1
++
+
+	rts
+
+Check6522
+; Pre: Y = SY6522_TIMER1L_COUNTER for chip A or B
+; Post: Z=1(OK), Z=0(NG)
 	lda		#4				; try 4 checks (avoid floating bus giving a false-positive, and avoid T1C_L underflow giving a false-negative!)
 	sta		zpTmp1
 	lda		#1				; failures (can have 1 failure)
 	sta		zpTmp2
-	ldy		#SY6522_B_BASE+SY6522_TIMER1L_COUNTER
 -		jsr		SF_GetTimerL
 		beq		+
 			dec		zpTmp2
-			bmi		@out
+			bmi		++
 +		dec		zpTmp1
 		bne		-
+++	rts
 
-	inc		slotInfo,x
-	inc		slotInfo,x		; bit1=1
-
-@out
-	rts
-
-SF_GetTimerL:
+SF_GetTimerL				; From Skyfox's detection code
+; Pre: Y = SY6522_TIMER1L_COUNTER for chip A or B
 	lda		(MBBase),y
 	cmp		MBBaseL			; 3cy, C=1 since A>=0 as (MBBaseL) == 0x00
 	sbc		(MBBase),y		; 5cy
