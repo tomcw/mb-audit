@@ -686,7 +686,13 @@ Detect
 	lda		#0
 	sta		MBBaseL
 
-;@check_A
+	; 6522's IER.b7 is always 1
+	ldy		#SY6522_B_BASE+SY6522_IER
+	lda		(MBBase),y
+	bmi		@check_A
+	rts
+
+@check_A
 	lda		#4				; try 4 checks (avoid floating bus giving a false-positive, and avoid T1C_L underflow giving a false-negative!)
 	sta		zpTmp1
 	lda		#1				; failures (can have 1 failure)
@@ -722,8 +728,8 @@ Detect
 
 SF_GetTimerL:
 	lda		(MBBase),y
-	cmp		MBBaseL
-	sbc		(MBBase),y
+	cmp		MBBaseL			; 3cy, C=1 since A>=0 as (MBBaseL) == 0x00
+	sbc		(MBBase),y		; 5cy
 	cmp		#$08
 	rts
 
