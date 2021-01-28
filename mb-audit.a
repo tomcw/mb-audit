@@ -653,20 +653,17 @@ Display
 DisplayCardUpdate
 ; Pre: X=slot#
 
-	lda		hasAY8913
-	sta		zpTmp1
-
 	;
 	; Update cards
 	;
 
-+	lda		zpTmp1
++	lda		hasAY8913
 	cmp		#1					; 6522/AY8913 at $00?
 	bne		+
 		lda		#$80+'1'		; MB-Sound I (has a 6522/AY8913 at $00)
 		sta		$480+$20,x
 
-+	lda		zpTmp1
++	lda		hasAY8913
 	cmp		#2					; 6522/AY8913 at $80?
 	bne		+
 		lda		hasSC01
@@ -674,7 +671,7 @@ DisplayCardUpdate
 		lda		#$80+'S'		; MB-Sound/Speech I has a 6522/SC01 at $00; and a 6522/AY8913 at $80
 		sta		$500+$20,x
 
-+	lda		zpTmp1
++	lda		hasAY8913
 	cmp		#3					; 6522/AY8913 at $00 && $80?
 	bne		+
 		lda		isPhasorCard
