@@ -652,35 +652,34 @@ Display
 
 DisplayCardUpdate
 ; Pre: X=slot#
-;	zpTmp1 = slotInfo[slot]
+
+	lda		hasAY8913
+	sta		zpTmp1
 
 	;
 	; Update cards
 	;
 
 +	lda		zpTmp1
-	cmp		#1
+	cmp		#1					; 6522/AY8913 at $00?
 	bne		+
 		lda		#$80+'1'		; MB-Sound I (has a 6522/AY8913 at $00)
 		sta		$480+$20,x
 
-;+	lda		zpTmp1
-;	cmp		#2
-;	bne		+
-;		...						; ?? only has a 6522 at $80
++	lda		zpTmp1
+	cmp		#2					; 6522/AY8913 at $80?
+	bne		+
+		lda		hasSC01
+		beq		+				; no SC01 - don't know what this is!
+		lda		#$80+'S'		; MB-Sound/Speech I has a 6522/SC01 at $00; and a 6522/AY8913 at $80
+		sta		$500+$20,x
 
 +	lda		zpTmp1
-	cmp		#3
+	cmp		#3					; 6522/AY8913 at $00 && $80?
 	bne		+
 		lda		isPhasorCard
-		beq		++
+		beq		@isIIorC
 			lda		#$80+'P'
-			bne		@out
-++		lda		hasSSI263
-		bne		@isIIorC
-		lda		hasSC01
-		beq		@isIIorC		; no SC01? so must be MB-Sound II (ie. == MB-C)
-			lda		#$80+'S'	; MB-Sound/Speech I has a 6522/SC01 at $00; and a 6522/AY8913 at $80
 			bne		@out
 @isIIorC	lda		#$80+'C'	; MB-C or MB-Sound II (has 2x 6522/AY8913, but no SC01 nor SSI263)
 @out:	sta		$480+$20,x
