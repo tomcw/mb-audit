@@ -41,6 +41,12 @@ entrypoint
 
 	;
 
+	lda		TEXTON
+	lda		MIXEDOFF
+	lda		PAGE2OFF
+	lda		HIRESOFF
+	jsr		HOME	; perhaps better to clear to $00? ie. for floating-bus reads in GetSlotInfo()
+
 	jsr		GetSlotInfo
 	bne		+
 		lda		#<msg_NoMB
@@ -48,8 +54,7 @@ entrypoint
 		jsr		Print
 		jmp		exit
 
-+	jsr		HOME
-	lda		#<msg_mbaudit
++	lda		#<msg_mbaudit
 	ldx		#>msg_mbaudit
 	jsr		Print
 	jsr		Display
@@ -483,10 +488,79 @@ DetectSubunits
 	;
 
 @detectAY8913
+	lda		#SY6522_A_BASE
+	sta		zpTmp1
+
+-		lda		#SY6522_DDRB
+		ora		zpTmp1
+		tay
+		lda		#$07
+		sta		(MBBase),y
+
+		lda		#SY6522_DDRA
+		ora		zpTmp1
+		tay
+		lda		#$ff	; output
+		sta		(MBBase),y
+
+		ldy		#zpTmp1
+		jsr		SF_ChipReset
+
+		lda		#SY6522_ORA
+		ora		zpTmp1
+		tay
+
+		lda		#AY_AFINE
+		jsr		SF_SelectReg
+		lda		#$AA
+		jsr		SF_WriteReg
+
+		lda		#AY_BFINE
+		jsr		SF_SelectReg
+		lda		#$55
+		jsr		SF_WriteReg
+
+		lda		#AY_CFINE
+		jsr		SF_SelectReg
+		lda		#$69
+		jsr		SF_WriteReg
+
+		lda		#SY6522_ORA
+		ora		zpTmp1
+		tay
+
+		jsr		AY_SetPortAOutput
+		lda		#AY_AFINE
+		jsr		SF_SelectReg
+		jsr		AY_SetPortAInput
+		jsr		AY_ReadReg
+		cmp		#$AA
+		bne		+
+
+		jsr		AY_SetPortAOutput
+		lda		#AY_BFINE
+		jsr		SF_SelectReg
+		jsr		AY_SetPortAInput
+		jsr		AY_ReadReg
+		cmp		#$55
+		bne		+
+
+		jsr		AY_SetPortAOutput
+		lda		#AY_CFINE
+		jsr		SF_SelectReg
+		jsr		AY_SetPortAInput
+		jsr		AY_ReadReg
+		cmp		#$69
+		bne		+
+
+	lda		zpTmp1
+	eor		#$80
+	sta		zpTmp1
+	bne		-
 
 	;
 
-	lda		#1
++	lda		#1
 	rts
 
 ;------------------------------------------------------------------------------
@@ -656,6 +730,7 @@ DisplayCardUpdate
 ;------------------------------------------------------------------------------
 
 GetSlotInfo
+; Scan all slots for 6522s at $Cn00 and $Cn80
 ; Post: Z=1 (BEQ) if nothing found
 
 	ldx		#7
@@ -687,6 +762,7 @@ Detect
 	sta		MBBaseL
 
 	; 6522's IER.b7 is always 1
+	; . Due to floating bus (and the visible TEXT screen being mainly $A0 values), then empty slots will likely pass this check
 	ldy		#SY6522_B_BASE+SY6522_IER
 	lda		(MBBase),y
 	bmi		@check_A
@@ -730,6 +806,70 @@ SF_GetTimerL				; From Skyfox's detection code
 	cmp		MBBaseL			; 3cy, C=1 since A>=0 as (MBBaseL) == 0x00
 	sbc		(MBBase),y		; 5cy
 	cmp		#$08
+	rts
+
+;------------------------------------------------------------------------------
+
+AY_SetPortAOutput
+; Pre: Y = SY6522_ORA for chip A or B
+; Post: Y = SY6522_ORA for chip A or B
+	iny
+	iny		; Y = DDRA
+	lda		#$ff
+	sta		(MBBase),y
+	dey
+	dey		; Y = ORA
+	rts
+
+AY_SetPortAInput
+; Pre: Y = SY6522_ORA for chip A or B
+; Post: Y = SY6522_ORA for chip A or B
+	iny
+	iny		; Y = DDRA
+	lda		#$0
+	sta		(MBBase),y
+	dey
+	dey		; Y = ORA
+	rts
+
+AY_ReadReg
+; Pre: Y = SY6522_ORA for chip A or B
+;	6522.DDRA = $00 (Port-A direction = input)
+; Post: Y = SY6522_ORA for chip A or B
+;	A = data
+	lda		#AY_READ
+	jsr		+
+	lda		(MBBase),y		; Read Port-A
+	rts
+
+SF_SelectReg
+; Pre: Y = SY6522_ORA for chip A or B
+; Post: Y = SY6522_ORA for chip A or B
+;	A = reg#
+	sta		(MBBase),y
+	lda		#AY_LATCH
+	bne		+
+
+SF_WriteReg
+; Pre: Y = SY6522_ORA for chip A or B
+;	6522.DDRA = $FF (Port-A direction = output)
+; Post: Y = SY6522_ORA for chip A or B
+;	A = data
+	sta		(MBBase),y
+	lda		#AY_WRITE
+	bne		+
+
+SF_ChipReset
+; Pre: Y = SY6522_A_BASE or SY6522_B_BASE
+; Post: Y = SY6522_ORA for chip A or B
+	lda		#AY_RESET
+	beq		++
+
++	dey		; Y = ORB (reg#0)
+++	sta		(MBBase),y
+	lda		#AY_INACTIVE
+	sta		(MBBase),y
+	iny		; Y = ORA (reg#1)
 	rts
 
 ;------------------------------------------------------------------------------

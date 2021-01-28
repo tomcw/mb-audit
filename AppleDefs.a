@@ -13,6 +13,22 @@ SW_SLOTC3ROM_R = $C017	; Active high
 
 ;--------------------------------------
 
+KBD = $C000
+KBDSTRB = $C010
+
+TEXTOFF = $C050
+TEXTON = $C051
+MIXEDOFF = $C052
+MIXEDON = $C053
+PAGE2OFF = $C054
+PAGE2ON = $C055
+HIRESOFF = $C056
+HIRESON = $C057
+DHIRESON = $C05E
+DHIRESOFF = $C05F
+
+;--------------------------------------
+
 PRNTYX = $F940
 PRNTX = $F944
 HOME = $FC58
