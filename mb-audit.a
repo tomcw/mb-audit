@@ -490,6 +490,8 @@ DetectSubunits
 @detectAY8913
 	lda		#SY6522_A_BASE
 	sta		zpTmp1
+	lda		#1					; hasAY8913 mask
+	sta		zpTmp2
 
 -		lda		#SY6522_DDRB
 		ora		zpTmp1
@@ -503,60 +505,49 @@ DetectSubunits
 		lda		#$ff	; output
 		sta		(MBBase),y
 
-		ldy		#zpTmp1
-		jsr		SF_ChipReset
+		ldy		zpTmp1
+		jsr		SF_ChipReset	; Post: Y=SY6522_ORA for chip A or B
 
-		lda		#SY6522_ORA
-		ora		zpTmp1
-		tay
+		;
 
 		lda		#AY_AFINE
-		jsr		SF_SelectReg
-		lda		#$AA
-		jsr		SF_WriteReg
+		ldx		#$AA
+		jsr		AY_WriteRegValue
 
 		lda		#AY_BFINE
-		jsr		SF_SelectReg
-		lda		#$55
-		jsr		SF_WriteReg
+		ldx		#$55
+		jsr		AY_WriteRegValue
 
 		lda		#AY_CFINE
-		jsr		SF_SelectReg
-		lda		#$69
-		jsr		SF_WriteReg
+		ldx		#$69
+		jsr		AY_WriteRegValue
 
-		lda		#SY6522_ORA
-		ora		zpTmp1
-		tay
+		;
 
-		jsr		AY_SetPortAOutput
-		lda		#AY_AFINE
-		jsr		SF_SelectReg
-		jsr		AY_SetPortAInput
-		jsr		AY_ReadReg
+		ldx		#AY_AFINE
+		jsr		AY_ReadRegValue
 		cmp		#$AA
 		bne		+
 
-		jsr		AY_SetPortAOutput
-		lda		#AY_BFINE
-		jsr		SF_SelectReg
-		jsr		AY_SetPortAInput
-		jsr		AY_ReadReg
+		ldx		#AY_BFINE
+		jsr		AY_ReadRegValue
 		cmp		#$55
 		bne		+
 
-		jsr		AY_SetPortAOutput
-		lda		#AY_CFINE
-		jsr		SF_SelectReg
-		jsr		AY_SetPortAInput
-		jsr		AY_ReadReg
+		ldx		#AY_CFINE
+		jsr		AY_ReadRegValue
 		cmp		#$69
 		bne		+
 
-	lda		zpTmp1
-	eor		#$80
-	sta		zpTmp1
-	bne		-
+			lda		hasAY8913
+			ora		zpTmp2
+			sta		hasAY8913
+			asl		zpTmp2			; mask <<= 1
+
++		lda		zpTmp1
+		eor		#$80
+		sta		zpTmp1
+		bne		-
 
 	;
 
@@ -810,6 +801,27 @@ SF_GetTimerL				; From Skyfox's detection code
 
 ;------------------------------------------------------------------------------
 
+AY_WriteRegValue
+; Pre: Y = SY6522_ORA for chip A or B
+;	A=reg#
+;	X=value
+	jsr		SF_SelectReg
+	txa
+	jmp		SF_WriteReg
+
+AY_ReadRegValue
+; Pre: Y = SY6522_ORA for chip A or B
+;	X=reg#
+; Post:
+;	A=value
+	jsr		AY_SetPortAOutput
+	txa
+	jsr		SF_SelectReg
+	jsr		AY_SetPortAInput
+	jmp		AY_ReadReg
+
+	;
+
 AY_SetPortAOutput
 ; Pre: Y = SY6522_ORA for chip A or B
 ; Post: Y = SY6522_ORA for chip A or B
@@ -831,6 +843,8 @@ AY_SetPortAInput
 	dey
 	dey		; Y = ORA
 	rts
+
+	;
 
 AY_ReadReg
 ; Pre: Y = SY6522_ORA for chip A or B
