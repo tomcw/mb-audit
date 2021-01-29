@@ -597,7 +597,7 @@ TestAY8913
 	sta		(MBBase),y
 
 	ldy		zpTmp3
-	jsr		SF_ChipReset	; Post: Y=SY6522_ORA for chip A or B
+	jsr		SF_ChipReset		; Post: Y=SY6522_ORA for chip A or B
 
 	; Test the 8 data lines:
 	; . Write then Read: $01, $02, $04, ..., $80
@@ -637,8 +637,10 @@ TestAY8913
 		tax
 		jsr		AY_WriteRegValue
 
-		inc		zpTmp2
+--		inc		zpTmp2
 		lda		zpTmp2
+		cmp		#AY_ENABLE		; skip ENABLE to avoid enabling ABC noise
+		beq		--
 		cmp		#AY_ESHAPE
 		bne		-
 
@@ -650,12 +652,16 @@ TestAY8913
 		cmp		zpTmp2
 		bne		@error
 
-		inc		zpTmp2
+--		inc		zpTmp2
 		lda		zpTmp2
+		cmp		#AY_ENABLE		; skip ENABLE to avoid enabling ABC noise
+		beq		--
 		cmp		#AY_ESHAPE
 		bne		-
 
-	jsr		AY_SetPortAOutput	; DDRA=0xFF
+	ldy		zpTmp3
+	jsr		SF_ChipReset		; Post: Y=SY6522_ORA for chip A or B
+	jsr		AY_SetPortAOutput	; DDRA=0xFF (restore this)
 
 	lda		#1
 	rts
