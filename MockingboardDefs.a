@@ -45,7 +45,7 @@ AY_EFINE	= 11	; b7:0
 AY_ECOARSE	= 12	; b7:0
 AY_ESHAPE	= 13	; b7:0
 AY_PORTA	= 14	; b7:0 - not available on AY-3-8913
-AY_PORTB	= 14	; b7:0 - not available on AY-3-8913
+AY_PORTB	= 15	; b7:0 - not available on AY-3-8913
 
 AY_NOISE_MASK = $1f		; valid bits of AY_NOISEPER
 AY_AMPLITUDE_MODE = $10	; b4 of AY_xVOL (0=fixed, 1=envelope)

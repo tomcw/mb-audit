@@ -14,8 +14,9 @@
 
 ZP_BASE = $f0
 
-zpTmp1 = $fc
-zpTmp2 = $fd
+zpTmp3 = $fb
+zpTmp2 = $fc
+zpTmp1 = $fd
 MBBase = $fe		; Mockingboard base
 MBBaseL	= MBBase
 MBBaseH	= MBBase+1
@@ -489,23 +490,26 @@ DetectSubunits
 
 @detectAY8913
 	lda		#SY6522_A_BASE
-	sta		zpTmp1
+	sta		zpTmp3
 	lda		#1					; hasAY8913 mask
 	sta		zpTmp2
 
--		lda		#SY6522_DDRB
-		ora		zpTmp1
+-		lsr		zpTmp1			; 6522 at this addr?
+		bcc		+
+
+		lda		#SY6522_DDRB
+		ora		zpTmp3
 		tay
 		lda		#$07
 		sta		(MBBase),y
 
 		lda		#SY6522_DDRA
-		ora		zpTmp1
+		ora		zpTmp3
 		tay
 		lda		#$ff	; output
 		sta		(MBBase),y
 
-		ldy		zpTmp1
+		ldy		zpTmp3
 		jsr		SF_ChipReset	; Post: Y=SY6522_ORA for chip A or B
 
 		;
@@ -542,16 +546,103 @@ DetectSubunits
 			lda		hasAY8913
 			ora		zpTmp2
 			sta		hasAY8913
-			asl		zpTmp2			; mask <<= 1
 
-+		lda		zpTmp1
++		asl		zpTmp2			; mask <<= 1
+		lda		zpTmp3
 		eor		#$80
-		sta		zpTmp1
+		sta		zpTmp3
 		bne		-
 
 	;
 
 +	lda		#1
+	rts
+
+;------------------------------------------------------------------------------
+
+TestAY8913
+; Pre: A = SY6522_A_BASE or SY6522_B_BASE
+
+	sta		zpTmp3
+
+	; Test the 8 data lines:
+	; . Write then Read: $01, $02, $04, ..., $80
+
+	lda		#1					; data to test
+	sta		zpTmp2
+
+-		lda		#SY6522_DDRB
+		ora		zpTmp3
+		tay
+		lda		#$07
+		sta		(MBBase),y
+
+		lda		#SY6522_DDRA
+		ora		zpTmp3
+		tay
+		lda		#$ff	; output
+		sta		(MBBase),y
+
+		ldy		zpTmp3
+		jsr		SF_ChipReset	; Post: Y=SY6522_ORA for chip A or B
+
+		;
+
+		lda		#AY_AFINE
+		ldx		zpTmp2
+		jsr		AY_WriteRegValue
+
+		ldx		#AY_AFINE
+		jsr		AY_ReadRegValue
+		cmp		zpTmp2
+		bne		@error
+
+		asl		zpTmp2
+		bne		-
+
+	; Test the 4 addr lines:
+	; . Write regs: [0..$D] with values [0..$D]
+	; . then read back
+
+	jsr		AY_SetPortAOutput
+
+	lda		#0					; reg & data to test
+	sta		zpTmp2
+
+-		lda		zpTmp2
+		tax
+		jsr		AY_WriteRegValue
+
+		inc		zpTmp2
+		lda		zpTmp2
+		cmp		#AY_ESHAPE
+		bne		-
+
+	lda		#0					; reg & data to test
+	sta		zpTmp2
+
+-		ldx		zpTmp2
+		jsr		AY_ReadRegValue
+		cmp		zpTmp2
+		bne		@error
+
+		inc		zpTmp2
+		lda		zpTmp2
+		cmp		#AY_ESHAPE
+		bne		-
+
+	lda		#1
+	rts
+
+@error
+; Pre: zpTmp2 = expected value
+;	A = actual value
+
+	sta		errorActual
+	lda		zpTmp2
+	sta		errorExpected
+
+	lda		#0
 	rts
 
 ;------------------------------------------------------------------------------
@@ -624,14 +715,14 @@ Display
 		lda		slotInfo,x
 		lsr
 		pha
-		lda		#$80+' '		; C not affected
+		lda		#$80+' '		; C-flag not affected
 		bcc		+
 		lda		#$80+'V'
 +		sta		$480+$20,x		; 'V' or ' '
 
 		pla
 		lsr
-		lda		#$80+' '		; C not affected
+		lda		#$80+' '		; C-flag not affected
 		bcc		+
 		lda		#$80+'V'
 +		sta		$500+$20,x		; 'V' or ' '
