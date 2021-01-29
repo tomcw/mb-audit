@@ -73,6 +73,25 @@ entrypoint
 ++			jsr		DetectSubunits	; AY8913 & speech chips
 			ldx		slotUnderTest
 			jsr		DisplayCardUpdate
+			;
+			lda		#1
+			and		hasAY8913
+			beq		++
+				lda		#SY6522_A_BASE
+				jsr		TestAY8913
+				bne		++
+					jsr		PrintTestFailedErrBytes
+					jmp		exit
+++			lda		#2
+			and		hasAY8913
+			beq		++
+				lda		#SY6522_B_BASE
+				jsr		TestAY8913
+				bne		++
+					jsr		PrintTestFailedErrBytes
+					jmp		exit
+++
+			;
 +		dec		slotUnderTest
 		bne		@nextSlot
 
@@ -565,30 +584,33 @@ TestAY8913
 
 	sta		zpTmp3
 
+	lda		#SY6522_DDRB
+	ora		zpTmp3
+	tay
+	lda		#$07
+	sta		(MBBase),y
+
+	lda		#SY6522_DDRA
+	ora		zpTmp3
+	tay
+	lda		#$ff	; output
+	sta		(MBBase),y
+
+	ldy		zpTmp3
+	jsr		SF_ChipReset	; Post: Y=SY6522_ORA for chip A or B
+
 	; Test the 8 data lines:
 	; . Write then Read: $01, $02, $04, ..., $80
+
+	lda		#2
+	sta		testNum
+	lda		#0
+	sta		subTestNum			; test #02.00
 
 	lda		#1					; data to test
 	sta		zpTmp2
 
--		lda		#SY6522_DDRB
-		ora		zpTmp3
-		tay
-		lda		#$07
-		sta		(MBBase),y
-
-		lda		#SY6522_DDRA
-		ora		zpTmp3
-		tay
-		lda		#$ff	; output
-		sta		(MBBase),y
-
-		ldy		zpTmp3
-		jsr		SF_ChipReset	; Post: Y=SY6522_ORA for chip A or B
-
-		;
-
-		lda		#AY_AFINE
+-		lda		#AY_AFINE
 		ldx		zpTmp2
 		jsr		AY_WriteRegValue
 
@@ -597,6 +619,8 @@ TestAY8913
 		cmp		zpTmp2
 		bne		@error
 
+		jsr		AY_SetPortAOutput	; DDRA=0xFF
+
 		asl		zpTmp2
 		bne		-
 
@@ -604,7 +628,7 @@ TestAY8913
 	; . Write regs: [0..$D] with values [0..$D]
 	; . then read back
 
-	jsr		AY_SetPortAOutput
+	inc		subTestNum			; test #02.01
 
 	lda		#0					; reg & data to test
 	sta		zpTmp2
@@ -630,6 +654,8 @@ TestAY8913
 		lda		zpTmp2
 		cmp		#AY_ESHAPE
 		bne		-
+
+	jsr		AY_SetPortAOutput	; DDRA=0xFF
 
 	lda		#1
 	rts
@@ -975,6 +1001,21 @@ SF_ChipReset
 
 ;------------------------------------------------------------------------------
 
+PrintTestFailedErrBytes
+	jsr		PrintTestFailed
+	lda		#<msg_Expected
+	ldx		#>msg_Expected
+	jsr		Print
+	ldx		errorExpected
+	jsr		PRNTX
+	lda		#<msg_Actual
+	ldx		#>msg_Actual
+	jsr		Print
+	ldx		errorActual
+	jsr		PRNTX
+	lda		#$80+$0d
+	jmp		COUT
+
 PrintTestFailed
 	lda		#<msg_TestFailed
 	ldx		#>msg_TestFailed
@@ -1037,6 +1078,9 @@ isrIFR_B		!byte 0
 saveIRQL		!byte 0
 saveIRQH		!byte 0
 
+errorExpected	!byte 0
+errorActual		!byte 0
+
 msg_mbaudit	!text "mb-audit v0.01, 2021",0xd
 msg_mbauditEnd !text 0
 
@@ -1045,6 +1089,12 @@ msg_NoMBEnd !text 0
 
 msg_TestFailed !text "Mockingboard failed test #"	; 00:00 (testNum:subTestNum)
 msg_TestFailedEnd !text 0
+
+msg_Expected !text "Expected:"	; 00 (errorExpected)
+msg_ExpectedEnd !text 0
+
+msg_Actual !text " Actual:"	; 00 (errorActual)
+msg_ActualEnd !text 0
 
 msg_OK !text "All tests passed",0xd
 msg_OKEnd !text 0
