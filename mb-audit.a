@@ -97,22 +97,10 @@ entrypoint
 			ldx		slotUnderTest
 			jsr		DisplayCardUpdate
 			;
-			lda		#1
-			and		hasAY8913
-			beq		++
-				lda		#SY6522_A_BASE
-				jsr		TestAY8913
-				bne		++
-					jsr		PrintTestFailedErrBytes
-					jmp		exit
-++			lda		#2
-			and		hasAY8913
-			beq		++
-				lda		#SY6522_B_BASE
-				jsr		TestAY8913
-				bne		++
-					jsr		PrintTestFailedErrBytes
-					jmp		exit
+			jsr		TestAY8913
+			bne		++
+				jsr		PrintTestFailedErrBytes
+				jmp		exit
 ++
 			;
 +		dec		slotUnderTest
@@ -590,29 +578,44 @@ DetectSubunits
 ;------------------------------------------------------------------------------
 
 TestAY8913
-; Pre: A = SY6522_A_BASE or SY6522_B_BASE
-
-	sta		zpTmp3
-
-	jsr		Init6522ForAY
+; Pre:
+; Post:
 
 	lda		#2
 	sta		testNum
-	lda		#0
+	lda		#$ff
 	sta		subTestNum			; test #02.00
-	jsr		TestAYDatalines
-	bne		@error
 
-	inc		subTestNum			; test #02.01
-	jsr		TestAYAddrlines
-	bne		@error
+	lda		#SY6522_A_BASE
+	sta		zpTmp3				; 6522 base addr
 
-	inc		subTestNum			; test #02.02
-	lda		zpTmp3
-	bne		+					; only do this test once, since it covers both SY6522's
-		jsr		TestAYPhasor
+	lda		hasAY8913
+	sta		zpTmp1
+
+-		lsr		zpTmp1
+		bcs		+
+			inc		subTestNum
+			inc		subTestNum
+			bne		++
+
++		jsr		Init6522ForAY
+
+		inc		subTestNum		; test #02.00, 02.02
+		jsr		TestAYDatalines
 		bne		@error
-+
+
+		inc		subTestNum		; test #02.01, 02.03
+		jsr		TestAYAddrlines
+		bne		@error
+
+++		lda		zpTmp3
+		eor		#$80
+		sta		zpTmp3
+		bne		-
+
+	inc		subTestNum			; test #02.04
+	jsr		TestAYPhasor		; only do this test once, since it covers both SY6522's
+	bne		@error
 
 	lda		#1
 	rts
