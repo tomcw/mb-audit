@@ -89,7 +89,7 @@ entrypoint
 		ldx		slotUnderTest
 		lda		slotInfo,x
 		beq		+
-			jsr		Diagnose6522
+			jsr		Check6522
 			bne		++
 				jsr		PrintTestFailed
 				jmp		exit
@@ -141,7 +141,7 @@ exit
 
 ;------------------------------------------------------------------------------
 
-Diagnose6522
+Check6522
 ; Pre: X=slot#
 ; Post: Z=0(BNE):OK, Z=1(BEQ):Failed
 
@@ -151,27 +151,25 @@ Diagnose6522
 	lda		#0
 	sta		MBBaseL
 
-	lda		#1
-	sta		testNum
-	lda		#0
-	sta		subTestNum					; test #01.00
-
 	lda		slotInfo,x
 	and		#3							; just 6522's
 	sta		zpTmp1
 
-	inc		subTestNum					; test #01.01
-
-	jsr		Diag6522Datalines
+	lda		#1
+	sta		testNum
+	lda		#0
+	sta		subTestNum					; test #01.00
+	jsr		Check6522Datalines
 	bne		+
 	rts
 
-+	jsr		Diag6522IRQ
++	inc		subTestNum					; test #01.01
+	jsr		Check6522IRQ
 	rts
 
 ;------------------
 
-Diag6522Datalines
+Check6522Datalines
 ; Pre: zpTmp1 = slotInfo[slot]
 ; Post: Z=0(BNE):OK, Z=1(BEQ):Failed
 
@@ -271,7 +269,7 @@ Diag6522Datalines
 
 ;------------------
 
-Diag6522IRQ
+Check6522IRQ
 ; Pre: zpTmp1 = slotInfo[slot]
 ; Post: Z=0(BNE):OK, Z=1(BEQ):Failed
 
@@ -281,9 +279,9 @@ Diag6522IRQ
 
 	sei
 
-	lda		#<Diag6522ISR
+	lda		#<Check6522ISR
 	sta		IRQL
-	lda		#>Diag6522ISR
+	lda		#>Check6522ISR
 	sta		IRQH
 
 ;@6522_A_int
@@ -364,7 +362,7 @@ Diag6522IRQ
 
 ;------------------------------------------------------------------------------
 
-Diag6522ISR
+Check6522ISR
 ; Pre:
 ;	6502 has pushed P
 ;	Apple ROM has stored A to $45 (not Apple //e ROM!)
@@ -1016,14 +1014,14 @@ Detect
 
 @check_A
 	ldy		#SY6522_A_BASE+SY6522_TIMER1L_COUNTER
-	jsr		Check6522
+	jsr		@Check6522T1C
 	bne		+
 		inc		slotInfo,x	; bit0=1
 +
 
 @check_B
 	ldy		#SY6522_B_BASE+SY6522_TIMER1L_COUNTER
-	jsr		Check6522
+	jsr		@Check6522T1C
 	bne		+
 		inc		slotInfo,x
 		inc		slotInfo,x	; bit1=1
@@ -1031,7 +1029,7 @@ Detect
 
 	rts
 
-Check6522
+@Check6522T1C
 ; Pre: Y = SY6522_TIMER1L_COUNTER for chip A or B
 ; Post: Z=1(OK), Z=0(NG)
 	lda		#4				; try 4 checks (avoid floating bus giving a false-positive, and avoid T1C_L underflow giving a false-negative!)
