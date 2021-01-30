@@ -94,7 +94,13 @@ entrypoint
 				jsr		PrintTestFailed
 				jmp		exit
 ++			jsr		DetectSubunits	; AY8913 & speech chips
-			ldx		slotUnderTest
+			bne		++
+					lda		#<msg_PhasorNotAllAYs
+					ldx		#>msg_PhasorNotAllAYs
+					jsr		Print
+					jmp		exit
+
+++			ldx		slotUnderTest
 			jsr		DisplayCardUpdate
 			;
 			lda		#1
@@ -410,6 +416,12 @@ DetectSubunits
 	sta		hasSC01					; ... no SC01
 	sta		hasAY8913				; ... no AY81913's
 
+	lda		#1						; OK
+	sta		detectSubunitResult
+
+	lda		#PH_MOCKINGBOARD
+	sta		phasorMode
+
 	; Determine if this is a Mockingboard or Phasor card
 
 	lda		zpTmp1
@@ -449,7 +461,7 @@ DetectSubunits
 	; - Speech using 6522 PCR w/o IRQ (based on Willy Byte's SSI263 detection code)
 
 	lda		zpTmp1
-	and		#1
+	and		#2
 	beq		@detectSC01
 
 	lda		#IxR_SSI263
@@ -496,6 +508,10 @@ DetectSubunits
 	; SC01 is only on MB-Speech, MB-Sound/Speech + AppleWin's hybrid MB
 	; - Speech using 6522 PCR w/o IRQ (based on Crimewave's SC01 code)
 
+	lda		zpTmp1
+	and		#1
+	beq		@detectAY8913
+
 	lda		#IxR_VOTRAX
 	ldy		#SY6522_A_BASE+SY6522_IER
 	sta		(MBBase),y				; disable CB1(Speech) IRQ
@@ -539,22 +555,7 @@ DetectSubunits
 -		lsr		zpTmp1			; 6522 at this addr?
 		bcc		+
 
-		lda		#SY6522_DDRB
-		ora		zpTmp3
-		tay
-		lda		#$07
-		sta		(MBBase),y
-
-		lda		#SY6522_DDRA
-		ora		zpTmp3
-		tay
-		lda		#$ff	; output
-		sta		(MBBase),y
-
-		ldy		zpTmp3
-		jsr		SF_ChipReset	; Post: Y=SY6522_ORA for chip A or B
-
-		;
+		jsr		Init6522ForAY
 
 		lda		#AY_AFINE
 		ldx		#$AA
@@ -597,7 +598,94 @@ DetectSubunits
 
 	;
 
-+	lda		#1
+;@detectPhasorAY8913
+
+	lda		isPhasorCard
+	beq		@done
+
+		lda		#PH_PHASOR
+		jsr		SetPhasorMode
+
+		;
+
+		lda		#SY6522_A_PH_BASE
+		sta		zpTmp3
+
+		jsr		Init6522ForAY
+
+		lda		#AY_AFINE
+		ldx		#$11
+		jsr		AY1_WriteRegValue
+
+		lda		#AY_AFINE
+		ldx		#$22
+		jsr		AY2_WriteRegValue
+
+		;
+
+		lda		#SY6522_B_BASE
+		sta		zpTmp3
+
+		jsr		Init6522ForAY
+
+		lda		#AY_AFINE
+		ldx		#$33
+		jsr		AY1_WriteRegValue
+
+		lda		#AY_AFINE
+		ldx		#$44
+		jsr		AY2_WriteRegValue
+
+		;
+
+		ldy		#SY6522_A_PH_BASE+SY6522_ORA
+
+		ldx		#AY_AFINE
+		jsr		AY1_ReadRegValue
+		cmp		#$11
+		bne		+
+
+		ldx		#AY_AFINE
+		jsr		AY2_ReadRegValue
+		cmp		#$22
+		bne		+
+
+		;
+
+		ldy		#SY6522_B_BASE+SY6522_ORA
+
+		ldx		#AY_AFINE
+		jsr		AY1_ReadRegValue
+		cmp		#$33
+		bne		+
+
+		ldx		#AY_AFINE
+		jsr		AY2_ReadRegValue
+		cmp		#$44
+		bne		+
+
+				lda		hasAY8913
+				ora		#$0C
+				sta		hasAY8913
+				bne		++
+
++		lda		#0					; error
+		sta		detectSubunitResult
+
+++		lda		#SY6522_A_PH_BASE
+		sta		zpTmp3
+		jsr		Init6522ForAY		; Reset 2 AYs
+		lda		#SY6522_B_BASE
+		sta		zpTmp3
+		jsr		Init6522ForAY		; Reset 2 AYs
+
+		lda		#PH_MOCKINGBOARD
+		jsr		SetPhasorMode
+
+	;
+
+@done
+	lda		detectSubunitResult
 	rts
 
 ;------------------------------------------------------------------------------
@@ -607,20 +695,7 @@ TestAY8913
 
 	sta		zpTmp3
 
-	lda		#SY6522_DDRB
-	ora		zpTmp3
-	tay
-	lda		#$07
-	sta		(MBBase),y
-
-	lda		#SY6522_DDRA
-	ora		zpTmp3
-	tay
-	lda		#$ff	; output
-	sta		(MBBase),y
-
-	ldy		zpTmp3
-	jsr		SF_ChipReset		; Post: Y=SY6522_ORA for chip A or B
+	jsr		Init6522ForAY
 
 	; Test the 8 data lines:
 	; . Write then Read: $01, $02, $04, ..., $80
@@ -831,7 +906,7 @@ DisplayCardUpdate
 
 +	lda		hasAY8913
 	cmp		#3					; 6522/AY8913 at $00 && $80?
-	bne		+
+	bcc		+					; (branch if A < 3)
 		lda		isPhasorCard
 		beq		@isIIorC
 			lda		#$80+'P'
@@ -957,6 +1032,33 @@ SF_GetTimerL				; From Skyfox's detection code
 
 ;------------------------------------------------------------------------------
 
+Init6522ForAY
+; Pre: phasorMode
+;	zpTmp3 = SY6522_A_BASE or SY6522_A_PH_BASE or SY6522_B_BASE
+; Post: Y = SY6522_ORA for chip A or B
+
+	lda		#SY6522_DDRB
+	ora		zpTmp3
+	tay
+	lda		phasorMode
+	cmp		#PH_PHASOR
+	beq		+
+		lda		#$07
+		beq		++
++		lda		#$1f
+++	sta		(MBBase),y
+
+	lda		#SY6522_DDRA
+	ora		zpTmp3
+	tay
+	lda		#$ff	; output
+	sta		(MBBase),y
+
+	ldy		zpTmp3
+	jmp		SF_ChipReset		; Post: Y=SY6522_ORA for chip A or B
+
+	;
+
 AY_WriteRegValue
 ; Pre: Y = SY6522_ORA for chip A or B
 ;	A=reg#
@@ -1030,17 +1132,107 @@ SF_WriteReg
 	bne		+
 
 SF_ChipReset
+; NB. For native Phasor mode, reset both AY's, since cmd=AY_RESET|(%00<<3) - and CS is active low
 ; Pre: Y = SY6522_A_BASE or SY6522_B_BASE
 ; Post: Y = SY6522_ORA for chip A or B
 	lda		#AY_RESET
 	beq		++
 
 +	dey		; Y = ORB (reg#0)
+
 ++	sta		(MBBase),y
 	lda		#AY_INACTIVE
 	sta		(MBBase),y
 	iny		; Y = ORA (reg#1)
 	rts
+
+;------------------------------------------------------------------------------
+; Phasor (native mode) routines:
+
+AY1_ReadReg
+; Pre: Y = SY6522_ORA for chip A or B
+;	6522.DDRA = $00 (Port-A direction = input)
+; Post: Y = SY6522_ORA for chip A or B
+;	A = data
+	lda		#AY_READ|AY_CS1
+	bne		++
+AY2_ReadReg
+	lda		#AY_READ|AY_CS2
+++	jsr		+
+	lda		(MBBase),y		; Read Port-A
+	rts
+
+AY1_SelectReg
+; Pre: Y = SY6522_ORA for chip A or B
+; Post: Y = SY6522_ORA for chip A or B
+;	A = reg#
+	sta		(MBBase),y
+	lda		#AY_LATCH|AY_CS1
+	bne		+
+AY2_SelectReg
+	sta		(MBBase),y
+	lda		#AY_LATCH|AY_CS2
+	bne		+
+
+AY1_WriteReg
+; Pre: Y = SY6522_ORA for chip A or B
+;	6522.DDRA = $FF (Port-A direction = output)
+; Post: Y = SY6522_ORA for chip A or B
+;	A = data
+	sta		(MBBase),y
+	lda		#AY_WRITE|AY_CS1
+	bne		+
+AY2_WriteReg
+	sta		(MBBase),y
+	lda		#AY_WRITE|AY_CS2
+	bne		+
+
++	dey		; Y = ORB (reg#0)
+	sta		(MBBase),y
+	lda		#AY_INACTIVE		; NB. Always deactivate both AY's (as it's simpler!)
+	sta		(MBBase),y
+	iny		; Y = ORA (reg#1)
+	rts
+
+;------------------------------------------------------------------------------
+
+AY1_WriteRegValue
+; Pre: Y = SY6522_ORA for chip A or B
+;	A=reg#
+;	X=value
+	jsr		AY1_SelectReg
+	txa
+	jmp		AY1_WriteReg
+
+AY2_WriteRegValue
+; Pre: Y = SY6522_ORA for chip A or B
+;	A=reg#
+;	X=value
+	jsr		AY2_SelectReg
+	txa
+	jmp		AY2_WriteReg
+
+AY1_ReadRegValue
+; Pre: Y = SY6522_ORA for chip A or B
+;	X=reg#
+; Post:
+;	A=value
+	jsr		AY_SetPortAOutput
+	txa
+	jsr		AY1_SelectReg
+	jsr		AY_SetPortAInput
+	jmp		AY1_ReadReg
+
+AY2_ReadRegValue
+; Pre: Y = SY6522_ORA for chip A or B
+;	X=reg#
+; Post:
+;	A=value
+	jsr		AY_SetPortAOutput
+	txa
+	jsr		AY2_SelectReg
+	jsr		AY_SetPortAInput
+	jmp		AY2_ReadReg
 
 ;------------------------------------------------------------------------------
 
@@ -1121,6 +1313,8 @@ isrIFR_B		!byte 0
 saveIRQL		!byte 0
 saveIRQH		!byte 0
 
+detectSubunitResult	!byte 0
+
 errorExpected	!byte 0
 errorActual		!byte 0
 
@@ -1129,6 +1323,10 @@ msg_mbauditEnd !text 0
 
 msg_NoMB !text "No Mockingboard detected!",0xd
 msg_NoMBEnd !text 0
+
+;                          0123456789012345678901234567890123456789
+msg_PhasorNotAllAYs !text "Phasor mode: failed to detect all 4 AYs!",0xd
+msg_PhasorNotAllAYsEnd !text 0
 
 msg_TestFailed !text "Mockingboard failed test #"	; 00:00 (testNum:subTestNum)
 msg_TestFailedEnd !text 0
