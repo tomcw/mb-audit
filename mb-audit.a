@@ -94,13 +94,7 @@ entrypoint
 				jsr		PrintTestFailed
 				jmp		exit
 ++			jsr		DetectSubunits	; AY8913 & speech chips
-			bne		++
-					lda		#<msg_PhasorNotAllAYs
-					ldx		#>msg_PhasorNotAllAYs
-					jsr		Print
-					jmp		exit
-
-++			ldx		slotUnderTest
+			ldx		slotUnderTest
 			jsr		DisplayCardUpdate
 			;
 			lda		#1
@@ -416,9 +410,6 @@ DetectSubunits
 	sta		hasSC01					; ... no SC01
 	sta		hasAY8913				; ... no AY81913's
 
-	lda		#1						; OK
-	sta		detectSubunitResult
-
 	lda		#PH_MOCKINGBOARD
 	sta		phasorMode
 
@@ -596,96 +587,6 @@ DetectSubunits
 		sta		zpTmp3
 		bne		-
 
-	;
-
-;@detectPhasorAY8913
-
-	lda		isPhasorCard
-	beq		@done
-
-		lda		#PH_PHASOR
-		jsr		SetPhasorMode
-
-		;
-
-		lda		#SY6522_A_PH_BASE
-		sta		zpTmp3
-
-		jsr		Init6522ForAY
-
-		lda		#AY_AFINE
-		ldx		#$11
-		jsr		AY1_WriteRegValue
-
-		lda		#AY_AFINE
-		ldx		#$22
-		jsr		AY2_WriteRegValue
-
-		;
-
-		lda		#SY6522_B_BASE
-		sta		zpTmp3
-
-		jsr		Init6522ForAY
-
-		lda		#AY_AFINE
-		ldx		#$33
-		jsr		AY1_WriteRegValue
-
-		lda		#AY_AFINE
-		ldx		#$44
-		jsr		AY2_WriteRegValue
-
-		;
-
-		ldy		#SY6522_A_PH_BASE+SY6522_ORA
-
-		ldx		#AY_AFINE
-		jsr		AY1_ReadRegValue
-		cmp		#$11
-		bne		+
-
-		ldx		#AY_AFINE
-		jsr		AY2_ReadRegValue
-		cmp		#$22
-		bne		+
-
-		;
-
-		ldy		#SY6522_B_BASE+SY6522_ORA
-
-		ldx		#AY_AFINE
-		jsr		AY1_ReadRegValue
-		cmp		#$33
-		bne		+
-
-		ldx		#AY_AFINE
-		jsr		AY2_ReadRegValue
-		cmp		#$44
-		bne		+
-
-				lda		hasAY8913
-				ora		#$0C
-				sta		hasAY8913
-				bne		++
-
-+		lda		#0					; error
-		sta		detectSubunitResult
-
-++		lda		#SY6522_A_PH_BASE
-		sta		zpTmp3
-		jsr		Init6522ForAY		; Reset 2 AYs
-		lda		#SY6522_B_BASE
-		sta		zpTmp3
-		jsr		Init6522ForAY		; Reset 2 AYs
-
-		lda		#PH_MOCKINGBOARD
-		jsr		SetPhasorMode
-
-	;
-
-@done
-	lda		detectSubunitResult
 	rts
 
 ;------------------------------------------------------------------------------
@@ -697,13 +598,46 @@ TestAY8913
 
 	jsr		Init6522ForAY
 
-	; Test the 8 data lines:
-	; . Write then Read: $01, $02, $04, ..., $80
-
 	lda		#2
 	sta		testNum
 	lda		#0
 	sta		subTestNum			; test #02.00
+	jsr		TestAYDatalines
+	bne		@error
+
+	inc		subTestNum			; test #02.01
+	jsr		TestAYAddrlines
+	bne		@error
+
+	inc		subTestNum			; test #02.02
+	lda		zpTmp3
+	bne		+					; only do this test once, since it covers both SY6522's
+		jsr		TestAYPhasor
+		bne		@error
++
+
+	lda		#1
+	rts
+
+@error
+; Pre: zpTmp2 = expected value
+;	A = actual value
+
+	sta		errorActual
+	lda		zpTmp2
+	sta		errorExpected
+
+	lda		#0
+	rts
+
+;--------------------------------------
+
+TestAYDatalines
+; Post: Z=1(OK),0(NG)
+;	zpTmp2 = expected, A = actual
+
+	; Test the 8 data lines:
+	; . Write then Read: $01, $02, $04, ..., $80
 
 	lda		#1					; data to test
 	sta		zpTmp2
@@ -715,18 +649,25 @@ TestAY8913
 		ldx		#AY_AFINE
 		jsr		AY_ReadRegValue
 		cmp		zpTmp2
-		bne		@error
+		beq		+
+		rts						; Z=0(NG)
 
-		jsr		AY_SetPortAOutput	; DDRA=0xFF
++		jsr		AY_SetPortAOutput	; DDRA=0xFF
 
 		asl		zpTmp2
 		bne		-
 
+	rts							; Z=1(OK)
+
+;--------------------------------------
+
+TestAYAddrlines
+; Post: Z=1(OK),0(NG)
+;	zpTmp2 = expected, A = actual
+
 	; Test the 4 addr lines:
 	; . Write regs: [0..$D] with values [0..$D]
 	; . then read back
-
-	inc		subTestNum			; test #02.01
 
 	lda		#0					; reg & data to test
 	sta		zpTmp2
@@ -748,8 +689,9 @@ TestAY8913
 -		ldx		zpTmp2
 		jsr		AY_ReadRegValue
 		cmp		zpTmp2
-		bne		@error
-
+		beq		+
+		rts						; Z=0(NG)
++
 --		inc		zpTmp2
 		lda		zpTmp2
 		cmp		#AY_ENABLE		; skip ENABLE to avoid enabling ABC noise
@@ -758,22 +700,105 @@ TestAY8913
 		bne		-
 
 	ldy		zpTmp3
-	jsr		SF_ChipReset		; Post: Y=SY6522_ORA for chip A or B
-	jsr		AY_SetPortAOutput	; DDRA=0xFF (restore this)
+	jsr		Init6522ForAY
 
-	lda		#1
+	lda		#0					; Z=1(OK)
 	rts
 
-@error
-; Pre: zpTmp2 = expected value
-;	A = actual value
+;--------------------------------------
 
-	sta		errorActual
-	lda		zpTmp2
-	sta		errorExpected
+TestAYPhasor
+; Post: Z=1(OK),0(NG)
+;	zpTmp2 = expected, A = actual
 
-	lda		#0
-	rts
+	lda		isPhasorCard
+	bne		+
+	rts							; Z=1(OK)
++
+
+	; Test for 4 AYs (Phasor only)
+	; . Write to each AY's reg#0 with values: $11,$22,$33,$44
+	; . then read back
+
+	lda		#PH_PHASOR
+	jsr		SetPhasorMode
+
+	;
+
+	lda		#SY6522_A_PH_BASE
+	sta		zpTmp3
+
+	jsr		Init6522ForAY
+
+	lda		#AY_AFINE
+	ldx		#$11
+	jsr		AY1_WriteRegValue
+
+	lda		#AY_AFINE
+	ldx		#$22
+	jsr		AY2_WriteRegValue
+
+	;
+
+	lda		#SY6522_B_BASE
+	sta		zpTmp3
+
+	jsr		Init6522ForAY
+
+	lda		#AY_AFINE
+	ldx		#$33
+	jsr		AY1_WriteRegValue
+
+	lda		#AY_AFINE
+	ldx		#$44
+	jsr		AY2_WriteRegValue
+
+	;
+
+	ldy		#SY6522_A_PH_BASE+SY6522_ORA
+
+	ldx		#AY_AFINE
+	jsr		AY1_ReadRegValue
+	ldx		#$11
+	cmp		#$11
+	bne		+
+
+	ldx		#AY_AFINE
+	jsr		AY2_ReadRegValue
+	ldx		#$22
+	cmp		#$22
+	bne		+
+
+	;
+
+	ldy		#SY6522_B_BASE+SY6522_ORA
+
+	ldx		#AY_AFINE
+	jsr		AY1_ReadRegValue
+	ldx		#$33
+	cmp		#$33
+	bne		+
+
+	ldx		#AY_AFINE
+	jsr		AY2_ReadRegValue
+	ldx		#$44
+
++	stx		zpTmp2				; expected
+	sta		zpTmp1				; actual
+
+++	lda		#SY6522_A_PH_BASE
+	sta		zpTmp3
+	jsr		Init6522ForAY		; Reset 6522-A's 2x AYs
+	lda		#SY6522_B_BASE
+	sta		zpTmp3
+	jsr		Init6522ForAY		; Reset 6522-B's 2x AYs
+
+	lda		#PH_MOCKINGBOARD
+	jsr		SetPhasorMode
+
+	lda		zpTmp1
+	cmp		zpTmp2
+	rts							; Z=1(OK), Z=0(NG)
 
 ;------------------------------------------------------------------------------
 
@@ -872,6 +897,8 @@ Display
 		dex
 		bne		-
 
+	lda		#$80+$0a
+	jsr		COUT
 	lda		#$80+$0a
 	jsr		COUT
 	lda		#$80+$0a
@@ -1313,8 +1340,6 @@ isrIFR_B		!byte 0
 saveIRQL		!byte 0
 saveIRQH		!byte 0
 
-detectSubunitResult	!byte 0
-
 errorExpected	!byte 0
 errorActual		!byte 0
 
@@ -1323,10 +1348,6 @@ msg_mbauditEnd !text 0
 
 msg_NoMB !text "No Mockingboard detected!",0xd
 msg_NoMBEnd !text 0
-
-;                          0123456789012345678901234567890123456789
-msg_PhasorNotAllAYs !text "Phasor mode: failed to detect all 4 AYs!",0xd
-msg_PhasorNotAllAYsEnd !text 0
 
 msg_TestFailed !text "Mockingboard failed test #"	; 00:00 (testNum:subTestNum)
 msg_TestFailedEnd !text 0
