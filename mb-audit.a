@@ -11,6 +11,27 @@
 !source "MockingboardDefs.a"
 
 ;------------------------------------------------------------------------------
+; Mockingboard types supported:
+;							$00						$80
+; --------------------------------------------------------------------------
+; Sound I					6522-A/AY8913			n/a
+; Sound/Speech I			6522-A/SC01				6522-B/AY8913
+; Sound II					6522-A/AY8913			6522-B/AY8913
+; MB-C
+; . MB-C & clones			6522-A/AY8913			6522-B/AY8913 +[1|2x SSI263]
+; . MB-C (AppleWin)			MB-C +SC01				MB-C +SSI263
+; . MEGA Audio (a2heaven)	MB-C					MB-C				6522 & AY8913 implemented in FPGA
+; Phasor
+; . MB-C					6522-A/AY8913			6522-B/AY8913 +[1|2x SSI263]
+; . Echo+					6522-A/AY8913			6522-B/AY8913
+; . Phasor native			6522-A/AY8913x2			6522-B/AY8913x2 +[1|2x SSI263]
+; . Phasor (AppleWin)		Phasor +SC01			Phasor +SSI263
+;
+; Unsupported:
+; Mockingboard 4c (Ian Kim)	6522-A/AY8913			6522-A/AY8913		Same 6522 mapped to both $00 & $80
+;
+
+;------------------------------------------------------------------------------
 
 ZP_BASE = $f0
 
