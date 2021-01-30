@@ -47,6 +47,8 @@ MBBaseH	= MBBase+1
 !zone code
 
 entrypoint
+; Pre: TODO: disable accelerators or set to 1MHz
+;
 
 	sei
 
@@ -444,7 +446,7 @@ DetectSubunits
 
 @detectSSI263
 	; SSI263 is only on MB-C & Phasor, both of which have 2x 6522's
-	; - Speech using 6522 PCR w/o IRQ (Willy Byte's SSI263 detection code)
+	; - Speech using 6522 PCR w/o IRQ (based on Willy Byte's SSI263 detection code)
 
 	lda		zpTmp1
 	and		#1
@@ -483,9 +485,8 @@ DetectSubunits
 	beq		+
 	sta		(MBBase),y				; clear CA1(Speech) IRQ
 
-	jsr		DisableSSI263
-
-	inc		hasSSI263
+		jsr		DisableSSI263
+		inc		hasSSI263
 
 +
 
@@ -493,7 +494,7 @@ DetectSubunits
 
 @detectSC01
 	; SC01 is only on MB-Speech, MB-Sound/Speech + AppleWin's hybrid MB
-	; - Speech using 6522 PCR w/o IRQ (Crimewave's SC01 detection code)
+	; - Speech using 6522 PCR w/o IRQ (based on Crimewave's SC01 code)
 
 	lda		#IxR_VOTRAX
 	ldy		#SY6522_A_BASE+SY6522_IER
@@ -522,7 +523,8 @@ DetectSubunits
 	beq		+
 	sta		(MBBase),y				; clear CB1(Speech) IRQ
 
-	inc		hasSC01
+		jsr		DisableSC01
+		inc		hasSC01
 
 +
 
@@ -733,6 +735,18 @@ DisableSSI263
 
 	rts
 
+;--------------------------------------
+
+DisableSC01
+
+	; https://github.com/a2-4am/4cade:
+	; . turn off cb2 pulse mode to disable false writes to sc01 (to fix random MB noise)
+	lda		#$D0
+	ldy		#SY6522_A_BASE+SY6522_PCR
+	sta		(MBBase),y
+
+	rts
+
 ;------------------------------------------------------------------------------
 
 Display
@@ -884,7 +898,6 @@ GetSlotInfo
 Detect
 ; Pre: X=slot#
 ; Post: X=slot#
-; TODO: FASTChip //e read of T1C_L is 1 cycle more - see "4cade" detection code
 
 	txa
 	ora		#$c0
@@ -893,7 +906,7 @@ Detect
 	sta		MBBaseL
 
 	; 6522's IER.b7 is always 1
-	; . Due to floating bus (and the visible TEXT screen being mainly $A0 values), then empty slots will likely pass this check
+	; . Due to floating bus (and the visible TEXT screen being mainly $A0 values), then empty slots will likely pass this IER.b7 check
 	ldy		#SY6522_B_BASE+SY6522_IER
 	lda		(MBBase),y
 	bmi		@check_A
@@ -933,11 +946,14 @@ Check6522
 
 SF_GetTimerL				; From Skyfox's detection code
 ; Pre: Y = SY6522_TIMER1L_COUNTER for chip A or B
+; Post: Z=1(OK), Z=0(NG)
 	lda		(MBBase),y
 	cmp		MBBaseL			; 3cy, C=1 since A>=0 as (MBBaseL) == 0x00
 	sbc		(MBBase),y		; 5cy
 	cmp		#$08
-	rts
+	beq		+
+	cmp		#$09			; FASTChip //e (Ref: https://github.com/a2-4am/4cade)
++	rts
 
 ;------------------------------------------------------------------------------
 
