@@ -59,7 +59,7 @@ Detect6522
 
 	;
 
-SF_GetTimerL				; From Skyfox's detection code
+SF_GetTimerL				; Based on Skyfox's detection code
 ; Pre: Y = SY6522_TIMER1L_COUNTER for chip A or B
 ; Post: Z=1(OK), Z=0(NG)
 	lda		(MBBase),y
@@ -230,7 +230,7 @@ Check6522IRQ
 	ldy		#SY6522_A_BASE+SY6522_ACR
 	sta		(MBBase),y
 
-	lda		#IxR_SET|IxR_TIMER1
+	lda		#IER_SET|IxR_TIMER1
 	ldy		#SY6522_A_BASE+SY6522_IER
 	sta		(MBBase),y
 
@@ -263,7 +263,7 @@ Check6522IRQ
 	ldy		#SY6522_B_BASE+SY6522_ACR
 	sta		(MBBase),y
 
-	lda		#IxR_SET|IxR_TIMER1
+	lda		#IER_SET|IxR_TIMER1
 	ldy		#SY6522_B_BASE+SY6522_IER
 	sta		(MBBase),y
 
@@ -315,6 +315,315 @@ Check6522ISR
 	lda		(MBBase),y
 	sta		(MBBase),y
 	sta		isrIFR_B
+
+	;------
+
+	pla
+	tay
+	pla
+	tax
+
+	lda		$45		; for Apple II/II+
+	rti
+
+;------------------------------------------------------------------------------
+; Notes:
+;	T1:
+;	. oneshot|continuous x IRQ|poll
+;	. 6522 count is N+2 cycles
+;	. 6522 -> IRQ cycle (detect a2heaven's MEGA Audio)
+;	. 6502|65C02 addr modes access of 6522 T1L
+;	T2:
+;	. oneshot x IRQ|poll
+;	All 6522: write chip A,B; read chip A,B
+
+Test6522
+; Pre: has6522
+; Post:
+
+	sei
+
+	lda		#<Test6522ISR
+	sta		IRQL
+	lda		#>Test6522ISR
+	sta		IRQH
+
+	lda		#2
+	sta		testNum
+	lda		#$ff
+	sta		subTestNum			; test #02.00
+
+	lda		has6522
+	lsr
+	sta		zpTmp1
+	bcc		@next6522
+
+@loop	inc		subTestNum		; test #02.00, 02.??
+		jsr		T6522_1
+		bne		@error
+
+		inc		subTestNum		; test #02.01, 02.??
+		jsr		T6522_2
+		bne		@error
+
+		inc		subTestNum		; test #02.02, 02.??
+		jsr		T6522_3
+		bne		@error
+
+@next6522
+		lda		MBBaseL
+		ora		#$80
+		sta		MBBaseL
+
+		lsr		zpTmp1
+		bcs		@loop
+
+	lda		#0
+	sta		MBBaseL
+
+	lda		#1
+	rts
+
+@error
+; Pre: zpTmp2 = expected value
+;	A = actual value
+
+	sta		errorActual
+	lda		zpTmp2
+	sta		errorExpected
+
+	lda		#0
+	sta		MBBaseL
+
+	lda		#0
+	rts
+
+;--------------------------------------
+
+T6522_1
+; Pre:
+; Post: Z=1(OK), Z=0(NG)
+;
+; Test#1 (AppleWin-GH#765)
+; . Enable T1 & T2 IRQs, but don't write to T1H_C
+; . Wait for T1 underflow
+; . Check no T1|T2 ints are pending
+; NB. Only runs OK after a MB card reset, or T1 has been set to one-shot mode
+
+	jsr		WaitT1OneShotUnderflow	; Post: SEI
+
+	lda		#IER_SET|IxR_TIMER1|IxR_TIMER2
+	ldy		#SY6522_IER
+	sta		(MBBase),y				; Enable Timer1&2 IRQ
+	lda		#IER_CLR|IxR_VOTRAX|IxR_SSI263
+	ldy		#SY6522_IER
+	sta		(MBBase),y				; Disable speech IRQ
+
+	ldy		#SY6522_TIMER1H_COUNTER
+-		lda		(MBBase),y			; wait $00nn
+		bne		-
+
+	ldy		#SY6522_IFR
+	lda		(MBBase),y
+	and		#IxR_TIMER1|IxR_TIMER2	; Poll Timer1&2 IRQ flag
+	bne		+
+
+	ldy		#SY6522_TIMER1H_COUNTER
+-		lda		(MBBase),y			; wait $FFnn
+		beq		-
+
+	ldy		#SY6522_IFR
+	lda		(MBBase),y
+	and		#IxR_TIMER1|IxR_TIMER2	; Poll Timer1&2 IRQ flag
+
++	rts								; Z=1(OK), Z=0(NG)
+
+;--------------------------------------
+
+T6522_2
+; Pre:
+; Post: Z=1(OK), Z=0(NG)
+;
+; Test#2
+; . Setup T1_C=0x0202 and ACR=free-running
+; . Enable T1 & T2 IRQs
+; . Poll for T1 int
+; . ACR=one-shot
+; . CLI & expect ISR to immediately set flag (T1 free-running)
+; . wait for ISR to set flag (T1 one-shot)
+; . SEI & wait for T1 underflow & check that no T1|T2 ints pending
+
+	sei
+	lda		#0
+	sta		isrIFR
+
+	lda		#$02
+	ldy		#SY6522_TIMER1L_COUNTER
+	sta		(MBBase),y
+	ldy		#SY6522_TIMER1H_COUNTER
+	sta		(MBBase),y
+
+	lda		#ACR_FREERUNNING
+	ldy		#SY6522_ACR
+	sta		(MBBase),y				; Free-running timer
+
+	lda		#IER_SET|IxR_TIMER1|IxR_TIMER2
+	ldy		#SY6522_IER
+	sta		(MBBase),y				; Enable Timer1&2 IRQ
+	eor		#$ff
+	ldy		#SY6522_IER
+	sta		(MBBase),y				; Disable all other IRQs
+
+	ldy		#SY6522_IFR
+-		lda		(MBBase),y
+		and		#IxR_TIMER1			; Poll Timer1 IRQ flag
+		beq		-
+
+	lda		#ACR_ONESHOT
+	ldy		#SY6522_ACR
+	sta		(MBBase),y				; One-shot timer
+
+	cli
+	nop								; 1 insn for IRQ (6502 pipelining)
+
+	lda		#IxR_TIMER1
+	and		isrIFR					; T1 int from free-running mode
+	bne		+
+		lda		#0
+		beq		++
++	lda		#0
+	sta		isrIFR
+
+-		lda		#IxR_TIMER1			; T1 int from one-shot mode
+		and		isrIFR
+		beq		-
+
+	sei
+
+	jsr		WaitT1Underflow
+
+	ldy		#SY6522_IFR
+	lda		(MBBase),y
+	and		#IxR_TIMER1|IxR_TIMER2	; Poll Timer1&2 IRQ flag (expect none set)
+
+++	rts								; Z=1(OK), Z=0(NG)
+
+;--------------------------------------
+
+T6522_3
+; Pre:
+; Post: Z=1(OK), Z=0(NG)
+;
+; Test#3 (AppleWin-GH#567)
+; . Setup T1_C=0x0202 and ACR=free-running
+; . Disable T1 IRQ, enable T2 IRQ
+; . CLI
+; . Poll for T1 int
+; . Enable T1 IRQ
+; . Expect ISR to immediately set flag
+
+	sei
+	lda		#0
+	sta		isrIFR
+
+	lda		#$02
+	ldy		#SY6522_TIMER1L_COUNTER
+	sta		(MBBase),y
+	ldy		#SY6522_TIMER1H_COUNTER
+	sta		(MBBase),y
+
+	lda		#ACR_FREERUNNING
+	ldy		#SY6522_ACR
+	sta		(MBBase),y				; Free-running timer
+
+	lda		#IER_SET|IxR_TIMER2
+	ldy		#SY6522_IER
+	sta		(MBBase),y				; Enable Timer2 IRQ (to catch any false T2 ints)
+	lda		#IER_CLR|IxR_TIMER1
+	ldy		#SY6522_IER
+	sta		(MBBase),y				; Disable Timer1 IRQ
+
+	cli
+
+	ldy		#SY6522_IFR
+-		lda		(MBBase),y
+		and		#IxR_TIMER1			; Poll Timer1 IRQ flag
+		beq		-
+
+	lda		#IER_SET|IxR_TIMER1
+	ldy		#SY6522_IER
+	sta		(MBBase),y				; Enable Timer1 IRQ
+
+	nop								; 1 insn for IRQ (6502 pipelining)
+	jsr		WaitT1OneShotUnderflow	; Post: SEI
+
+	lda		#IxR_TIMER1
+	and		isrIFR
+	beq		+
+
+	lda		#0
+	rts								; Z=1(OK)
+
++	; error
+	lda		#1
+	rts								; Z=0(NG)
+
+;------------------------------------------------------------------------------
+
+WaitT1OneShotUnderflow
+; Set to T1 one-shot mode, and wait for underflow to clear internal 6522 state
+
+	sei
+
+	lda		#ACR_ONESHOT
+	ldy		#SY6522_ACR
+	sta		(MBBase),y				; T1 one-shot mode
+
+	jsr		WaitT1Underflow
+
+	lda		#IER_CLR|IxR_TIMER1
+	ldy		#SY6522_IER
+	sta		(MBBase),y				; Disable Timer1 IRQ
+	ldy		#SY6522_IFR
+	sta		(MBBase),y				; Clear any Timer1 IRQ
+
+	rts
+
+;--------------------------------------
+
+WaitT1Underflow
+
+	ldy		#SY6522_TIMER1H_COUNTER
+
+;wait_00nn
+-		lda		(MBBase),y
+		bne		-
+
+;wait_FFnn
+-		lda		(MBBase),y
+		beq		-
+
+	rts
+
+;------------------------------------------------------------------------------
+
+Test6522ISR
+; Pre:
+;	6502 has pushed P
+;	Apple ROM has stored A to $45 (not Apple //e ROM!)
+;
+
+	txa
+	pha
+	tya
+	pha
+
+	;------
+
+	ldy		#SY6522_IFR
+	lda		(MBBase),y
+	sta		(MBBase),y
+	sta		isrIFR
 
 	;------
 

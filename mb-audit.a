@@ -47,6 +47,9 @@ ZP_BASE = $f0
 zpTmp3 = $fb
 zpTmp2 = $fc
 zpTmp1 = $fd
+String = $fc		; alias with zpTmp2 & zpTmp1
+StringL = String
+StringH = String+1
 MBBase = $fe		; Mockingboard base
 MBBaseL	= MBBase
 MBBaseH	= MBBase+1
@@ -98,7 +101,8 @@ entrypoint
 		ldx		slotUnderTest
 		lda		slotInfo,x
 		beq		+
-			jsr		Check6522
+			sta		has6522
+			jsr		Check6522		; Basic 6522 checks
 			bne		++
 				jsr		PrintTestFailed
 				jmp		exit
@@ -106,9 +110,11 @@ entrypoint
 			ldx		slotUnderTest
 			jsr		DisplayCardUpdate
 			;
+			jsr		Test6522
+			beq		@error
 			jsr		TestAY8913
 			bne		++
-				jsr		PrintTestFailedErrBytes
+@error			jsr		PrintTestFailedErrBytes
 				jmp		exit
 ++
 			;
@@ -391,10 +397,10 @@ PrintTestFailed
 Print
 ; Pre: A(l),X(h) = msg addr
 
-	sta		$fe
-	stx		$ff
+	sta		StringL
+	stx		StringH
 	ldy		#0
-@loop	lda		($fe),y
+@loop	lda		(String),y
 		beq		+
 		ora		#$80	; set high bit
 		tax
@@ -422,7 +428,7 @@ Print
 !align 15, 0, 0		; align to 16 bytes (pad with 0's)
 
 saveZP			!fill ($100-ZP_BASE),0
-slotInfo		!fill 8,0	; slot[0..7] : bits: 0=6522/$00, 1=6522/$80
+slotInfo		!fill 8,0	; slot[0..7] : bits: 1=6522/$80, 0=6522/$00
 
 slotUnderTest	!byte 0
 
@@ -432,12 +438,14 @@ subTestNum		!byte 0
 isPhasorCard	!byte 0
 phasorMode:		!byte PH_MOCKINGBOARD
 
+has6522			!byte 0
 hasAY8913		!byte 0
 hasSSI263		!byte 0
 hasSC01			!byte 0
 
 isrIFR_A		!byte 0
 isrIFR_B		!byte 0
+isrIFR			!byte 0
 
 saveIRQL		!byte 0
 saveIRQH		!byte 0

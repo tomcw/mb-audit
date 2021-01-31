@@ -24,7 +24,8 @@ SY6522_IER = $E
 ACR_ONESHOT     = 0<<6
 ACR_FREERUNNING = 1<<6
 
-IxR_SET    = 1<<7	; b7=0: CLEAR
+IER_SET    = 1<<7
+IER_CLR    = 0<<7
 IxR_TIMER1 = 1<<6
 IxR_TIMER2 = 1<<5
 IxR_VOTRAX = 1<<4	; 6522 CB1
