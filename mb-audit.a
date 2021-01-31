@@ -3,7 +3,7 @@
 ;
 ; mb-audit:
 ; . Verify real h/w is operating correctly, eg. inter-component (addr/data line, IRQ)
-; . Verify emulated h/w is operating at a chip level, eg. chip functionality
+; . Verify emulated h/w is operating correctly at a chip level, eg. chip functionality
 ;
 
 ; ACME 0.96.4
@@ -20,6 +20,7 @@
 
 ;------------------------------------------------------------------------------
 ; Mockingboard types supported:
+;
 ;							$00						$80
 ; --------------------------------------------------------------------------
 ; Sound I					6522-A/AY8913			n/a
@@ -137,260 +138,24 @@ exit
 
 ;------------------------------------------------------------------------------
 
-Check6522
-; Pre: X=slot#
-; Post: Z=0(BNE):OK, Z=1(BEQ):Failed
+GetSlotInfo
+; Scan all slots for 6522s at $Cn00 and $Cn80
+; Post: Z=1 (BEQ) if nothing found
 
-	txa
-	ora		#$c0
-	sta		MBBaseH
-	lda		#0
-	sta		MBBaseL
-
-	lda		slotInfo,x
-	and		#3							; just 6522's
-	sta		zpTmp1
-
-	lda		#1
-	sta		testNum
-	lda		#0
-	sta		subTestNum					; test #01.00
-	jsr		Check6522Datalines
-	bne		+
-	rts
-
-+	inc		subTestNum					; test #01.01
-	jsr		Check6522IRQ
-	rts
-
-;------------------
-
-Check6522Datalines
-; Pre: zpTmp1 = slotInfo[slot]
-; Post: Z=0(BNE):OK, Z=1(BEQ):Failed
-
-	;
-	; Check r/w of all 8 data lines
-	; (NB. my real Phasor occasionally powers-on with r/w to 2nd 6522's DDRA with b7=1!)
-	;
-	;                 1st loop  2nd loop
-	; 6522-A:  DDRB =   $55       $AA
-	; 6522-A:  DDRA =   $AA       $55
-	; 6522-B:  DDRB =   $96       $69
-	; 6522-B:  DDRA =   $69       $96
-	; check A: DDRB ==  $55       $AA
-	; check A: DDRA ==  $AA       $55
-	; check B: DDRB ==  $69       $96
-	; check B: DDRA ==  $96       $69
+	ldx		#7
+-		lda		#0
+		sta		slotInfo,x
+		jsr		Detect6522
+		dex
+		bne		-
 
 	lda		#0
-	sta		zpTmp2
-
-@loop
-;@6522_A_w
-		lda		zpTmp1
-		and		#1
-		beq		@6522_B_w
-
-		ldy		#SY6522_A_BASE+SY6522_DDRB
-		lda		#$55
-		eor		zpTmp2
-		sta		(MBBase),y
-		lda		#$aa
-		eor		zpTmp2
-		iny								; Y=SY6522_DDRA
-		sta		(MBBase),y
-
-@6522_B_w
-		lda		zpTmp1
-		and		#2
-		beq		@6522_A_r
-
-		ldy		#SY6522_B_BASE+SY6522_DDRB
-		lda		#$69
-		eor		zpTmp2
-		sta		(MBBase),y
-		lda		#$96
-		eor		zpTmp2
-		iny								; Y=SY6522_DDRA
-		sta		(MBBase),y
-
-@6522_A_r
-		lda		zpTmp1
-		and		#1
-		beq		@6522_B_r
-
-		ldy		#SY6522_A_BASE+SY6522_DDRB
-		lda		#$55
-		eor		zpTmp2
-		cmp		(MBBase),y
-		bne		@6522_err
-		lda		#$aa
-		eor		zpTmp2
-		iny								; Y=SY6522_DDRA
-		cmp		(MBBase),y
-		bne		@6522_err
-
-@6522_B_r
-		lda		zpTmp1
-		and		#2
-		beq		@next
-
-		ldy		#SY6522_B_BASE+SY6522_DDRB
-		lda		#$69
-		eor		zpTmp2
-		cmp		(MBBase),y
-		bne		@6522_err
-		lda		#$96
-		eor		zpTmp2
-		iny								; Y=SY6522_DDRA
-		cmp		(MBBase),y
-		bne		@6522_err
-
-@next
-	lda		#$ff
-	eor		zpTmp2
-	sta		zpTmp2
-	bne		@loop
-
-;
-
-@6522_ok
-	lda		#1
-	rts
-
-@6522_err
-	lda		#0
-	rts
-
-;------------------
-
-Check6522IRQ
-; Pre: zpTmp1 = slotInfo[slot]
-; Post: Z=0(BNE):OK, Z=1(BEQ):Failed
-
-	;
-	; Check interrupt line
-	;
-
-	sei
-
-	lda		#<Check6522ISR
-	sta		IRQL
-	lda		#>Check6522ISR
-	sta		IRQH
-
-;@6522_A_int
-	lda		zpTmp1
-	and		#1
-	beq		@6522_B_int
-
-	lda		#1
-	ldy		#SY6522_A_BASE+SY6522_TIMER1L_COUNTER
-	sta		(MBBase),y
-	iny									; Y=SY6522_TIMER1H_COUNTER
-	sta		(MBBase),y					; T1C=0x0101
-
-	lda		#ACR_ONESHOT
-	ldy		#SY6522_A_BASE+SY6522_ACR
-	sta		(MBBase),y
-
-	lda		#IxR_SET|IxR_TIMER1
-	ldy		#SY6522_A_BASE+SY6522_IER
-	sta		(MBBase),y
-
-	lda		#$f							; wait 0x304 cycles
-	jsr		WAIT
-
-	ldy		#SY6522_A_BASE+SY6522_IFR
-	lda		#IxR_TIMER1
-	and		(MBBase),y
-	beq		@6522_err
-
-	cli
-	sei
-
-	and		isrIFR_A
-	beq		@6522_err
-
-@6522_B_int
-	lda		zpTmp1
-	and		#2
-	beq		@6522_ok
-
-	lda		#1
-	ldy		#SY6522_B_BASE+SY6522_TIMER1L_COUNTER
-	sta		(MBBase),y
-	iny									; Y=SY6522_TIMER1H_COUNTER
-	sta		(MBBase),y					; T1C=0x0101
-
-	lda		#ACR_ONESHOT
-	ldy		#SY6522_B_BASE+SY6522_ACR
-	sta		(MBBase),y
-
-	lda		#IxR_SET|IxR_TIMER1
-	ldy		#SY6522_B_BASE+SY6522_IER
-	sta		(MBBase),y
-
-	lda		#$f							; wait 0x304 cycles
-	jsr		WAIT
-
-	ldy		#SY6522_B_BASE+SY6522_IFR
-	lda		#IxR_TIMER1
-	and		(MBBase),y
-	beq		@6522_err
-
-	cli
-	sei
-
-	and		isrIFR_B
-	beq		@6522_err
-
-;
-
-@6522_ok
-	lda		#1
-	rts
-
-@6522_err
-	lda		#0
-	rts
-
-;------------------------------------------------------------------------------
-
-Check6522ISR
-; Pre:
-;	6502 has pushed P
-;	Apple ROM has stored A to $45 (not Apple //e ROM!)
-;
-
-	txa
-	pha
-	tya
-	pha
-
-	;------
-
-	ldy		#SY6522_A_BASE+SY6522_IFR
-	lda		(MBBase),y
-	sta		(MBBase),y
-	sta		isrIFR_A
-
-	ldy		#SY6522_B_BASE+SY6522_IFR
-	lda		(MBBase),y
-	sta		(MBBase),y
-	sta		isrIFR_B
-
-	;------
-
-	pla
-	tay
-	pla
+	ldx		#7
+-		ora		slotInfo,x
+		dex
+		bne		-
 	tax
-
-	lda		$45		; for Apple II/II+
-	rti
-
+	rts
 
 ;------------------------------------------------------------------------------
 
@@ -402,7 +167,7 @@ DetectSubunits
 	sta		isPhasorCard			; assume Mockingboard
 	sta		hasSSI263				; ... no SSI263's
 	sta		hasSC01					; ... no SC01
-	sta		hasAY8913				; ... no AY81913's
+	sta		hasAY8913				; ... no AY8913's
 
 	lda		#PH_MOCKINGBOARD
 	sta		phasorMode
@@ -593,89 +358,6 @@ DisplayCardUpdate
 
 ;------------------------------------------------------------------------------
 
-GetSlotInfo
-; Scan all slots for 6522s at $Cn00 and $Cn80
-; Post: Z=1 (BEQ) if nothing found
-
-	ldx		#7
--		lda		#0
-		sta		slotInfo,x
-		jsr		Detect
-		dex
-		bne		-
-
-	lda		#0
-	ldx		#7
--		ora		slotInfo,x
-		dex
-		bne		-
-	tax
-	rts
-
-;
-
-Detect
-; Pre: X=slot#
-; Post: X=slot#
-
-	txa
-	ora		#$c0
-	sta		MBBaseH
-	lda		#0
-	sta		MBBaseL
-
-	; 6522's IER.b7 is always 1
-	; . Due to floating bus (and the visible TEXT screen being mainly $A0 values), then empty slots will likely pass this IER.b7 check
-	ldy		#SY6522_B_BASE+SY6522_IER
-	lda		(MBBase),y
-	bmi		@check_A
-	rts
-
-@check_A
-	ldy		#SY6522_A_BASE+SY6522_TIMER1L_COUNTER
-	jsr		@Check6522T1C
-	bne		+
-		inc		slotInfo,x	; bit0=1
-+
-
-@check_B
-	ldy		#SY6522_B_BASE+SY6522_TIMER1L_COUNTER
-	jsr		@Check6522T1C
-	bne		+
-		inc		slotInfo,x
-		inc		slotInfo,x	; bit1=1
-+
-
-	rts
-
-@Check6522T1C
-; Pre: Y = SY6522_TIMER1L_COUNTER for chip A or B
-; Post: Z=1(OK), Z=0(NG)
-	lda		#4				; try 4 checks (avoid floating bus giving a false-positive, and avoid T1C_L underflow giving a false-negative!)
-	sta		zpTmp1
-	lda		#1				; failures (can have 1 failure)
-	sta		zpTmp2
--		jsr		SF_GetTimerL
-		beq		+
-			dec		zpTmp2
-			bmi		++
-+		dec		zpTmp1
-		bne		-
-++	rts
-
-SF_GetTimerL				; From Skyfox's detection code
-; Pre: Y = SY6522_TIMER1L_COUNTER for chip A or B
-; Post: Z=1(OK), Z=0(NG)
-	lda		(MBBase),y
-	cmp		MBBaseL			; 3cy, C=1 since A>=0 as (MBBaseL) == 0x00
-	sbc		(MBBase),y		; 5cy
-	cmp		#$08
-	beq		+
-	cmp		#$09			; FASTChip //e (Ref: https://github.com/a2-4am/4cade)
-+	rts
-
-;------------------------------------------------------------------------------
-
 PrintTestFailedErrBytes
 	jsr		PrintTestFailed
 	lda		#<msg_Expected
@@ -728,6 +410,7 @@ Print
 
 ;------------------------------------------------------------------------------
 
+!source "chip-6522.a"
 !source "chip-ay8913.a"
 !source "chip-sc01.a"
 !source "chip-ssi263.a"
