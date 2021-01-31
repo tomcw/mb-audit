@@ -1,0 +1,62 @@
+;license:MIT
+;(c) 2021 by TomCh
+;
+; SC01 related
+;
+
+;------------------------------------------------------------------------------
+
+DetectSC01
+; Pre: zpTmp1 = 6522 bitmap in b1:0
+; Post:
+
+	; SC01 is only on MB-Speech, MB-Sound/Speech + AppleWin's hybrid MB
+	; - Speech using 6522 PCR w/o IRQ (based on Crimewave's SC01 code)
+
+	lda		zpTmp1
+	and		#1
+	beq		+
+
+	lda		#IxR_VOTRAX
+	ldy		#SY6522_A_BASE+SY6522_IER
+	sta		(MBBase),y				; disable CB1(Speech) IRQ
+	ldy		#SY6522_A_BASE+SY6522_IFR
+	sta		(MBBase),y				; clear CB1(Speech) IRQ
+
+	ldy		#SY6522_A_BASE+SY6522_DDRB
+	lda		#$FF
+	sta		(MBBase),y
+
+	lda		#$B0
+	ldy		#SY6522_A_BASE+SY6522_PCR
+	sta		(MBBase),y
+
+	ldy		#SY6522_A_BASE+SY6522_ORB
+	lda		#$03					; PAUSE0
+	sta		(MBBase),y
+
+	lda		#$FF
+	jsr		WAIT					; delay for 0x28882 (166018) cycles / ~163ms
+
+	ldy		#SY6522_A_BASE+SY6522_IFR
+	lda		#IxR_VOTRAX				; check CB1(Speech) IRQ
+	and		(MBBase),y
+	beq		+
+	sta		(MBBase),y				; clear CB1(Speech) IRQ
+
+		jsr		DisableSC01
+		inc		hasSC01
+
++	rts
+
+;------------------------------------------------------------------------------
+
+DisableSC01
+
+	; https://github.com/a2-4am/4cade:
+	; . turn off cb2 pulse mode to disable false writes to sc01 (to fix random MB noise)
+	lda		#$D0
+	ldy		#SY6522_A_BASE+SY6522_PCR
+	sta		(MBBase),y
+
+	rts

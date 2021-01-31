@@ -1,0 +1,74 @@
+;license:MIT
+;(c) 2021 by TomCh
+;
+; SSI263 related
+;
+
+;------------------------------------------------------------------------------
+
+DetectSSI263
+; Pre: zpTmp1 = 6522 bitmap in b1:0
+; Post:
+
+	; SSI263 is only on MB-C & Phasor, both of which have 2x 6522's
+	; - Speech using 6522 PCR w/o IRQ (based on Willy Byte's SSI263 detection code)
+
+	lda		zpTmp1
+	and		#2
+	beq		+
+
+	lda		#IxR_SSI263
+	ldy		#SY6522_B_BASE+SY6522_IER
+	sta		(MBBase),y				; disable CA1(Speech) IRQ
+	ldy		#SY6522_B_BASE+SY6522_IFR
+	sta		(MBBase),y				; clear CA1(Speech) IRQ
+
+	lda		#$0C					; Peripheral for PA port Control: CA2 = low output (Pin18: Power Down/Reset)
+									; CA1 = negative active edge (input) (Pin4: A/!R)
+	ldy		#SY6522_B_BASE+SY6522_PCR
+	sta		(MBBase),y
+
+	lda		#CONTROL_H
+	ldy		#SSI_CTTRAMP
+	sta		(MBBase),y
+
+	; Warning: stepping this won't yield an IRQ, since the phoneme completes before H->L (assuming prev mode=MODE_IRQ_DISABLED)
+	lda		#MODE_PHONEME_TRANSITIONED_INFLECTION+$00	; DR1:DR0=3 , P5:P0=$00
+	ldy		#SSI_DURPHON
+	sta		(MBBase),y
+
+	lda		#$70					; H->L sets SSI263 operation mode = DR1:DR0, ie. IRQ active (also set Articulation=7, as Willy Byte does)
+	ldy		#SSI_CTTRAMP
+	sta		(MBBase),y
+
+	lda		#$FF
+	jsr		WAIT					; delay for 0x28882 (166018) cycles / ~163ms
+
+	ldy		#SY6522_B_BASE+SY6522_IFR
+	lda		#IxR_SSI263				; check CA1(Speech) IRQ
+	and		(MBBase),y
+	beq		+
+	sta		(MBBase),y				; clear CA1(Speech) IRQ
+
+		jsr		DisableSSI263
+		inc		hasSSI263
+
++	rts
+
+;------------------------------------------------------------------------------
+
+DisableSSI263
+
+	lda		#CONTROL_H
+	ldy		#SSI_CTTRAMP
+	sta		(MBBase),y
+
+	lda		#MODE_IRQ_DISABLED+$00	; DR1:DR0=3 , P5:P0=$00
+	ldy		#SSI_DURPHON
+	sta		(MBBase),y
+
+	lda		#CONTROL_L				; H->L sets SSI263 operation mode = DR1:DR0, ie. IRQ inactive
+	ldy		#SSI_CTTRAMP
+	sta		(MBBase),y
+
+	rts

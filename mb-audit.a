@@ -1,5 +1,13 @@
-;ACME 0.96.4
+;license:MIT
+;(c) 2021 by TomCh
+;
+; mb-audit:
+; . Verify real h/w is operating correctly, eg. inter-component (addr/data line, IRQ)
+; . Verify emulated h/w is operating at a chip level, eg. chip functionality
+;
 
+; ACME 0.96.4
+;
 !cpu 6502	; Compatible with all Apple2's
 !to "mb-audit", plain
 !sl "mb-audit.labels"
@@ -20,7 +28,7 @@
 ; MB-C
 ; . MB-C & clones			6522-A/AY8913			6522-B/AY8913 +[1|2x SSI263]
 ; . MB-C (AppleWin)			MB-C +SC01				MB-C +SSI263
-; . MEGA Audio (a2heaven)	MB-C					MB-C				6522 & AY8913 implemented in FPGA
+; . MEGA Audio (a2heaven)	MB-C					MB-C				6522 & AY8913 implemented in FPGA, supports 2x MB-C's
 ; Phasor
 ; . MB-C					6522-A/AY8913			6522-B/AY8913 +[1|2x SSI263]
 ; . Echo+					6522-A/AY8913			6522-B/AY8913
@@ -403,7 +411,7 @@ DetectSubunits
 
 	lda		zpTmp1
 	and		#1
-	beq		@detectSSI263
+	beq		+++
 
 	lda		#$55
 	ldy		#SY6522_DDRB
@@ -431,375 +439,13 @@ DetectSubunits
 ++	lda		#PH_MOCKINGBOARD
 	jsr		SetPhasorMode
 
-	;
-
-@detectSSI263
-	; SSI263 is only on MB-C & Phasor, both of which have 2x 6522's
-	; - Speech using 6522 PCR w/o IRQ (based on Willy Byte's SSI263 detection code)
-
-	lda		zpTmp1
-	and		#2
-	beq		@detectSC01
-
-	lda		#IxR_SSI263
-	ldy		#SY6522_B_BASE+SY6522_IER
-	sta		(MBBase),y				; disable CA1(Speech) IRQ
-	ldy		#SY6522_B_BASE+SY6522_IFR
-	sta		(MBBase),y				; clear CA1(Speech) IRQ
-
-	lda		#$0C					; Peripheral for PA port Control: CA2 = low output (Pin18: Power Down/Reset)
-									; CA1 = negative active edge (input) (Pin4: A/!R)
-	ldy		#SY6522_B_BASE+SY6522_PCR
-	sta		(MBBase),y
-
-	lda		#CONTROL_H
-	ldy		#SSI_CTTRAMP
-	sta		(MBBase),y
-
-	; Warning: stepping this won't yield an IRQ, since the phoneme completes before H->L (assuming prev mode=MODE_IRQ_DISABLED)
-	lda		#MODE_PHONEME_TRANSITIONED_INFLECTION+$00	; DR1:DR0=3 , P5:P0=$00
-	ldy		#SSI_DURPHON
-	sta		(MBBase),y
-
-	lda		#$70					; H->L sets SSI263 operation mode = DR1:DR0, ie. IRQ active (also set Articulation=7, as Willy Byte does)
-	ldy		#SSI_CTTRAMP
-	sta		(MBBase),y
-
-	lda		#$FF
-	jsr		WAIT					; delay for 0x28882 (166018) cycles / ~163ms
-
-	ldy		#SY6522_B_BASE+SY6522_IFR
-	lda		#IxR_SSI263				; check CA1(Speech) IRQ
-	and		(MBBase),y
-	beq		+
-	sta		(MBBase),y				; clear CA1(Speech) IRQ
-
-		jsr		DisableSSI263
-		inc		hasSSI263
-
-+
++++
 
 	;
 
-@detectSC01
-	; SC01 is only on MB-Speech, MB-Sound/Speech + AppleWin's hybrid MB
-	; - Speech using 6522 PCR w/o IRQ (based on Crimewave's SC01 code)
-
-	lda		zpTmp1
-	and		#1
-	beq		@detectAY8913
-
-	lda		#IxR_VOTRAX
-	ldy		#SY6522_A_BASE+SY6522_IER
-	sta		(MBBase),y				; disable CB1(Speech) IRQ
-	ldy		#SY6522_A_BASE+SY6522_IFR
-	sta		(MBBase),y				; clear CB1(Speech) IRQ
-
-	ldy		#SY6522_A_BASE+SY6522_DDRB
-	lda		#$FF
-	sta		(MBBase),y
-
-	lda		#$B0
-	ldy		#SY6522_A_BASE+SY6522_PCR
-	sta		(MBBase),y
-
-	ldy		#SY6522_A_BASE+SY6522_ORB
-	lda		#$03					; PAUSE0
-	sta		(MBBase),y
-
-	lda		#$FF
-	jsr		WAIT					; delay for 0x28882 (166018) cycles / ~163ms
-
-	ldy		#SY6522_A_BASE+SY6522_IFR
-	lda		#IxR_VOTRAX				; check CB1(Speech) IRQ
-	and		(MBBase),y
-	beq		+
-	sta		(MBBase),y				; clear CB1(Speech) IRQ
-
-		jsr		DisableSC01
-		inc		hasSC01
-
-+
-
-	;
-
-@detectAY8913
-	lda		#SY6522_A_BASE
-	sta		zpTmp3
-	lda		#1					; hasAY8913 mask
-	sta		zpTmp2
-
--		lsr		zpTmp1			; 6522 at this addr?
-		bcc		+
-
-		jsr		Init6522ForAY
-
-		lda		#AY_AFINE
-		ldx		#$AA
-		jsr		AY_WriteRegValue
-
-		lda		#AY_BFINE
-		ldx		#$55
-		jsr		AY_WriteRegValue
-
-		lda		#AY_CFINE
-		ldx		#$69
-		jsr		AY_WriteRegValue
-
-		;
-
-		ldx		#AY_AFINE
-		jsr		AY_ReadRegValue
-		cmp		#$AA
-		bne		+
-
-		ldx		#AY_BFINE
-		jsr		AY_ReadRegValue
-		cmp		#$55
-		bne		+
-
-		ldx		#AY_CFINE
-		jsr		AY_ReadRegValue
-		cmp		#$69
-		bne		+
-
-			lda		hasAY8913
-			ora		zpTmp2
-			sta		hasAY8913
-
-+		asl		zpTmp2			; mask <<= 1
-		lda		zpTmp3
-		eor		#$80
-		sta		zpTmp3
-		bne		-
-
-	rts
-
-;------------------------------------------------------------------------------
-
-TestAY8913
-; Pre:
-; Post:
-
-	lda		#2
-	sta		testNum
-	lda		#$ff
-	sta		subTestNum			; test #02.00
-
-	lda		#SY6522_A_BASE
-	sta		zpTmp3				; 6522 base addr
-
-	lda		hasAY8913
-	sta		zpTmp1
-
--		lsr		zpTmp1
-		bcs		+
-			inc		subTestNum
-			inc		subTestNum
-			bne		++
-
-+		jsr		Init6522ForAY
-
-		inc		subTestNum		; test #02.00, 02.02
-		jsr		TestAYDatalines
-		bne		@error
-
-		inc		subTestNum		; test #02.01, 02.03
-		jsr		TestAYAddrlines
-		bne		@error
-
-++		lda		zpTmp3
-		eor		#$80
-		sta		zpTmp3
-		bne		-
-
-	inc		subTestNum			; test #02.04
-	jsr		TestAYPhasor		; only do this test once, since it covers both SY6522's
-	bne		@error
-
-	lda		#1
-	rts
-
-@error
-; Pre: zpTmp2 = expected value
-;	A = actual value
-
-	sta		errorActual
-	lda		zpTmp2
-	sta		errorExpected
-
-	lda		#0
-	rts
-
-;--------------------------------------
-
-TestAYDatalines
-; Post: Z=1(OK),0(NG)
-;	zpTmp2 = expected, A = actual
-
-	; Test the 8 data lines:
-	; . Write then Read: $01, $02, $04, ..., $80
-
-	lda		#1					; data to test
-	sta		zpTmp2
-
--		lda		#AY_AFINE
-		ldx		zpTmp2
-		jsr		AY_WriteRegValue
-
-		ldx		#AY_AFINE
-		jsr		AY_ReadRegValue
-		cmp		zpTmp2
-		beq		+
-		rts						; Z=0(NG)
-
-+		jsr		AY_SetPortAOutput	; DDRA=0xFF
-
-		asl		zpTmp2
-		bne		-
-
-	rts							; Z=1(OK)
-
-;--------------------------------------
-
-TestAYAddrlines
-; Post: Z=1(OK),0(NG)
-;	zpTmp2 = expected, A = actual
-
-	; Test the 4 addr lines:
-	; . Write regs: [0..$D] with values [0..$D]
-	; . then read back
-
-	lda		#0					; reg & data to test
-	sta		zpTmp2
-
--		lda		zpTmp2
-		tax
-		jsr		AY_WriteRegValue
-
---		inc		zpTmp2
-		lda		zpTmp2
-		cmp		#AY_ENABLE		; skip ENABLE to avoid enabling ABC noise
-		beq		--
-		cmp		#AY_ESHAPE
-		bne		-
-
-	lda		#0					; reg & data to test
-	sta		zpTmp2
-
--		ldx		zpTmp2
-		jsr		AY_ReadRegValue
-		cmp		zpTmp2
-		beq		+
-		rts						; Z=0(NG)
-+
---		inc		zpTmp2
-		lda		zpTmp2
-		cmp		#AY_ENABLE		; skip ENABLE to avoid enabling ABC noise
-		beq		--
-		cmp		#AY_ESHAPE
-		bne		-
-
-	ldy		zpTmp3
-	jsr		Init6522ForAY
-
-	lda		#0					; Z=1(OK)
-	rts
-
-;--------------------------------------
-
-TestAYPhasor
-; Post: Z=1(OK),0(NG)
-;	zpTmp2 = expected, A = actual
-
-	lda		isPhasorCard
-	bne		+
-	rts							; Z=1(OK)
-+
-
-	; Test for 4 AYs (Phasor only)
-	; . Write to each AY's reg#0 with values: $11,$22,$33,$44
-	; . then read back
-
-	lda		#PH_PHASOR
-	jsr		SetPhasorMode
-
-	;
-
-	lda		#SY6522_A_PH_BASE
-	sta		zpTmp3
-
-	jsr		Init6522ForAY
-
-	lda		#AY_AFINE
-	ldx		#$11
-	jsr		AY1_WriteRegValue
-
-	lda		#AY_AFINE
-	ldx		#$22
-	jsr		AY2_WriteRegValue
-
-	;
-
-	lda		#SY6522_B_BASE
-	sta		zpTmp3
-
-	jsr		Init6522ForAY
-
-	lda		#AY_AFINE
-	ldx		#$33
-	jsr		AY1_WriteRegValue
-
-	lda		#AY_AFINE
-	ldx		#$44
-	jsr		AY2_WriteRegValue
-
-	;
-
-	ldy		#SY6522_A_PH_BASE+SY6522_ORA
-
-	ldx		#AY_AFINE
-	jsr		AY1_ReadRegValue
-	ldx		#$11
-	cmp		#$11
-	bne		+
-
-	ldx		#AY_AFINE
-	jsr		AY2_ReadRegValue
-	ldx		#$22
-	cmp		#$22
-	bne		+
-
-	;
-
-	ldy		#SY6522_B_BASE+SY6522_ORA
-
-	ldx		#AY_AFINE
-	jsr		AY1_ReadRegValue
-	ldx		#$33
-	cmp		#$33
-	bne		+
-
-	ldx		#AY_AFINE
-	jsr		AY2_ReadRegValue
-	ldx		#$44
-
-+	stx		zpTmp2				; expected
-	sta		zpTmp1				; actual
-
-++	lda		#SY6522_A_PH_BASE
-	sta		zpTmp3
-	jsr		Init6522ForAY		; Reset 6522-A's 2x AYs
-	lda		#SY6522_B_BASE
-	sta		zpTmp3
-	jsr		Init6522ForAY		; Reset 6522-B's 2x AYs
-
-	lda		#PH_MOCKINGBOARD
-	jsr		SetPhasorMode
-
-	lda		zpTmp1
-	cmp		zpTmp2
-	rts							; Z=1(OK), Z=0(NG)
+	jsr		DetectSSI263			; pre: zpTmp1
+	jsr		DetectSC01				; pre: zpTmp1
+	jmp		DetectAY8913			; pre: zpTmp1
 
 ;------------------------------------------------------------------------------
 
@@ -816,36 +462,6 @@ SetPhasorMode
 	adc		phasorMode
 	tax
 	lda		$c080,x
-	rts
-
-;--------------------------------------
-
-DisableSSI263
-
-	lda		#CONTROL_H
-	ldy		#SSI_CTTRAMP
-	sta		(MBBase),y
-
-	lda		#MODE_IRQ_DISABLED+$00	; DR1:DR0=3 , P5:P0=$00
-	ldy		#SSI_DURPHON
-	sta		(MBBase),y
-
-	lda		#CONTROL_L				; H->L sets SSI263 operation mode = DR1:DR0, ie. IRQ inactive
-	ldy		#SSI_CTTRAMP
-	sta		(MBBase),y
-
-	rts
-
-;--------------------------------------
-
-DisableSC01
-
-	; https://github.com/a2-4am/4cade:
-	; . turn off cb2 pulse mode to disable false writes to sc01 (to fix random MB noise)
-	lda		#$D0
-	ldy		#SY6522_A_BASE+SY6522_PCR
-	sta		(MBBase),y
-
 	rts
 
 ;------------------------------------------------------------------------------
@@ -1060,210 +676,6 @@ SF_GetTimerL				; From Skyfox's detection code
 
 ;------------------------------------------------------------------------------
 
-Init6522ForAY
-; Pre: phasorMode
-;	zpTmp3 = SY6522_A_BASE or SY6522_A_PH_BASE or SY6522_B_BASE
-; Post: Y = SY6522_ORA for chip A or B
-
-	lda		#SY6522_DDRB
-	ora		zpTmp3
-	tay
-	lda		phasorMode
-	cmp		#PH_PHASOR
-	beq		+
-		lda		#$07
-		beq		++
-+		lda		#$1f
-++	sta		(MBBase),y
-
-	lda		#SY6522_DDRA
-	ora		zpTmp3
-	tay
-	lda		#$ff	; output
-	sta		(MBBase),y
-
-	ldy		zpTmp3
-	jmp		SF_ChipReset		; Post: Y=SY6522_ORA for chip A or B
-
-	;
-
-AY_WriteRegValue
-; Pre: Y = SY6522_ORA for chip A or B
-;	A=reg#
-;	X=value
-	jsr		SF_SelectReg
-	txa
-	jmp		SF_WriteReg
-
-AY_ReadRegValue
-; Pre: Y = SY6522_ORA for chip A or B
-;	X=reg#
-; Post:
-;	A=value
-	jsr		AY_SetPortAOutput
-	txa
-	jsr		SF_SelectReg
-	jsr		AY_SetPortAInput
-	jmp		AY_ReadReg
-
-	;
-
-AY_SetPortAOutput
-; Pre: Y = SY6522_ORA for chip A or B
-; Post: Y = SY6522_ORA for chip A or B
-	iny
-	iny		; Y = DDRA
-	lda		#$ff
-	sta		(MBBase),y
-	dey
-	dey		; Y = ORA
-	rts
-
-AY_SetPortAInput
-; Pre: Y = SY6522_ORA for chip A or B
-; Post: Y = SY6522_ORA for chip A or B
-	iny
-	iny		; Y = DDRA
-	lda		#$0
-	sta		(MBBase),y
-	dey
-	dey		; Y = ORA
-	rts
-
-	;
-
-AY_ReadReg
-; Pre: Y = SY6522_ORA for chip A or B
-;	6522.DDRA = $00 (Port-A direction = input)
-; Post: Y = SY6522_ORA for chip A or B
-;	A = data
-	lda		#AY_READ
-	jsr		+
-	lda		(MBBase),y		; Read Port-A
-	rts
-
-SF_SelectReg
-; Pre: Y = SY6522_ORA for chip A or B
-; Post: Y = SY6522_ORA for chip A or B
-;	A = reg#
-	sta		(MBBase),y
-	lda		#AY_LATCH
-	bne		+
-
-SF_WriteReg
-; Pre: Y = SY6522_ORA for chip A or B
-;	6522.DDRA = $FF (Port-A direction = output)
-; Post: Y = SY6522_ORA for chip A or B
-;	A = data
-	sta		(MBBase),y
-	lda		#AY_WRITE
-	bne		+
-
-SF_ChipReset
-; NB. For native Phasor mode, reset both AY's, since cmd=AY_RESET|(%00<<3) - and CS is active low
-; Pre: Y = SY6522_A_BASE or SY6522_B_BASE
-; Post: Y = SY6522_ORA for chip A or B
-	lda		#AY_RESET
-	beq		++
-
-+	dey		; Y = ORB (reg#0)
-
-++	sta		(MBBase),y
-	lda		#AY_INACTIVE
-	sta		(MBBase),y
-	iny		; Y = ORA (reg#1)
-	rts
-
-;------------------------------------------------------------------------------
-; Phasor (native mode) routines:
-
-AY1_ReadReg
-; Pre: Y = SY6522_ORA for chip A or B
-;	6522.DDRA = $00 (Port-A direction = input)
-; Post: Y = SY6522_ORA for chip A or B
-;	A = data
-	lda		#AY_READ|AY_CS1
-	bne		++
-AY2_ReadReg
-	lda		#AY_READ|AY_CS2
-++	jsr		+
-	lda		(MBBase),y		; Read Port-A
-	rts
-
-AY1_SelectReg
-; Pre: Y = SY6522_ORA for chip A or B
-; Post: Y = SY6522_ORA for chip A or B
-;	A = reg#
-	sta		(MBBase),y
-	lda		#AY_LATCH|AY_CS1
-	bne		+
-AY2_SelectReg
-	sta		(MBBase),y
-	lda		#AY_LATCH|AY_CS2
-	bne		+
-
-AY1_WriteReg
-; Pre: Y = SY6522_ORA for chip A or B
-;	6522.DDRA = $FF (Port-A direction = output)
-; Post: Y = SY6522_ORA for chip A or B
-;	A = data
-	sta		(MBBase),y
-	lda		#AY_WRITE|AY_CS1
-	bne		+
-AY2_WriteReg
-	sta		(MBBase),y
-	lda		#AY_WRITE|AY_CS2
-	bne		+
-
-+	dey		; Y = ORB (reg#0)
-	sta		(MBBase),y
-	lda		#AY_INACTIVE		; NB. Always deactivate both AY's (as it's simpler!)
-	sta		(MBBase),y
-	iny		; Y = ORA (reg#1)
-	rts
-
-;------------------------------------------------------------------------------
-
-AY1_WriteRegValue
-; Pre: Y = SY6522_ORA for chip A or B
-;	A=reg#
-;	X=value
-	jsr		AY1_SelectReg
-	txa
-	jmp		AY1_WriteReg
-
-AY2_WriteRegValue
-; Pre: Y = SY6522_ORA for chip A or B
-;	A=reg#
-;	X=value
-	jsr		AY2_SelectReg
-	txa
-	jmp		AY2_WriteReg
-
-AY1_ReadRegValue
-; Pre: Y = SY6522_ORA for chip A or B
-;	X=reg#
-; Post:
-;	A=value
-	jsr		AY_SetPortAOutput
-	txa
-	jsr		AY1_SelectReg
-	jsr		AY_SetPortAInput
-	jmp		AY1_ReadReg
-
-AY2_ReadRegValue
-; Pre: Y = SY6522_ORA for chip A or B
-;	X=reg#
-; Post:
-;	A=value
-	jsr		AY_SetPortAOutput
-	txa
-	jsr		AY2_SelectReg
-	jsr		AY_SetPortAInput
-	jmp		AY2_ReadReg
-
-;------------------------------------------------------------------------------
-
 PrintTestFailedErrBytes
 	jsr		PrintTestFailed
 	lda		#<msg_Expected
@@ -1313,6 +725,12 @@ Print
 		iny
 		bne 	@loop
 +	rts
+
+;------------------------------------------------------------------------------
+
+!source "chip-ay8913.a"
+!source "chip-sc01.a"
+!source "chip-ssi263.a"
 
 ;------------------------------------------------------------------------------
 
