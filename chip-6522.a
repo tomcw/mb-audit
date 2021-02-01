@@ -332,9 +332,11 @@ Check6522ISR
 ;	. oneshot|continuous x IRQ|poll
 ;	. 6522 count is N+2 cycles
 ;	. 6522 -> IRQ cycle (detect a2heaven's MEGA Audio)
-;	. 6502|65C02 addr modes access of 6522 T1L
+;	. 6502|65C02 addr modes access of 6522 T1C
+;	. oneshot|continuous underflow, then T1L -> T1C
 ;	T2:
 ;	. oneshot x IRQ|poll
+;	. oneshot underflow, then T1L -> T1C
 ;	All 6522: write chip A,B; read chip A,B
 
 Test6522
@@ -376,7 +378,7 @@ Test6522
 
 @next6522
 		lda		MBBaseL
-		ora		#$80
+		eor		#$80
 		sta		MBBaseL
 
 		lsr		zpTmp1
@@ -449,7 +451,7 @@ T6522_2
 ; Post: Z=1(OK), Z=0(NG)
 ;
 ; Test#2
-; . Setup T1_C=0x0202 and ACR=free-running
+; . Setup T1C=0x0202 and ACR=free-running
 ; . Enable T1 & T2 IRQs
 ; . Poll for T1 int
 ; . ACR=one-shot
@@ -504,6 +506,8 @@ T6522_2
 
 	sei
 
+	; NB. T1C reloaded with T1L (except it doesn't for AppleWin, due to one-shot mode)
+
 	jsr		WaitT1Underflow
 
 	ldy		#SY6522_IFR
@@ -519,7 +523,7 @@ T6522_3
 ; Post: Z=1(OK), Z=0(NG)
 ;
 ; Test#3 (AppleWin-GH#567)
-; . Setup T1_C=0x0202 and ACR=free-running
+; . Setup T1C=0x0202 and ACR=free-running
 ; . Disable T1 IRQ, enable T2 IRQ
 ; . CLI
 ; . Poll for T1 int
@@ -596,6 +600,14 @@ T6522_4
 	sta		@4+2
 	sta		@5+2
 
+	lda		MBBaseL
+	sta		@4+1
+	sta		@5+1
+	ora		#SY6522_TIMER1H_COUNTER
+	sta		@1+1
+	sta		@2+1
+	sta		@3+1
+
 	ldy		#$FF
 @1	sty		CARD_BASE+SY6522_TIMER1H_COUNTER
 	jsr		@readT1C
@@ -619,13 +631,13 @@ T6522_4
 	jsr		@readT1C
 
 	lda		MBBaseH
-	sta		StringH
+	sta		zpTmpPtrH
 	lda		MBBaseL
 	ora		#SY6522_TIMER1H_COUNTER
-	sta		StringL
+	sta		zpTmpPtrL
 	ldx		#0
 	lda		#$FF
-	sta		(String,x)
+	sta		(zpTmpPtr,x)
 	jsr		@readT1C
 
 	lda		#$FF
@@ -636,12 +648,12 @@ T6522_4
 !if 0 {		; 65C02
 !cpu 65c02
 	lda		#$FF
-	sta		(String)
+	sta		(zpTmpPtr)
 	jsr		@readT1C
 !cpu 6502
 }
 
-	lda		#0
+	lda		#0						; Z=1(OK)
 	rts
 
 	;
@@ -653,10 +665,13 @@ T6522_4
 	bne		+
 	rts
 
-+	sta		zpTmp1
++	tax
 	pla
 	pla
-	lda		#1
+	lda		#$F5
+	sta		zpTmp2					; expected
+	txa								; actual
+	ldx		#1						; Z=0(NG)
 	rts
 
 ;------------------------------------------------------------------------------

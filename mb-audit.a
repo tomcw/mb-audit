@@ -44,7 +44,11 @@
 
 ZP_BASE = $f0
 
+zpTmp4 = $fa
 zpTmp3 = $fb
+zpTmpPtr = $fa
+zpTmpPtrL = zpTmpPtr
+zpTmpPtrH = zpTmpPtr+1
 zpTmp2 = $fc
 zpTmp1 = $fd
 String = $fc		; alias with zpTmp2 & zpTmp1
@@ -365,6 +369,16 @@ DisplayCardUpdate
 ;------------------------------------------------------------------------------
 
 PrintTestFailedErrBytes
+	lda		#<msg_Slot
+	ldx		#>msg_Slot
+	jsr		Print
+	lda		slotUnderTest
+	ora		#$80+$30
+	jsr		COUT
+	lda		#$80+' '
+	jsr		COUT
+	lda		#$80+':'
+	jsr		COUT
 	jsr		PrintTestFailed
 	lda		#<msg_Expected
 	ldx		#>msg_Expected
@@ -389,8 +403,9 @@ PrintTestFailed
 	jsr		COUT
 	ldx		subTestNum
 	jsr		PRNTX
-	lda		#$80+$0d
-	jmp		COUT
+;	lda		#$80+$0d		; exactly 40 char, so no need for CR
+;	jsr		COUT
+	rts
 
 ;------------------------------------------------------------------------------
 
@@ -458,6 +473,9 @@ msg_mbauditEnd !text 0
 
 msg_NoMB !text "No Mockingboard detected!",0xd
 msg_NoMBEnd !text 0
+
+msg_Slot !text "Slot #"	; 0
+msg_SlotEnd !text 0
 
 msg_TestFailed !text "Mockingboard failed test #"	; 00:00 (testNum:subTestNum)
 msg_TestFailedEnd !text 0
