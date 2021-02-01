@@ -51,13 +51,13 @@ AY_PORTB	= 15	; b7:0 - not available on AY-3-8913
 AY_NOISE_MASK = $1f		; valid bits of AY_NOISEPER
 AY_AMPLITUDE_MODE = $10	; b4 of AY_xVOL (0=fixed, 1=envelope)
 
-AY_ENA_A	= %110110	; Enable A (Noise & Tone)
-AY_ENA_B	= %101101	; Enable B (Noise & Tone)
-AY_ENA_C	= %011011	; Enable C (Noise & Tone)
+AY_ENA_A	= %00110110	; Enable A (Noise & Tone)
+AY_ENA_B	= %00101101	; Enable B (Noise & Tone)
+AY_ENA_C	= %00011011	; Enable C (Noise & Tone)
 
-AY_DIS_A	= %001001	; Disable A (Noise & Tone)
-AY_DIS_B	= %010010	; Disable B (Noise & Tone)
-AY_DIS_C	= %100100	; Disable C (Noise & Tone)
+AY_DIS_A	= %00001001	; Disable A (Noise & Tone)
+AY_DIS_B	= %00010010	; Disable B (Noise & Tone)
+AY_DIS_C	= %00100100	; Disable C (Noise & Tone)
 
 ; AY inputs on BDIR|BC2|BC1:
 AY_RESET	= 0

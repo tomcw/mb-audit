@@ -370,6 +370,10 @@ Test6522
 		jsr		T6522_3
 		bne		@error
 
+		inc		subTestNum		; test #02.03, 02.??
+		jsr		T6522_4
+		bne		@error
+
 @next6522
 		lda		MBBaseL
 		ora		#$80
@@ -567,6 +571,93 @@ T6522_3
 +	; error
 	lda		#1
 	rts								; Z=0(NG)
+
+;--------------------------------------
+
+T6522_4
+; Pre:
+; Post: Z=1(OK), Z=0(NG)
+;
+; Test#4
+; . 6502|65C02 addr modes access of 6522 T1L
+; TODO: inc subTestParam to track the sub-test
+; TODO: on error: set expected & actual
+
+	lda		#$FF
+	ldy		#SY6522_TIMER1L_COUNTER
+	sta		(MBBase),y
+	ldy		#SY6522_TIMER1H_COUNTER
+	sta		(MBBase),y
+
+	lda		MBBaseH
+	sta		@1+2
+	sta		@2+2
+	sta		@3+2
+	sta		@4+2
+	sta		@5+2
+
+	ldy		#$FF
+@1	sty		CARD_BASE+SY6522_TIMER1H_COUNTER
+	jsr		@readT1C
+
+	lda		#$FF
+@2	sta		CARD_BASE+SY6522_TIMER1H_COUNTER
+	jsr		@readT1C
+
+	ldx		#$FF
+@3	stx		CARD_BASE+SY6522_TIMER1H_COUNTER
+	jsr		@readT1C
+
+	lda		#$FF
+	ldy		#SY6522_TIMER1H_COUNTER
+@4	sta		CARD_BASE,y
+	jsr		@readT1C
+
+	lda		#$FF
+	ldx		#SY6522_TIMER1H_COUNTER
+@5	sta		CARD_BASE,x
+	jsr		@readT1C
+
+	lda		MBBaseH
+	sta		StringH
+	lda		MBBaseL
+	ora		#SY6522_TIMER1H_COUNTER
+	sta		StringL
+	ldx		#0
+	lda		#$FF
+	sta		(String,x)
+	jsr		@readT1C
+
+	lda		#$FF
+	ldy		#SY6522_TIMER1H_COUNTER
+	sta		(MBBase),y
+	jsr		@readT1C
+
+!if 0 {		; 65C02
+!cpu 65c02
+	lda		#$FF
+	sta		(String)
+	jsr		@readT1C
+!cpu 6502
+}
+
+	lda		#0
+	rts
+
+	;
+
+@readT1C
+	ldy		#SY6522_TIMER1L_COUNTER
+	lda		(MBBase),y
+	cmp		#$F5
+	bne		+
+	rts
+
++	sta		zpTmp1
+	pla
+	pla
+	lda		#1
+	rts
 
 ;------------------------------------------------------------------------------
 
