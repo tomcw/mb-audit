@@ -599,14 +599,36 @@ T6522_4
 	sta		@3+2
 	sta		@4+2
 	sta		@5+2
+	;
+	sta		@6+2
+	sta		@7+2
+	sta		@8+2
+	sta		@9+2
+	sta		@A+2
+	sta		@B+2
+	sta		@C+2
 
 	lda		MBBaseL
 	sta		@4+1
 	sta		@5+1
+	;
+	sta		@9+1
+	sta		@A+1
+	sta		@B+1
+	sta		@C+1
+	;
 	ora		#SY6522_TIMER1H_COUNTER
 	sta		@1+1
 	sta		@2+1
 	sta		@3+1
+	;
+	sec
+	sbc		#1						; SY6522_TIMER1L_COUNTER
+	sta		@6+1
+	sta		@7+1
+	sta		@8+1
+
+	; (a) Test all the insn's that can write to $Cn04
 
 	ldy		#$FF
 @1	sty		CARD_BASE+SY6522_TIMER1H_COUNTER
@@ -653,10 +675,95 @@ T6522_4
 !cpu 6502
 }
 
+	; (b) Test all the insn's that can read from $Cn04
+
+	jsr		@setT1C
+@6	ldy		CARD_BASE+SY6522_TIMER1L_COUNTER
+	cpy		#$FC
+	bne		@readErrY
+
+	jsr		@setT1C
+@7	ldx		CARD_BASE+SY6522_TIMER1L_COUNTER
+	cpx		#$FC
+	bne		@readErrX
+
+	jsr		@setT1C
+@8	lda		CARD_BASE+SY6522_TIMER1L_COUNTER
+	cmp		#$FC
+	bne		@readErrA
+
+	lda		#$07
+	jsr		@setT1C2
+	ldx		#SY6522_TIMER1L_COUNTER
+@9	lda		CARD_BASE,x
+	cmp		#$FC
+	bne		@readErrA
+
+	lda		#$07
+	jsr		@setT1C2
+	ldy		#SY6522_TIMER1L_COUNTER
+@A	lda		CARD_BASE,y
+	cmp		#$FC
+	bne		@readErrA
+
+	lda		#$07
+	jsr		@setT1C2
+	ldy		#SY6522_TIMER1L_COUNTER
+@B	ldx		CARD_BASE,y
+	cpx		#$FC
+	bne		@readErrX
+
+	lda		#$07
+	jsr		@setT1C2
+	ldx		#SY6522_TIMER1L_COUNTER
+@C	ldy		CARD_BASE,x
+	cpy		#$FC
+	bne		@readErrY
+
+;	lda		MBBaseH
+;	sta		zpTmpPtrH				; set above
+	lda		MBBaseL
+	ora		#SY6522_TIMER1L_COUNTER
+	sta		zpTmpPtrL
+	lda		#$07
+	jsr		@setT1C2
+	ldx		#0
+	lda		(zpTmpPtr,x)
+	cmp		#$FC					; AppleWin bug
+	bne		@readErrA
+
+	lda		#$07
+	jsr		@setT1C2
+	ldy		#SY6522_TIMER1L_COUNTER
+	lda		(MBBase),y
+	cmp		#$FC					; AppleWin bug
+	bne		@readErrA
+
+!if 0 {		; 65C02
+!cpu 65c02
+	lda		#$07
+	jsr		@setT1C2
+	lda		(zpTmpPtr)
+	cmp		#$FC					; AppleWin bug
+	bne		@readErrA
+!cpu 6502
+}
+
 	lda		#0						; Z=1(OK)
 	rts
 
 	;
+
+@readErrY
+	tya
+@readErrA
+	tax
+@readErrX
+	lda		#$FC
+	sta		zpTmp2					; expected
+	txa								; actual
+	ldx		#1						; Z=0(NG)
+	rts
 
 @readT1C
 	ldy		#SY6522_TIMER1L_COUNTER
@@ -673,6 +780,18 @@ T6522_4
 	txa								; actual
 	ldx		#1						; Z=0(NG)
 	rts
+
+	;
+
+@setT1C
+; Post: T1C=nnFF
+	lda		#$05
+@setT1C2
+	ldy		#SY6522_TIMER1L_COUNTER
+	sta		(MBBase),y
+	ldy		#SY6522_TIMER1H_COUNTER
+	sta		(MBBase),y				; post: T1C = $0505
+	rts								; post: T1C = $04FF (as RTS is 6cy)
 
 ;------------------------------------------------------------------------------
 
