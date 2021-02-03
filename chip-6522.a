@@ -687,73 +687,77 @@ T6522_4
 ; Post: Z=1(OK), Z=0(NG)
 ;
 ; Test#4
-; . Test all the insn's that can read from $Cn04
+; . Test all the insn's that can read from $Cn04 (excluding RMW: DEC,INC,ASL,LSR,ROL,ROR)
 ; TODO: inc subTestParam to track the sub-test
 ; TODO: on error: set expected & actual
 
 	lda		MBBaseH
 	sta		@6+2
-	sta		@7+2
 	sta		@8+2
-	sta		@9+2
 	sta		@A+2
 	sta		@B+2
 	sta		@C+2
+	sta		@7+2
+	sta		@9+2
 
 	lda		MBBaseL
-	sta		@9+1
-	sta		@A+1
 	sta		@B+1
 	sta		@C+1
+	sta		@7+1
+	sta		@9+1
 	ora		#SY6522_TIMER1L_COUNTER
 	sta		@6+1
-	sta		@7+1
 	sta		@8+1
+	sta		@A+1
 
-	;
-
-	jsr		@setT1C
-@6	ldy		CARD_BASE+SY6522_TIMER1L_COUNTER
-	cpy		#$FC
-	bne		@readErrY
+	; LDX
 
 	jsr		@setT1C
-@7	ldx		CARD_BASE+SY6522_TIMER1L_COUNTER
+@6	ldx		CARD_BASE+SY6522_TIMER1L_COUNTER
 	cpx		#$FC
 	bne		@readErrX
 
+	lda		#$07
+	jsr		@setT1C2
+	ldy		#SY6522_TIMER1L_COUNTER
+@7	ldx		CARD_BASE,y
+	cpx		#$FC
+	bne		@readErrX
+
+	; LDY
+
 	jsr		@setT1C
-@8	lda		CARD_BASE+SY6522_TIMER1L_COUNTER
+@8	ldy		CARD_BASE+SY6522_TIMER1L_COUNTER
+	cpy		#$FC
+	bne		@readErrY
+
+	lda		#$07
+	jsr		@setT1C2
+	ldx		#SY6522_TIMER1L_COUNTER
+@9	ldy		CARD_BASE,x
+	cpy		#$FC
+	bne		@readErrY
+
+	; LDA (and ADC, AND, CMP, EOR, ORA, SBC)
+
+	jsr		@setT1C
+@A	lda		CARD_BASE+SY6522_TIMER1L_COUNTER
 	cmp		#$FC
 	bne		@readErrA
 
 	lda		#$07
 	jsr		@setT1C2
 	ldx		#SY6522_TIMER1L_COUNTER
-@9	lda		CARD_BASE,x
+@B	lda		CARD_BASE,x
 	cmp		#$FC
 	bne		@readErrA
 
 	lda		#$07
 	jsr		@setT1C2
 	ldy		#SY6522_TIMER1L_COUNTER
-@A	lda		CARD_BASE,y
+@C	lda		CARD_BASE,y
 	cmp		#$FC
 	bne		@readErrA
-
-	lda		#$07
-	jsr		@setT1C2
-	ldy		#SY6522_TIMER1L_COUNTER
-@B	ldx		CARD_BASE,y
-	cpx		#$FC
-	bne		@readErrX
-
-	lda		#$07
-	jsr		@setT1C2
-	ldx		#SY6522_TIMER1L_COUNTER
-@C	ldy		CARD_BASE,x
-	cpy		#$FC
-	bne		@readErrY
 
 	lda		MBBaseH
 	sta		zpTmpPtrH
