@@ -361,18 +361,22 @@ Test6522
 	bcc		@next6522
 
 @loop	inc		subTestNum		; test #02.00, 02.??
-		jsr		T6522_1
+		jsr		T6522_0
 		bne		@error
 
 		inc		subTestNum		; test #02.01, 02.??
-		jsr		T6522_2
+		jsr		T6522_1
 		bne		@error
 
 		inc		subTestNum		; test #02.02, 02.??
-		jsr		T6522_3
+		jsr		T6522_2
 		bne		@error
 
 		inc		subTestNum		; test #02.03, 02.??
+		jsr		T6522_3
+		bne		@error
+
+		inc		subTestNum		; test #02.04, 02.??
 		jsr		T6522_4
 		bne		@error
 
@@ -406,11 +410,11 @@ Test6522
 
 ;--------------------------------------
 
-T6522_1
+T6522_0
 ; Pre:
 ; Post: Z=1(OK), Z=0(NG)
 ;
-; Test#1 (AppleWin-GH#765)
+; Test#0 (AppleWin-GH#765)
 ; . Enable T1 & T2 IRQs, but don't write to T1H_C
 ; . Wait for T1 underflow
 ; . Check no T1|T2 ints are pending
@@ -446,11 +450,11 @@ T6522_1
 
 ;--------------------------------------
 
-T6522_2
+T6522_1
 ; Pre:
 ; Post: Z=1(OK), Z=0(NG)
 ;
-; Test#2
+; Test#1
 ; . Setup T1C=0x0202 and ACR=free-running
 ; . Enable T1 & T2 IRQs
 ; . Poll for T1 int
@@ -518,11 +522,11 @@ T6522_2
 
 ;--------------------------------------
 
-T6522_3
+T6522_2
 ; Pre:
 ; Post: Z=1(OK), Z=0(NG)
 ;
-; Test#3 (AppleWin-GH#567)
+; Test#2 (AppleWin-GH#567)
 ; . Setup T1C=0x0202 and ACR=free-running
 ; . Disable T1 IRQ, enable T2 IRQ
 ; . CLI
@@ -578,12 +582,12 @@ T6522_3
 
 ;--------------------------------------
 
-T6522_4
+T6522_3
 ; Pre:
 ; Post: Z=1(OK), Z=0(NG)
 ;
-; Test#4
-; . 6502|65C02 addr modes access of 6522 T1L
+; Test#3
+; . Test all the insn's that can write to $Cn04
 ; TODO: inc subTestParam to track the sub-test
 ; TODO: on error: set expected & actual
 
@@ -599,36 +603,16 @@ T6522_4
 	sta		@3+2
 	sta		@4+2
 	sta		@5+2
-	;
-	sta		@6+2
-	sta		@7+2
-	sta		@8+2
-	sta		@9+2
-	sta		@A+2
-	sta		@B+2
-	sta		@C+2
 
 	lda		MBBaseL
 	sta		@4+1
 	sta		@5+1
-	;
-	sta		@9+1
-	sta		@A+1
-	sta		@B+1
-	sta		@C+1
-	;
 	ora		#SY6522_TIMER1H_COUNTER
 	sta		@1+1
 	sta		@2+1
 	sta		@3+1
-	;
-	sec
-	sbc		#1						; SY6522_TIMER1L_COUNTER
-	sta		@6+1
-	sta		@7+1
-	sta		@8+1
 
-	; (a) Test all the insn's that can write to $Cn04
+	;
 
 	ldy		#$FF
 @1	sty		CARD_BASE+SY6522_TIMER1H_COUNTER
@@ -675,7 +659,58 @@ T6522_4
 !cpu 6502
 }
 
-	; (b) Test all the insn's that can read from $Cn04
+	lda		#0						; Z=1(OK)
+	rts
+
+	;
+
+@readT1C
+	ldy		#SY6522_TIMER1L_COUNTER
+	lda		(MBBase),y
+	cmp		#$F5
+	bne		+
+	rts
+
++	tax
+	pla
+	pla
+	lda		#$F5
+	sta		zpTmp2					; expected
+	txa								; actual
+	ldx		#1						; Z=0(NG)
+	rts
+
+;--------------------------------------
+
+T6522_4
+; Pre:
+; Post: Z=1(OK), Z=0(NG)
+;
+; Test#4
+; . Test all the insn's that can read from $Cn04
+; TODO: inc subTestParam to track the sub-test
+; TODO: on error: set expected & actual
+
+	lda		MBBaseH
+	sta		@6+2
+	sta		@7+2
+	sta		@8+2
+	sta		@9+2
+	sta		@A+2
+	sta		@B+2
+	sta		@C+2
+
+	lda		MBBaseL
+	sta		@9+1
+	sta		@A+1
+	sta		@B+1
+	sta		@C+1
+	ora		#SY6522_TIMER1L_COUNTER
+	sta		@6+1
+	sta		@7+1
+	sta		@8+1
+
+	;
 
 	jsr		@setT1C
 @6	ldy		CARD_BASE+SY6522_TIMER1L_COUNTER
@@ -720,8 +755,8 @@ T6522_4
 	cpy		#$FC
 	bne		@readErrY
 
-;	lda		MBBaseH
-;	sta		zpTmpPtrH				; set above
+	lda		MBBaseH
+	sta		zpTmpPtrH
 	lda		MBBaseL
 	ora		#SY6522_TIMER1L_COUNTER
 	sta		zpTmpPtrL
@@ -760,22 +795,6 @@ T6522_4
 	tax
 @readErrX
 	lda		#$FC
-	sta		zpTmp2					; expected
-	txa								; actual
-	ldx		#1						; Z=0(NG)
-	rts
-
-@readT1C
-	ldy		#SY6522_TIMER1L_COUNTER
-	lda		(MBBase),y
-	cmp		#$F5
-	bne		+
-	rts
-
-+	tax
-	pla
-	pla
-	lda		#$F5
 	sta		zpTmp2					; expected
 	txa								; actual
 	ldx		#1						; Z=0(NG)
