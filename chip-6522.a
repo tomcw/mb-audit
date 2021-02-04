@@ -657,6 +657,8 @@ T6522_3
 	sta		(zpTmpPtr)
 	jsr		@readT1C
 !cpu 6502
+
+	; TODO: STZ addr, STZ addr,x
 }
 
 	lda		#0						; Z=1(OK)
@@ -687,7 +689,7 @@ T6522_4
 ; Post: Z=1(OK), Z=0(NG)
 ;
 ; Test#4
-; . Test all the insn's that can read from $Cn04 (excluding RMW: DEC,INC,ASL,LSR,ROL,ROR)
+; . Test all the insn's that can read from $Cn04 (excluding RMW: DEC,INC,ASL,LSR,ROL,ROR & 65C02: TRB,TSB)
 ; TODO: inc subTestParam to track the sub-test
 ; TODO: on error: set expected & actual
 
@@ -710,83 +712,161 @@ T6522_4
 	sta		@8+1
 	sta		@A+1
 
+	; BIT, CPX, CPY & 65C02: BIT addr,x
+
+; TODO
+
 	; LDX
 
 	jsr		@setT1C
 @6	ldx		CARD_BASE+SY6522_TIMER1L_COUNTER
 	cpx		#$FC
-	bne		@readErrX
+	beq		+
+	jmp		@readErrX
++
 
-	lda		#$07
 	jsr		@setT1C2
 	ldy		#SY6522_TIMER1L_COUNTER
 @7	ldx		CARD_BASE,y
 	cpx		#$FC
-	bne		@readErrX
+	beq		+
+	jmp		@readErrX
++
 
 	; LDY
 
 	jsr		@setT1C
 @8	ldy		CARD_BASE+SY6522_TIMER1L_COUNTER
 	cpy		#$FC
-	bne		@readErrY
+	beq		+
+	jmp		@readErrY
++
 
-	lda		#$07
 	jsr		@setT1C2
 	ldx		#SY6522_TIMER1L_COUNTER
 @9	ldy		CARD_BASE,x
 	cpy		#$FC
-	bne		@readErrY
+	beq		+
+	jmp		@readErrY
++
 
-	; LDA (and ADC, AND, CMP, EOR, ORA, SBC)
+	; CMP
 
-	jsr		@setT1C
-@A	lda		CARD_BASE+SY6522_TIMER1L_COUNTER
-	cmp		#$FC
-	bne		@readErrA
-
-	lda		#$07
 	jsr		@setT1C2
+	lda		#$FC
+@A0	cmp		CARD_BASE+SY6522_TIMER1L_COUNTER
+	bne		@readErrCMP
+
+	jsr		@setT1C3
 	ldx		#SY6522_TIMER1L_COUNTER
-@B	lda		CARD_BASE,x
-	cmp		#$FC
-	bne		@readErrA
+	lda		#$FC
+@B0	cmp		CARD_BASE,x
+	bne		@readErrCMP
 
-	lda		#$07
-	jsr		@setT1C2
+	jsr		@setT1C3
 	ldy		#SY6522_TIMER1L_COUNTER
-@C	lda		CARD_BASE,y
-	cmp		#$FC
-	bne		@readErrA
+	lda		#$FC
+@C0	cmp		CARD_BASE,y
+	bne		@readErrCMP
 
 	lda		MBBaseH
 	sta		zpTmpPtrH
 	lda		MBBaseL
 	ora		#SY6522_TIMER1L_COUNTER
 	sta		zpTmpPtrL
-	lda		#$07
-	jsr		@setT1C2
+	jsr		@setT1C3
 	ldx		#0
-	lda		(zpTmpPtr,x)
-	cmp		#$FC					; AppleWin bug
-	bne		@readErrA
+	lda		#$FC					; AppleWin bug
+@D0	cmp		(zpTmpPtr,x)
+	bne		@readErrCMP
 
-	lda		#$07
-	jsr		@setT1C2
+	jsr		@setT1C3
 	ldy		#SY6522_TIMER1L_COUNTER
-	lda		(MBBase),y
-	cmp		#$FC					; AppleWin bug
+	lda		#$FC					; AppleWin bug
+@E0	cmp		(MBBase),y
+	bne		@readErrCMP
+
+!cpu 65c02
+	beq		+						; TODO - for now always skip
+	jsr		@setT1C2
+	lda		#$FC					; AppleWin bug
+@F0	cmp		(zpTmpPtr)
+	bne		@readErrCMP
++
+!cpu 6502
+
+	beq		+
+@readErrCMP
 	bne		@readErrA
 
-!if 0 {		; 65C02
++
+	; ORA, AND, EOR, ADC, (STA), LDA, CMP, SBC
+	; 0D,  2D,  4D,  6D,  (8D),  AD,  CD,  ED	= ORA,     AND,     ... SBC
+	; 1D,  3D,  5D,  7F,  (9D),  BD,  DD,  FD	= ORA,X,   AND,X,   ... SBC,X
+	; 19,  39,  59,  79,  (99),  B9,  D9,  F9	= ORA,Y,   AND,Y,   ... SBC,Y
+	; 01,  21,  41,  61,  (81),  A1,  C1,  E1	= ORA(,X), AND(,X), ... SBC(,X)
+	; 11,  31,  51,  71,  (91),  B1,  D1,  F1	= ORA(),Y, AND(),Y, ... SBC(),Y
+	; 12,  32,  52,  72,  (92),  B2,  D2,  F2	= ORA(),   AND(),   ... SBC()		- 65C02
+
+	lda		#$0D	; ora abs
+	sta		@A
+	lda		#$1D	; ora abs,x
+	sta		@B
+	lda		#$19	; ora abs,y
+	sta		@C
+	lda		#$01	; ora (zp,x)
+	sta		@D
+	lda		#$11	; ora (zp),y
+	sta		@E
+	lda		#$12	; ora (zp),y
+	sta		@F
+
+@loop
+		jsr		@setT1C
+@A		ora		CARD_BASE+SY6522_TIMER1L_COUNTER
+		cmp		#$FC
+		bne		@readErrA
+
+		jsr		@setT1C2
+		ldx		#SY6522_TIMER1L_COUNTER
+@B		ora		CARD_BASE,x
+		cmp		#$FC
+		bne		@readErrA
+
+		jsr		@setT1C2
+		ldy		#SY6522_TIMER1L_COUNTER
+@C		ora		CARD_BASE,y
+		cmp		#$FC
+		bne		@readErrA
+
+		lda		MBBaseH
+		sta		zpTmpPtrH
+		lda		MBBaseL
+		ora		#SY6522_TIMER1L_COUNTER
+		sta		zpTmpPtrL
+		jsr		@setT1C2
+		ldx		#0
+@D		ora		(zpTmpPtr,x)
+		cmp		#$FC					; AppleWin bug
+		bne		@readErrA
+
+		jsr		@setT1C2
+		ldy		#SY6522_TIMER1L_COUNTER
+@E		ora		(MBBase),y
+		cmp		#$FC					; AppleWin bug
+		bne		@readErrA
+
 !cpu 65c02
-	lda		#$07
-	jsr		@setT1C2
-	lda		(zpTmpPtr)
-	cmp		#$FC					; AppleWin bug
-	bne		@readErrA
+		beq		+						; TODO - for now always skip
+		jsr		@setT1C
+@F		ora		(zpTmpPtr)
+		cmp		#$FC					; AppleWin bug
+		bne		@readErrA
++
 !cpu 6502
-}
+
+		jsr		@nextOpcode
+		bcc		@loop
 
 	lda		#0						; Z=1(OK)
 	rts
@@ -807,14 +887,73 @@ T6522_4
 	;
 
 @setT1C
-; Post: T1C=nnFF
-	lda		#$05
+; Post: T1C=nnFF, A=0, C=0
+	lda		#$09
+	bne		+
+
 @setT1C2
-	ldy		#SY6522_TIMER1L_COUNTER
+; Post: T1C=nn01, A=0, C=0
+	lda		#$0B
+	bne		+
+
+@setT1C3
+; Post: T1C=nn03, A=0, C=0
+	lda		#$0D
+	bne		+
+
++	ldy		#SY6522_TIMER1L_COUNTER
 	sta		(MBBase),y
 	ldy		#SY6522_TIMER1H_COUNTER
-	sta		(MBBase),y				; post: T1C = $0505
-	rts								; post: T1C = $04FF (as RTS is 6cy)
+	sta		(MBBase),y					; post: T1C = $0509
+@X	lda		#0							; post: T1C = $0507
+	clc		; clc for adc/sbc-opcodes	; post: T1C = $0505
+	rts									; post: T1C = $04FF (as RTS is 6cy)
+
+	;
+
+@nextOpcode
+; Post: C=0(more), C=1(done)
+	lda		#$00
+	sta		@X+1
+
+-	clc
+	lda		@A
+	adc		#20
+	sta		@A
+	lda		@B
+	adc		#20
+	sta		@B
+	lda		@C
+	adc		#20
+	sta		@C
+	lda		@D
+	adc		#20
+	sta		@D
+	lda		@E
+	adc		#20
+	sta		@E
+	lda		@F
+	adc		#20
+	sta		@F
+	bcs		++					; overflowed... so done
+
+	cmp		#$92				; skip the sta-opcodes
+	beq		-
+	cmp		#$D2				; skip the cmp-opcodes
+	beq		-
+
+	cmp		#$32
+	bne		+
+		lda		#$FF			; for and-opcodes: "lda #$FF"
+		sta		@X+1
+
++	cmp		#$F2
+	bne		+
+		lda		#$FD			; for sbc-opcodes: "lda #$FD", where $FD = $FC - (C-1)
+		sta		@X+1
+
++	clc
+++	rts
 
 ;------------------------------------------------------------------------------
 
