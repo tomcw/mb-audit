@@ -695,22 +695,28 @@ T6522_4
 
 	lda		MBBaseH
 	sta		@6+2
+	sta		@7+2
 	sta		@8+2
+	sta		@9+2
+	sta		@A0+2
+	sta		@B0+2
+	sta		@C0+2
 	sta		@A+2
 	sta		@B+2
 	sta		@C+2
-	sta		@7+2
-	sta		@9+2
 
 	lda		MBBaseL
-	sta		@B+1
-	sta		@C+1
 	sta		@7+1
 	sta		@9+1
+	sta		@B0+1
+	sta		@C0+1
+	sta		@B+1
+	sta		@C+1
 	ora		#SY6522_TIMER1L_COUNTER
 	sta		@6+1
 	sta		@8+1
 	sta		@A+1
+	sta		@A0+1
 
 	; BIT, CPX, CPY & 65C02: BIT addr,x
 
