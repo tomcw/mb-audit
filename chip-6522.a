@@ -603,35 +603,39 @@ T6522_3
 	sta		@3+2
 	sta		@4+2
 	sta		@5+2
+	sta		@6+2
+	sta		@7+2
 
 	lda		MBBaseL
 	sta		@4+1
 	sta		@5+1
+	sta		@7+1
 	ora		#SY6522_TIMER1H_COUNTER
 	sta		@1+1
 	sta		@2+1
 	sta		@3+1
+	sta		@6+1
 
 	;
 
-	ldy		#$FF
+	ldy		#$00
 @1	sty		CARD_BASE+SY6522_TIMER1H_COUNTER
 	jsr		@readT1C
 
-	lda		#$FF
+	lda		#$00
 @2	sta		CARD_BASE+SY6522_TIMER1H_COUNTER
 	jsr		@readT1C
 
-	ldx		#$FF
+	ldx		#$00
 @3	stx		CARD_BASE+SY6522_TIMER1H_COUNTER
 	jsr		@readT1C
 
-	lda		#$FF
+	lda		#$00
 	ldy		#SY6522_TIMER1H_COUNTER
 @4	sta		CARD_BASE,y
 	jsr		@readT1C
 
-	lda		#$FF
+	lda		#$00
 	ldx		#SY6522_TIMER1H_COUNTER
 @5	sta		CARD_BASE,x
 	jsr		@readT1C
@@ -642,11 +646,11 @@ T6522_3
 	ora		#SY6522_TIMER1H_COUNTER
 	sta		zpTmpPtrL
 	ldx		#0
-	lda		#$FF
+	txa
 	sta		(zpTmpPtr,x)
 	jsr		@readT1C
 
-	lda		#$FF
+	lda		#$00
 	ldy		#SY6522_TIMER1H_COUNTER
 	sta		(MBBase),y
 	jsr		@readT1C
@@ -655,11 +659,16 @@ T6522_3
 	lda		is65C02
 	beq		+
 
-	lda		#$FF
-	sta		(zpTmpPtr)
-	jsr		@readT1C
+		lda		#$00
+		sta		(zpTmpPtr)
+		jsr		@readT1C
 
-	; TODO: STZ addr, STZ addr,x
+@6		stz		CARD_BASE+SY6522_TIMER1H_COUNTER
+		jsr		@readT1C
+
+@7		ldx		#SY6522_TIMER1H_COUNTER
+		stz		CARD_BASE,x
+		jsr		@readT1C
 
 +
 !cpu 6502
@@ -672,7 +681,7 @@ T6522_3
 @readT1C
 	ldy		#SY6522_TIMER1L_COUNTER
 	lda		(MBBase),y
-	cmp		#$F5
+	cmp		#$F4
 	bne		+
 	rts
 
