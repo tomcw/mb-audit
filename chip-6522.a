@@ -666,8 +666,8 @@ T6522_3
 @6		stz		CARD_BASE+SY6522_TIMER1H_COUNTER
 		jsr		@readT1C
 
-@7		ldx		#SY6522_TIMER1H_COUNTER
-		stz		CARD_BASE,x
+		ldx		#SY6522_TIMER1H_COUNTER
+@7		stz		CARD_BASE,x
 		jsr		@readT1C
 
 +
