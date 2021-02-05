@@ -81,6 +81,16 @@ entrypoint
 
 	;
 
+	sed
+	lda		#$99
+	clc
+	adc		#$01
+	cld
+	bmi		+
+		lda		#1
+		sta		is65C02
++
+
 	lda		TEXTON
 	lda		MIXEDOFF
 	lda		PAGE2OFF
@@ -444,6 +454,8 @@ Print
 
 saveZP			!fill ($100-ZP_BASE),0
 slotInfo		!fill 8,0	; slot[0..7] : bits: 1=6522/$80, 0=6522/$00
+
+is65C02			!byte 0
 
 slotUnderTest	!byte 0
 

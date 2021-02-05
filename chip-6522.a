@@ -651,15 +651,18 @@ T6522_3
 	sta		(MBBase),y
 	jsr		@readT1C
 
-!if 0 {		; 65C02
 !cpu 65c02
+	lda		is65C02
+	beq		+
+
 	lda		#$FF
 	sta		(zpTmpPtr)
 	jsr		@readT1C
-!cpu 6502
 
 	; TODO: STZ addr, STZ addr,x
-}
+
++
+!cpu 6502
 
 	lda		#0						; Z=1(OK)
 	rts
@@ -793,11 +796,12 @@ T6522_4
 	bne		@readErrCMP
 
 !cpu 65c02
-	beq		+						; TODO - for now always skip
-	jsr		@setT1C2
-	lda		#$FC					; AppleWin bug
-@F0	cmp		(zpTmpPtr)
-	bne		@readErrCMP
+	lda		is65C02
+	beq		+
+		jsr		@setT1C2
+		lda		#$FC					; AppleWin bug
+@F0		cmp		(zpTmpPtr)
+		bne		@readErrCMP
 +
 !cpu 6502
 
