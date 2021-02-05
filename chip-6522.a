@@ -827,6 +827,9 @@ T6522_4
 	lda		#$12	; ora (zp),y
 	sta		@F
 
+	lda		#$00
+	sta		@X+1
+
 @loop
 		jsr		@setT1C
 @A		ora		CARD_BASE+SY6522_TIMER1L_COUNTER
@@ -924,22 +927,22 @@ T6522_4
 
 -	clc
 	lda		@A
-	adc		#20
+	adc		#$20
 	sta		@A
 	lda		@B
-	adc		#20
+	adc		#$20
 	sta		@B
 	lda		@C
-	adc		#20
+	adc		#$20
 	sta		@C
 	lda		@D
-	adc		#20
+	adc		#$20
 	sta		@D
 	lda		@E
-	adc		#20
+	adc		#$20
 	sta		@E
 	lda		@F
-	adc		#20
+	adc		#$20
 	sta		@F
 	bcs		++					; overflowed... so done
 
@@ -955,7 +958,7 @@ T6522_4
 
 +	cmp		#$F2
 	bne		+
-		lda		#$FD			; for sbc-opcodes: "lda #$FD", where $FD = $FC - (C-1)
+		lda		#$F9			; for sbc-opcodes: "lda #$F9", where $FC = $1F9 - $FC + (C-1)
 		sta		@X+1
 
 +	clc
