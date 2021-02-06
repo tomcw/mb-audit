@@ -786,21 +786,24 @@ T6522_4
 
 	; CMP
 
+	lda		#$1f
+	sta		subTestNum
+
 	jsr		@setT1C2
 	lda		#$FC
-@A0	cmp		CARD_BASE+SY6522_TIMER1L_COUNTER	; subTest #4
+@A0	cmp		CARD_BASE+SY6522_TIMER1L_COUNTER	; subTest #$20
 	bne		@readErrCMP
 
 	jsr		@setT1C3
 	ldx		#SY6522_TIMER1L_COUNTER
 	lda		#$FC
-@B0	cmp		CARD_BASE,x				; subTest #5
+@B0	cmp		CARD_BASE,x				; subTest #$21
 	bne		@readErrCMP
 
 	jsr		@setT1C3
 	ldy		#SY6522_TIMER1L_COUNTER
 	lda		#$FC
-@C0	cmp		CARD_BASE,y				; subTest #6
+@C0	cmp		CARD_BASE,y				; subTest #$22
 	bne		@readErrCMP
 
 	lda		MBBaseH
@@ -811,13 +814,13 @@ T6522_4
 	jsr		@setT1C3
 	ldx		#0
 	lda		#$FC					; AppleWin bug
-@D0	cmp		(zpTmpPtr,x)			; subTest #7
+@D0	cmp		(zpTmpPtr,x)			; subTest #$23
 	bne		@readErrCMP
 
 	jsr		@setT1C3
 	ldy		#SY6522_TIMER1L_COUNTER
 	lda		#$FC					; AppleWin bug
-@E0	cmp		(MBBase),y				; subTest #8
+@E0	cmp		(MBBase),y				; subTest #$24
 	bne		@readErrCMP
 
 !cpu 65c02
@@ -825,7 +828,7 @@ T6522_4
 	beq		+
 		jsr		@setT1C2
 		lda		#$FC				; AppleWin bug
-@F0		cmp		(zpTmpPtr)			; subTest #9
+@F0		cmp		(zpTmpPtr)			; subTest #$25
 		bne		@readErrCMP
 +
 !cpu 6502
@@ -859,7 +862,7 @@ T6522_4
 	lda		#$00
 	sta		@X+1
 
-	lda		#$1f
+	lda		#$2f
 	sta		subTestNum
 
 @loop
