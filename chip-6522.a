@@ -595,9 +595,7 @@ T6522_3
 ; Post: Z=1(OK), Z=0(NG)
 ;
 ; Test#3
-; . Test all the insn's that can write to $Cn04
-; TODO: inc subTestParam to track the sub-test
-; TODO: on error: set expected & actual
+; . Test all the insn's that can write to $Cn04 (excluding RMW: DEC,INC,ASL,LSR,ROL,ROR & 65C02: TRB,TSB)
 
 	jsr		resetSubTest
 
@@ -715,8 +713,6 @@ T6522_4
 ;
 ; Test#4
 ; . Test all the insn's that can read from $Cn04 (excluding RMW: DEC,INC,ASL,LSR,ROL,ROR & 65C02: TRB,TSB)
-; TODO: inc subTestParam to track the sub-test
-; TODO: on error: set expected & actual
 
 	jsr		resetSubTest
 	dec		subTestNum
@@ -726,10 +722,10 @@ T6522_4
 	sta		@2+2
 	sta		@3+2
 	sta		@4+2
+	sta		@5+2
 	sta		@6+2
 	sta		@7+2
 	sta		@8+2
-	sta		@9+2
 	sta		@A0+2
 	sta		@B0+2
 	sta		@C0+2
@@ -739,8 +735,8 @@ T6522_4
 
 	lda		MBBaseL
 	sta		@2+1
-	sta		@7+1
-	sta		@9+1
+	sta		@6+1
+	sta		@8+1
 	sta		@B0+1
 	sta		@C0+1
 	sta		@B+1
@@ -749,8 +745,8 @@ T6522_4
 	sta		@1+1
 	sta		@3+1
 	sta		@4+1
-	sta		@6+1
-	sta		@8+1
+	sta		@5+1
+	sta		@7+1
 	sta		@A+1
 	sta		@A0+1
 
@@ -810,7 +806,7 @@ T6522_4
 	; LDX
 
 	jsr		@setT1C					; subTest #4
-@6	ldx		CARD_BASE+SY6522_TIMER1L_COUNTER
+@5	ldx		CARD_BASE+SY6522_TIMER1L_COUNTER
 	cpx		#$FC
 	beq		+
 	jmp		@readErrX
@@ -818,7 +814,7 @@ T6522_4
 
 	jsr		@setT1C2				; subTest #5
 	ldy		#SY6522_TIMER1L_COUNTER
-@7	ldx		CARD_BASE,y
+@6	ldx		CARD_BASE,y
 	cpx		#$FC
 	beq		+
 	jmp		@readErrX
@@ -826,17 +822,17 @@ T6522_4
 
 	; LDY
 
-	jsr		@setT1C
-@8	ldy		CARD_BASE+SY6522_TIMER1L_COUNTER
-	cpy		#$FC					; subTest #6
+	jsr		@setT1C					; subTest #6
+@7	ldy		CARD_BASE+SY6522_TIMER1L_COUNTER
+	cpy		#$FC
 	beq		+
 	jmp		@readErrY
 +
 
-	jsr		@setT1C2
+	jsr		@setT1C2				; subTest #7
 	ldx		#SY6522_TIMER1L_COUNTER
-@9	ldy		CARD_BASE,x
-	cpy		#$FC					; subTest #7
+@8	ldy		CARD_BASE,x
+	cpy		#$FC
 	beq		+
 	jmp		@readErrY
 +
@@ -846,43 +842,43 @@ T6522_4
 	lda		#$1f
 	sta		subTestNum
 
-	jsr		@setT1C2
+	jsr		@setT1C2				; subTest #$20
 	lda		#$FC
-@A0	cmp		CARD_BASE+SY6522_TIMER1L_COUNTER	; subTest #$20
+@A0	cmp		CARD_BASE+SY6522_TIMER1L_COUNTER
 	bne		@readErrCMP
 
-	jsr		@setT1C3
+	jsr		@setT1C3				; subTest #$21
 	ldx		#SY6522_TIMER1L_COUNTER
 	lda		#$FC
-@B0	cmp		CARD_BASE,x				; subTest #$21
+@B0	cmp		CARD_BASE,x
 	bne		@readErrCMP
 
-	jsr		@setT1C3
+	jsr		@setT1C3				; subTest #$22
 	ldy		#SY6522_TIMER1L_COUNTER
 	lda		#$FC
-@C0	cmp		CARD_BASE,y				; subTest #$22
+@C0	cmp		CARD_BASE,y
 	bne		@readErrCMP
 
-	jsr		@setT1C3
+	jsr		@setT1C3				; subTest #$23
 	ldy		#SY6522_TIMER1L_COUNTER
 	lda		#$FB
-@E0	cmp		(MBBase),y				; subTest #$23
+	cmp		(MBBase),y
 	bne		@readErrCMP
 
 !cpu 65c02
 	lda		is65C02
 	beq		+
-		jsr		@setT1C2
+		jsr		@setT1C2			; subTest #$24
 		lda		#$FB
-@F0		cmp		(zpTmpPtr)			; subTest #$24
+		cmp		(zpTmpPtr)
 		bne		@readErrCMP
 +
 !cpu 6502
 
-	jsr		@setT1C3
+	jsr		@setT1C3				; subTest #$25
 	ldx		#0
 	lda		#$FA
-@D0	cmp		(zpTmpPtr,x)			; subTest #$25
+	cmp		(zpTmpPtr,x)
 	bne		@readErrCMP
 
 	beq		+
@@ -904,11 +900,11 @@ T6522_4
 	sta		@B
 	lda		#$19	; ora abs,y
 	sta		@C
-	lda		#$01	; ora (zp,x)
-	sta		@D
 	lda		#$11	; ora (zp),y
+	sta		@D
+	lda		#$12	; ora (zp)
 	sta		@E
-	lda		#$12	; ora (zp),y
+	lda		#$01	; ora (zp,x)
 	sta		@F
 
 	lda		#$00
@@ -918,51 +914,52 @@ T6522_4
 	sta		subTestNum
 
 @loop
-		jsr		@setT1C
+		jsr		@setT1C				; subTest #$30, $40, $50, $60, $70, $80
 @A		ora		CARD_BASE+SY6522_TIMER1L_COUNTER
-		cmp		#$FC				; subTest #$30, $40, $50, $60, $70, $80
+		cmp		#$FC
 		bne		@readErrA
 
-		jsr		@setT1C2
+		jsr		@setT1C2			; subTest #$31, ...
 		ldx		#SY6522_TIMER1L_COUNTER
 @B		ora		CARD_BASE,x
-		cmp		#$FC				; subTest #$31, ...
+		cmp		#$FC
 		bne		@readErrA
 
-		jsr		@setT1C2
+		jsr		@setT1C2			; subTest #$32, ...
 		ldy		#SY6522_TIMER1L_COUNTER
 @C		ora		CARD_BASE,y
-		cmp		#$FC				; subTest #$32, ...
+		cmp		#$FC
 		bne		@readErrA
 
-		lda		@E
+		lda		@D					; subTest #$33, ...
 		cmp		#$F1				; opcode == 'sbc (zp),y' ?
 		bne		+
 			dec		@X+1			; only for sbc opcodes
 +		jsr		@setT1C2
 		ldy		#SY6522_TIMER1L_COUNTER
-@E		ora		(MBBase),y
-		cmp		#$FB				; subTest #$33, ...
+@D		ora		(MBBase),y
+		cmp		#$FB
 		bne		@readErrA
 
 !cpu 65c02
 		lda		is65C02
 		beq		+
-			jsr		@setT1C
-@F			ora		(zpTmpPtr)
-			cmp		#$FB			; subTest #$34, ...
+			; NB. Don't dec @X+1, since ora (zp) & ora (zp),y are both 5 cycles
+			jsr		@setT1C			; subTest #$34, ...
+@E			ora		(zpTmpPtr)
+			cmp		#$FB
 			bne		@readErrA
 +
 !cpu 6502
 
-		lda		@D
+		lda		@F
 		cmp		#$E1				; opcode == 'sbc (zp,x)' ?
 		bne		+
 			dec		@X+1			; only for sbc opcodes
-		jsr		@setT1C2
+		jsr		@setT1C2			; subTest #$35, ...
 		ldx		#0
-@D		ora		(zpTmpPtr,x)
-		cmp		#$FA				; subTest #$35, ...
+@F		ora		(zpTmpPtr,x)
+		cmp		#$FA
 		bne		@readErrA
 
 		jsr		@nextOpcode
