@@ -259,6 +259,14 @@ SetPhasorMode
 
 ;------------------------------------------------------------------------------
 
+resetSubTest
+
+	lda		#0
+	sta		subTestNum
+	rts
+
+;------------------------------------------------------------------------------
+
 Display
 ;              1234567
 ;          $00:  1 CP		;V=6522(VIA), 1=Sound-I, S=Sound/Speech, C=MB-C(or Sound-II), P=Phasor
@@ -398,6 +406,23 @@ PrintTestFailedErrBytes
 	lda		#$80+':'
 	jsr		COUT
 	jsr		PrintTestFailed
+	; (next line)
+	lda		#<msg_testNum
+	ldx		#>msg_testNum
+	jsr		Print
+	ldx		testComponentNum
+	jsr		PRNTX
+	lda		#$80+':'
+	jsr		COUT
+	ldx		testNum
+	jsr		PRNTX
+	lda		#$80+':'
+	jsr		COUT
+	ldx		subTestNum
+	jsr		PRNTX
+	lda		#$80+$0d
+	jsr		COUT
+	; (next line)
 	lda		#<msg_Expected
 	ldx		#>msg_Expected
 	jsr		Print
@@ -415,12 +440,36 @@ PrintTestFailed
 	lda		#<msg_TestFailed
 	ldx		#>msg_TestFailed
 	jsr		Print
-	ldx		testNum
-	jsr		PRNTX
-	lda		#$80+':'
-	jsr		COUT
-	ldx		subTestNum
-	jsr		PRNTX
+
+	lda		testComponentNum
+	lsr
+	lsr
+	lsr
+	lsr
+	tax
+	dex
+	beq		@1		; 1
+	dex
+	beq		@2		; 2
+	dex
+	beq		@3		; 3
+	dex
+	beq		@4		; 4
+	lda		#<msg_componentCard
+	ldx		#>msg_componentCard
+	bne		+
+@1	lda		#<msg_component6522
+	ldx		#>msg_component6522
+	bne		+
+@2	lda		#<msg_componentAY8913
+	ldx		#>msg_componentAY8913
+	bne		+
+@3	lda		#<msg_componentSC01
+	ldx		#>msg_componentSC01
+	bne		+
+@4	lda		#<msg_componentSSI263
+	ldx		#>msg_componentSSI263
++	jsr		Print
 ;	lda		#$80+$0d		; exactly 40 char, so no need for CR
 ;	jsr		COUT
 	rts
@@ -449,6 +498,12 @@ Print
 
 ;------------------------------------------------------------------------------
 
+COMPONENT_CARD		= $00
+COMPONENT_6522		= $10
+COMPONENT_AY8913	= $20
+COMPONENT_SC01		= $30
+COMPONENT_SSI263	= $40
+
 !source "chip-6522.a"
 !source "chip-ay8913.a"
 !source "chip-sc01.a"
@@ -467,6 +522,7 @@ is65C02			!byte 0
 
 slotUnderTest	!byte 0
 
+testComponentNum	!byte COMPONENT_CARD
 testNum			!byte 0
 subTestNum		!byte 0
 
@@ -502,8 +558,19 @@ msg_NoMBEnd !text 0
 msg_Slot !text "Slot #"	; 0
 msg_SlotEnd !text 0
 
-msg_TestFailed !text "Mockingboard failed test #"	; 00:00 (testNum:subTestNum)
+            ;0123456789
+            ;Slot #? :9012345678901234567890123456789
+msg_TestFailed !text "Mockingboard failed test:"	; [Card|6522|AY8913|SC01|SSI263]
 msg_TestFailedEnd !text 0
+
+; NB. These sub-strings must be exactly 6 chars
+msg_componentCard	!text " Card ",0
+msg_component6522	!text " 6522 ",0
+msg_componentAY8913	!text "AY8913",0
+msg_componentSC01	!text " SC01 ",0
+msg_componentSSI263	!text "SSI263",0
+
+msg_testNum !text "Test: ",0
 
 msg_Expected !text "Expected:"	; 00 (errorExpected)
 msg_ExpectedEnd !text 0

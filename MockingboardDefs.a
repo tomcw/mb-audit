@@ -38,13 +38,13 @@ AY_BCOARSE	= 3		; b3:0
 AY_CFINE	= 4		; b7:0
 AY_CCOARSE	= 5		; b3:0
 AY_NOISEPER	= 6		; b4:0
-AY_ENABLE	= 7		; b5:0
+AY_ENABLE	= 7		; b7:0 - for AY-3-8913, there is no PORTA/B so b7:6 are redundant
 AY_AVOL		= 8		; b4:0
 AY_BVOL		= 9		; b4:0
 AY_CVOL		= 10	; b4:0
 AY_EFINE	= 11	; b7:0
 AY_ECOARSE	= 12	; b7:0
-AY_ESHAPE	= 13	; b7:0
+AY_ESHAPE	= 13	; b3:0
 AY_PORTA	= 14	; b7:0 - not available on AY-3-8913
 AY_PORTB	= 15	; b7:0 - not available on AY-3-8913
 

@@ -86,15 +86,15 @@ Check6522
 	and		#3							; just 6522's
 	sta		zpTmp1
 
-	lda		#1
-	sta		testNum
+	lda		#COMPONENT_6522+0			; test component $10
+	sta		testComponentNum
 	lda		#0
-	sta		subTestNum					; test #01.00
+	sta		testNum						; test #00
 	jsr		Check6522Datalines
 	bne		+
 	rts
 
-+	inc		subTestNum					; test #01.01
++	inc		testNum						; test #01
 	jsr		Check6522IRQ
 	rts
 
@@ -350,33 +350,33 @@ Test6522
 	lda		#>Test6522ISR
 	sta		IRQH
 
-	lda		#2
-	sta		testNum
+	lda		#COMPONENT_6522+1	; test component $11
+	sta		testComponentNum
 	lda		#$ff
-	sta		subTestNum			; test #02.00
+	sta		testNum				; test #00
 
 	lda		has6522
 	lsr
 	sta		zpTmp1
 	bcc		@next6522
 
-@loop	inc		subTestNum		; test #02.00, 02.??
+@loop	inc		testNum			; test #00, ??
 		jsr		T6522_0
 		bne		@error
 
-		inc		subTestNum		; test #02.01, 02.??
+		inc		testNum			; test #01, ??
 		jsr		T6522_1
 		bne		@error
 
-		inc		subTestNum		; test #02.02, 02.??
+		inc		testNum			; test #02, ??
 		jsr		T6522_2
 		bne		@error
 
-		inc		subTestNum		; test #02.03, 02.??
+		inc		testNum			; test #03, ??
 		jsr		T6522_3
 		bne		@error
 
-		inc		subTestNum		; test #02.04, 02.??
+		inc		testNum			; test #04, ??
 		jsr		T6522_4
 		bne		@error
 
@@ -419,6 +419,8 @@ T6522_0
 ; . Wait for T1 underflow
 ; . Check no T1|T2 ints are pending
 ; NB. Only runs OK after a MB card reset, or T1 has been set to one-shot mode
+
+	jsr		resetSubTest
 
 	jsr		WaitT1OneShotUnderflow	; Post: SEI
 
@@ -463,6 +465,8 @@ T6522_1
 ; . wait for ISR to set flag (T1 one-shot)
 ; . SEI & wait for T1 underflow & check that no T1|T2 ints pending
 
+	jsr		resetSubTest
+
 	sei
 	lda		#0
 	sta		isrIFR
@@ -500,7 +504,7 @@ T6522_1
 	and		isrIFR					; T1 int from free-running mode
 	bne		+
 		lda		#0
-		beq		++
+		beq		++					; subTest #0 (failed)
 +	lda		#0
 	sta		isrIFR
 
@@ -509,6 +513,8 @@ T6522_1
 		beq		-
 
 	sei
+
+	inc		subTestNum				; subTest #1
 
 	; NB. T1C reloaded with T1L (except it doesn't for AppleWin, due to one-shot mode)
 
@@ -533,6 +539,8 @@ T6522_2
 ; . Poll for T1 int
 ; . Enable T1 IRQ
 ; . Expect ISR to immediately set flag
+
+	jsr		resetSubTest
 
 	sei
 	lda		#0
@@ -591,6 +599,8 @@ T6522_3
 ; TODO: inc subTestParam to track the sub-test
 ; TODO: on error: set expected & actual
 
+	jsr		resetSubTest
+
 	lda		#$FF
 	ldy		#SY6522_TIMER1L_COUNTER
 	sta		(MBBase),y
@@ -605,11 +615,13 @@ T6522_3
 	sta		@5+2
 	sta		@6+2
 	sta		@7+2
+	sta		@8+2
 
 	lda		MBBaseL
 	sta		@4+1
 	sta		@5+1
 	sta		@7+1
+	sta		@8+1
 	ora		#SY6522_TIMER1H_COUNTER
 	sta		@1+1
 	sta		@2+1
@@ -620,25 +632,25 @@ T6522_3
 
 	ldy		#$00
 @1	sty		CARD_BASE+SY6522_TIMER1H_COUNTER
-	jsr		@readT1C
+	jsr		@readT1C				; subTest #0
 
 	lda		#$00
 @2	sta		CARD_BASE+SY6522_TIMER1H_COUNTER
-	jsr		@readT1C
+	jsr		@readT1C				; subTest #1
 
 	ldx		#$00
 @3	stx		CARD_BASE+SY6522_TIMER1H_COUNTER
-	jsr		@readT1C
+	jsr		@readT1C				; subTest #2
 
 	lda		#$00
 	ldy		#SY6522_TIMER1H_COUNTER
 @4	sta		CARD_BASE,y
-	jsr		@readT1C
+	jsr		@readT1C				; subTest #3
 
 	lda		#$00
 	ldx		#SY6522_TIMER1H_COUNTER
 @5	sta		CARD_BASE,x
-	jsr		@readT1C
+	jsr		@readT1C				; subTest #4
 
 	lda		MBBaseH
 	sta		zpTmpPtrH
@@ -648,12 +660,12 @@ T6522_3
 	ldx		#0
 	txa
 	sta		(zpTmpPtr,x)
-	jsr		@readT1C
+	jsr		@readT1C				; subTest #5
 
 	lda		#$00
 	ldy		#SY6522_TIMER1H_COUNTER
 	sta		(MBBase),y
-	jsr		@readT1C
+	jsr		@readT1C				; subTest #6
 
 !cpu 65c02
 	lda		is65C02
@@ -661,14 +673,14 @@ T6522_3
 
 		lda		#$00
 		sta		(zpTmpPtr)
-		jsr		@readT1C
+		jsr		@readT1C			; subTest #7
 
 @6		stz		CARD_BASE+SY6522_TIMER1H_COUNTER
-		jsr		@readT1C
+		jsr		@readT1C			; subTest #8
 
 		ldx		#SY6522_TIMER1H_COUNTER
 @7		stz		CARD_BASE,x
-		jsr		@readT1C
+		jsr		@readT1C			; subTest #9
 
 +
 !cpu 6502
@@ -680,15 +692,16 @@ T6522_3
 
 @readT1C
 	ldy		#SY6522_TIMER1L_COUNTER
-	lda		(MBBase),y
+@8	lda		CARD_BASE,y
 	cmp		#$F4
 	bne		+
+	inc		subTestNum
 	rts
 
 +	tax
 	pla
 	pla
-	lda		#$F5
+	lda		#$F4
 	sta		zpTmp2					; expected
 	txa								; actual
 	ldx		#1						; Z=0(NG)
@@ -704,6 +717,9 @@ T6522_4
 ; . Test all the insn's that can read from $Cn04 (excluding RMW: DEC,INC,ASL,LSR,ROL,ROR & 65C02: TRB,TSB)
 ; TODO: inc subTestParam to track the sub-test
 ; TODO: on error: set expected & actual
+
+	jsr		resetSubTest
+	dec		subTestNum
 
 	lda		MBBaseH
 	sta		@6+2
@@ -738,7 +754,7 @@ T6522_4
 
 	jsr		@setT1C
 @6	ldx		CARD_BASE+SY6522_TIMER1L_COUNTER
-	cpx		#$FC
+	cpx		#$FC					; subTest #0
 	beq		+
 	jmp		@readErrX
 +
@@ -746,7 +762,7 @@ T6522_4
 	jsr		@setT1C2
 	ldy		#SY6522_TIMER1L_COUNTER
 @7	ldx		CARD_BASE,y
-	cpx		#$FC
+	cpx		#$FC					; subTest #1
 	beq		+
 	jmp		@readErrX
 +
@@ -755,7 +771,7 @@ T6522_4
 
 	jsr		@setT1C
 @8	ldy		CARD_BASE+SY6522_TIMER1L_COUNTER
-	cpy		#$FC
+	cpy		#$FC					; subTest #2
 	beq		+
 	jmp		@readErrY
 +
@@ -763,7 +779,7 @@ T6522_4
 	jsr		@setT1C2
 	ldx		#SY6522_TIMER1L_COUNTER
 @9	ldy		CARD_BASE,x
-	cpy		#$FC
+	cpy		#$FC					; subTest #3
 	beq		+
 	jmp		@readErrY
 +
@@ -772,19 +788,19 @@ T6522_4
 
 	jsr		@setT1C2
 	lda		#$FC
-@A0	cmp		CARD_BASE+SY6522_TIMER1L_COUNTER
+@A0	cmp		CARD_BASE+SY6522_TIMER1L_COUNTER	; subTest #4
 	bne		@readErrCMP
 
 	jsr		@setT1C3
 	ldx		#SY6522_TIMER1L_COUNTER
 	lda		#$FC
-@B0	cmp		CARD_BASE,x
+@B0	cmp		CARD_BASE,x				; subTest #5
 	bne		@readErrCMP
 
 	jsr		@setT1C3
 	ldy		#SY6522_TIMER1L_COUNTER
 	lda		#$FC
-@C0	cmp		CARD_BASE,y
+@C0	cmp		CARD_BASE,y				; subTest #6
 	bne		@readErrCMP
 
 	lda		MBBaseH
@@ -795,21 +811,21 @@ T6522_4
 	jsr		@setT1C3
 	ldx		#0
 	lda		#$FC					; AppleWin bug
-@D0	cmp		(zpTmpPtr,x)
+@D0	cmp		(zpTmpPtr,x)			; subTest #7
 	bne		@readErrCMP
 
 	jsr		@setT1C3
 	ldy		#SY6522_TIMER1L_COUNTER
 	lda		#$FC					; AppleWin bug
-@E0	cmp		(MBBase),y
+@E0	cmp		(MBBase),y				; subTest #8
 	bne		@readErrCMP
 
 !cpu 65c02
 	lda		is65C02
 	beq		+
 		jsr		@setT1C2
-		lda		#$FC					; AppleWin bug
-@F0		cmp		(zpTmpPtr)
+		lda		#$FC				; AppleWin bug
+@F0		cmp		(zpTmpPtr)			; subTest #9
 		bne		@readErrCMP
 +
 !cpu 6502
@@ -843,22 +859,25 @@ T6522_4
 	lda		#$00
 	sta		@X+1
 
+	lda		#$1f
+	sta		subTestNum
+
 @loop
 		jsr		@setT1C
 @A		ora		CARD_BASE+SY6522_TIMER1L_COUNTER
-		cmp		#$FC
+		cmp		#$FC				; subTest #$30, $40, $50, $60, $70, $80
 		bne		@readErrA
 
 		jsr		@setT1C2
 		ldx		#SY6522_TIMER1L_COUNTER
 @B		ora		CARD_BASE,x
-		cmp		#$FC
+		cmp		#$FC				; subTest #$31, ...
 		bne		@readErrA
 
 		jsr		@setT1C2
 		ldy		#SY6522_TIMER1L_COUNTER
 @C		ora		CARD_BASE,y
-		cmp		#$FC
+		cmp		#$FC				; subTest #$32, ...
 		bne		@readErrA
 
 		lda		MBBaseH
@@ -869,20 +888,20 @@ T6522_4
 		jsr		@setT1C2
 		ldx		#0
 @D		ora		(zpTmpPtr,x)
-		cmp		#$FC					; AppleWin bug
+		cmp		#$FC				; subTest #$33, ... / AppleWin bug
 		bne		@readErrA
 
 		jsr		@setT1C2
 		ldy		#SY6522_TIMER1L_COUNTER
 @E		ora		(MBBase),y
-		cmp		#$FC					; AppleWin bug
+		cmp		#$FC				; subTest #$34, ... / AppleWin bug
 		bne		@readErrA
 
 !cpu 65c02
-		beq		+						; TODO - for now always skip
+		beq		+					; TODO - for now always skip
 		jsr		@setT1C
 @F		ora		(zpTmpPtr)
-		cmp		#$FC					; AppleWin bug
+		cmp		#$FC				; subTest #$35, ... / AppleWin bug
 		bne		@readErrA
 +
 !cpu 6502
@@ -890,7 +909,7 @@ T6522_4
 		jsr		@nextOpcode
 		bcc		@loop
 
-	lda		#0						; Z=1(OK)
++	lda		#0						; Z=1(OK)
 	rts
 
 	;
@@ -921,9 +940,10 @@ T6522_4
 @setT1C3
 ; Post: T1C=nn03, A=0, C=0
 	lda		#$0D
-	bne		+
 
-+	ldy		#SY6522_TIMER1L_COUNTER
++	inc		subTestNum
+
+	ldy		#SY6522_TIMER1L_COUNTER
 	sta		(MBBase),y
 	ldy		#SY6522_TIMER1H_COUNTER
 	sta		(MBBase),y					; post: T1C = $0509
@@ -974,7 +994,10 @@ T6522_4
 		lda		#$F9			; for sbc-opcodes: "lda #$F9", where $FC = $1F9 - $FC + (C-1)
 		sta		@X+1
 
-+	clc
++	lda		subTestNum
+	ora		#$0f
+	sta		subTestNum
+	clc
 ++	rts
 
 ;------------------------------------------------------------------------------
