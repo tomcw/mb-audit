@@ -722,6 +722,10 @@ T6522_4
 	dec		subTestNum
 
 	lda		MBBaseH
+	sta		@1+2
+	sta		@2+2
+	sta		@3+2
+	sta		@4+2
 	sta		@6+2
 	sta		@7+2
 	sta		@8+2
@@ -734,6 +738,7 @@ T6522_4
 	sta		@C+2
 
 	lda		MBBaseL
+	sta		@2+1
 	sta		@7+1
 	sta		@9+1
 	sta		@B0+1
@@ -741,6 +746,9 @@ T6522_4
 	sta		@B+1
 	sta		@C+1
 	ora		#SY6522_TIMER1L_COUNTER
+	sta		@1+1
+	sta		@3+1
+	sta		@4+1
 	sta		@6+1
 	sta		@8+1
 	sta		@A+1
@@ -752,23 +760,66 @@ T6522_4
 	ora		#SY6522_TIMER1L_COUNTER
 	sta		zpTmpPtrL
 
-	; BIT, CPX, CPY & 65C02: BIT addr,x
+	; BIT, BIT addr,x (65C02)
 
-; TODO
+	jsr		@setT1C2				; subTest #0
+	lda		#$FF
+@1	bit		CARD_BASE+SY6522_TIMER1L_COUNTER
+	; Z = 0xFC & Acc  => Z=0
+	; N = 0xFC & 0x80 => N=1
+	; V = 0xFC & 0x40 => V=1
+	beq		++
+	bpl		++
+	bvs		+
+++	jmp		@readErrA
++
 
-	; LDX
+!cpu 65c02
+	lda		is65C02
+	beq		+
+		jsr		@setT1C3			; subTest #1
+		lda		#$FF
+		ldx		#SY6522_TIMER1L_COUNTER
+@2		bit		CARD_BASE,x
+	; Z = 0xFC & Acc  => Z=0
+	; N = 0xFC & 0x80 => N=1
+	; V = 0xFC & 0x40 => V=1
+	beq		++
+	bpl		++
+	bvs		+
+++	jmp		@readErrA
++
+!cpu 6502
 
-	jsr		@setT1C
-@6	ldx		CARD_BASE+SY6522_TIMER1L_COUNTER
-	cpx		#$FC					; subTest #0
+	; CPX, CPY
+
+	jsr		@setT1C2				; subTest #2
+	ldx		#$FC
+@3	cpx		CARD_BASE+SY6522_TIMER1L_COUNTER
 	beq		+
 	jmp		@readErrX
 +
 
-	jsr		@setT1C2
+	jsr		@setT1C2				; subTest #3
+	ldy		#$FC
+@4	cpy		CARD_BASE+SY6522_TIMER1L_COUNTER
+	beq		+
+	jmp		@readErrY
++
+
+	; LDX
+
+	jsr		@setT1C					; subTest #4
+@6	ldx		CARD_BASE+SY6522_TIMER1L_COUNTER
+	cpx		#$FC
+	beq		+
+	jmp		@readErrX
++
+
+	jsr		@setT1C2				; subTest #5
 	ldy		#SY6522_TIMER1L_COUNTER
 @7	ldx		CARD_BASE,y
-	cpx		#$FC					; subTest #1
+	cpx		#$FC
 	beq		+
 	jmp		@readErrX
 +
@@ -777,7 +828,7 @@ T6522_4
 
 	jsr		@setT1C
 @8	ldy		CARD_BASE+SY6522_TIMER1L_COUNTER
-	cpy		#$FC					; subTest #2
+	cpy		#$FC					; subTest #6
 	beq		+
 	jmp		@readErrY
 +
@@ -785,7 +836,7 @@ T6522_4
 	jsr		@setT1C2
 	ldx		#SY6522_TIMER1L_COUNTER
 @9	ldy		CARD_BASE,x
-	cpy		#$FC					; subTest #3
+	cpy		#$FC					; subTest #7
 	beq		+
 	jmp		@readErrY
 +
@@ -813,15 +864,9 @@ T6522_4
 	bne		@readErrCMP
 
 	jsr		@setT1C3
-	ldx		#0
-	lda		#$FA
-@D0	cmp		(zpTmpPtr,x)			; subTest #$23
-	bne		@readErrCMP
-
-	jsr		@setT1C3
 	ldy		#SY6522_TIMER1L_COUNTER
 	lda		#$FB
-@E0	cmp		(MBBase),y				; subTest #$24
+@E0	cmp		(MBBase),y				; subTest #$23
 	bne		@readErrCMP
 
 !cpu 65c02
@@ -829,10 +874,16 @@ T6522_4
 	beq		+
 		jsr		@setT1C2
 		lda		#$FB
-@F0		cmp		(zpTmpPtr)			; subTest #$25
+@F0		cmp		(zpTmpPtr)			; subTest #$24
 		bne		@readErrCMP
 +
 !cpu 6502
+
+	jsr		@setT1C3
+	ldx		#0
+	lda		#$FA
+@D0	cmp		(zpTmpPtr,x)			; subTest #$25
+	bne		@readErrCMP
 
 	beq		+
 @readErrCMP
@@ -841,7 +892,7 @@ T6522_4
 
 	; ORA, AND, EOR, ADC, (STA), LDA, CMP, SBC
 	; 0D,  2D,  4D,  6D,  (8D),  AD,  CD,  ED	= ORA,     AND,     ... SBC
-	; 1D,  3D,  5D,  7F,  (9D),  BD,  DD,  FD	= ORA,X,   AND,X,   ... SBC,X
+	; 1D,  3D,  5D,  7D,  (9D),  BD,  DD,  FD	= ORA,X,   AND,X,   ... SBC,X
 	; 19,  39,  59,  79,  (99),  B9,  D9,  F9	= ORA,Y,   AND,Y,   ... SBC,Y
 	; 01,  21,  41,  61,  (81),  A1,  C1,  E1	= ORA(,X), AND(,X), ... SBC(,X)
 	; 11,  31,  51,  71,  (91),  B1,  D1,  F1	= ORA(),Y, AND(),Y, ... SBC(),Y
