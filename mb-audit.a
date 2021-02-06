@@ -109,6 +109,14 @@ entrypoint
 	jsr		Print
 	jsr		Display
 
+	lda		#<msg_cpu6502Detected
+	ldx		#>msg_cpu6502Detected
+	ldy		is65C02
+	beq		+
+		lda		#<msg_cpu65C02Detected
+		ldx		#>msg_cpu65C02Detected
++	jsr		Print
+
 	lda		#7
 	sta		slotUnderTest
 @nextSlot
@@ -482,6 +490,11 @@ errorActual		!byte 0
 
 msg_mbaudit	!text "mb-audit v0.01, 2021",0xd
 msg_mbauditEnd !text 0
+
+msg_cpu6502Detected !text "6502 detected",0xd
+msg_cpu6502DetectedEnd !text 0
+msg_cpu65C02Detected !text "65C02 detected",0xd
+msg_cpu65C02DetectedEnd !text 0
 
 msg_NoMB !text "No Mockingboard detected!",0xd
 msg_NoMBEnd !text 0
