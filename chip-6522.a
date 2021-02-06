@@ -746,6 +746,12 @@ T6522_4
 	sta		@A+1
 	sta		@A0+1
 
+	lda		MBBaseH
+	sta		zpTmpPtrH
+	lda		MBBaseL
+	ora		#SY6522_TIMER1L_COUNTER
+	sta		zpTmpPtrL
+
 	; BIT, CPX, CPY & 65C02: BIT addr,x
 
 ; TODO
@@ -806,20 +812,15 @@ T6522_4
 @C0	cmp		CARD_BASE,y				; subTest #$22
 	bne		@readErrCMP
 
-	lda		MBBaseH
-	sta		zpTmpPtrH
-	lda		MBBaseL
-	ora		#SY6522_TIMER1L_COUNTER
-	sta		zpTmpPtrL
 	jsr		@setT1C3
 	ldx		#0
-	lda		#$FC					; AppleWin bug
+	lda		#$FA
 @D0	cmp		(zpTmpPtr,x)			; subTest #$23
 	bne		@readErrCMP
 
 	jsr		@setT1C3
 	ldy		#SY6522_TIMER1L_COUNTER
-	lda		#$FC					; AppleWin bug
+	lda		#$FB
 @E0	cmp		(MBBase),y				; subTest #$24
 	bne		@readErrCMP
 
@@ -827,7 +828,7 @@ T6522_4
 	lda		is65C02
 	beq		+
 		jsr		@setT1C2
-		lda		#$FC				; AppleWin bug
+		lda		#$FB
 @F0		cmp		(zpTmpPtr)			; subTest #$25
 		bne		@readErrCMP
 +
@@ -835,9 +836,9 @@ T6522_4
 
 	beq		+
 @readErrCMP
-	bne		@readErrA
-
+	jmp		@readErrA
 +
+
 	; ORA, AND, EOR, ADC, (STA), LDA, CMP, SBC
 	; 0D,  2D,  4D,  6D,  (8D),  AD,  CD,  ED	= ORA,     AND,     ... SBC
 	; 1D,  3D,  5D,  7F,  (9D),  BD,  DD,  FD	= ORA,X,   AND,X,   ... SBC,X
@@ -883,31 +884,35 @@ T6522_4
 		cmp		#$FC				; subTest #$32, ...
 		bne		@readErrA
 
-		lda		MBBaseH
-		sta		zpTmpPtrH
-		lda		MBBaseL
-		ora		#SY6522_TIMER1L_COUNTER
-		sta		zpTmpPtrL
-		jsr		@setT1C2
-		ldx		#0
-@D		ora		(zpTmpPtr,x)
-		cmp		#$FC				; subTest #$33, ... / AppleWin bug
-		bne		@readErrA
-
-		jsr		@setT1C2
+		lda		@E
+		cmp		#$F1				; opcode == 'sbc (zp),y' ?
+		bne		+
+			dec		@X+1			; only for sbc opcodes
++		jsr		@setT1C2
 		ldy		#SY6522_TIMER1L_COUNTER
 @E		ora		(MBBase),y
-		cmp		#$FC				; subTest #$34, ... / AppleWin bug
+		cmp		#$FB				; subTest #$33, ...
 		bne		@readErrA
 
 !cpu 65c02
-		beq		+					; TODO - for now always skip
-		jsr		@setT1C
-@F		ora		(zpTmpPtr)
-		cmp		#$FC				; subTest #$35, ... / AppleWin bug
-		bne		@readErrA
+		lda		is65C02
+		beq		+
+			jsr		@setT1C
+@F			ora		(zpTmpPtr)
+			cmp		#$FB			; subTest #$34, ...
+			bne		@readErrA
 +
 !cpu 6502
+
+		lda		@D
+		cmp		#$E1				; opcode == 'sbc (zp,x)' ?
+		bne		+
+			dec		@X+1			; only for sbc opcodes
+		jsr		@setT1C2
+		ldx		#0
+@D		ora		(zpTmpPtr,x)
+		cmp		#$FA				; subTest #$35, ...
+		bne		@readErrA
 
 		jsr		@nextOpcode
 		bcc		@loop
