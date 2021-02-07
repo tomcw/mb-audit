@@ -433,6 +433,7 @@ T6522_0
 ; NB. Only runs OK after a MB card reset, or T1 has been set to one-shot mode
 
 	jsr		resetSubTest
+	jsr		incTotalTests
 
 	jsr		WaitT1OneShotUnderflow	; Post: SEI
 
@@ -478,6 +479,7 @@ T6522_1
 ; . SEI & wait for T1 underflow & check that no T1|T2 ints pending
 
 	jsr		resetSubTest
+	jsr		incTotalTests
 
 	sei
 	lda		#0
@@ -527,6 +529,7 @@ T6522_1
 	sei
 
 	inc		subTestNum				; subTest #1
+	jsr		incTotalTests
 
 	; NB. T1C reloaded with T1L (except it doesn't for AppleWin, due to one-shot mode)
 
@@ -553,6 +556,7 @@ T6522_2
 ; . Expect ISR to immediately set flag
 
 	jsr		resetSubTest
+	jsr		incTotalTests
 
 	sei
 	lda		#0
@@ -717,6 +721,7 @@ T6522_4
 	cmp		#$F1
 	bne		+
 	inc		subTestNum
+	jsr		incTotalTests
 	rts
 
 +	tax
@@ -1039,6 +1044,7 @@ T6522_6
 	lda		#$0E
 
 +	inc		subTestNum
+	jsr		incTotalTests
 
 	ldy		zpTmp2						; y=SY6522_TIMER1|2L_COUNTER
 	sta		(MBBase),y

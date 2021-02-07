@@ -117,6 +117,10 @@ entrypoint
 		ldx		#>msg_cpu65C02Detected
 +	jsr		Print
 
+	lda		#0
+	sta		totalTests+0
+	sta		totalTests+1
+
 	lda		#7
 	sta		slotUnderTest
 @nextSlot
@@ -146,6 +150,13 @@ entrypoint
 	lda		#<msg_OK
 	ldx		#>msg_OK
 	jsr		Print
+	ldy		totalTests+1
+	ldx		totalTests+0
+	jsr		PRNTYX
+	lda		#$80+')'
+	jsr		COUT
+	lda		#$80+$0d
+	jsr		COUT
 
 	;
 
@@ -264,6 +275,15 @@ resetSubTest
 	lda		#0
 	sta		subTestNum
 	rts
+
+;------------------------------------------------------------------------------
+
+incTotalTests
+
+	inc		totalTests+0
+	bne		+
+	inc		totalTests+1
++	rts
 
 ;------------------------------------------------------------------------------
 
@@ -525,6 +545,7 @@ slotUnderTest	!byte 0
 testComponentNum	!byte COMPONENT_CARD
 testNum			!byte 0
 subTestNum		!byte 0
+totalTests		!byte 0,0
 
 isPhasorCard	!byte 0
 phasorMode:		!byte PH_MOCKINGBOARD
@@ -578,5 +599,5 @@ msg_ExpectedEnd !text 0
 msg_Actual !text " Actual:"	; 00 (errorActual)
 msg_ActualEnd !text 0
 
-msg_OK !text "All tests passed",0xd
+msg_OK !text "All tests passed (total=$"	; 0000)
 msg_OKEnd !text 0
