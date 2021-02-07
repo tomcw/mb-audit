@@ -278,6 +278,11 @@ resetSubTest
 
 ;------------------------------------------------------------------------------
 
+incSubTestNum
+
+	inc		subTestNum
+	; fall through...
+
 incTotalTests
 
 	inc		totalTests+0

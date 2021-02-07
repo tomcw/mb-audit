@@ -537,8 +537,7 @@ T6522_1
 
 	sei
 
-	inc		subTestNum				; subTest #1
-	jsr		incTotalTests
+	jsr		incSubTestNum			; subTest #1
 
 	; NB. T1C reloaded with T1L (except it doesn't for AppleWin, due to one-shot mode)
 
@@ -729,8 +728,7 @@ T6522_4
 @8	lda		CARD_BASE,y				; 4cy -> T1|2C=$FFF1
 	cmp		#$F1
 	bne		+
-	inc		subTestNum
-	jsr		incTotalTests
+	jsr		incSubTestNum
 	rts
 
 +	tax
@@ -1052,8 +1050,7 @@ T6522_6
 ; Post: T1C=nn04, A=0, C=0
 	lda		#$0E
 
-+	inc		subTestNum
-	jsr		incTotalTests
++	jsr		incSubTestNum
 
 	ldy		zpTmp2						; y=SY6522_TIMER1|2L_COUNTER
 	sta		(MBBase),y
@@ -1140,6 +1137,8 @@ T6522_8
 	sta		(MBBase),y
 	lda		(MBBase),y					; 5cy
 	beq		+							; error
+
+	jsr		incSubTestNum				; subTest #1
 
 	ldx		#3
 -		txa								; Set T1|2C=$0103,...,$0100
