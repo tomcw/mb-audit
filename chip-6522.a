@@ -338,6 +338,7 @@ Check6522ISR
 ;	. oneshot x IRQ|poll
 ;	. oneshot underflow, then T1L -> T1C
 ;	All 6522: write chip A,B; read chip A,B
+;   6522 IRQ pending, CTRL+RESET should clear it (currently doesn't in AppleWin)
 
 Test6522
 ; Pre: has6522
@@ -389,6 +390,14 @@ Test6522
 		jsr		T6522_6
 		bne		@error
 
+		inc		testNum			; test #07, ??
+		jsr		T6522_7
+		bne		@error
+
+		inc		testNum			; test #08, ??
+		jsr		T6522_8
+		bne		@error
+
 		jsr		WaitT1OneShotUnderflow	; clear & disable any T1 ints
 		jsr		WaitT2OneShotUnderflow	; clear & disable any T2 ints
 
@@ -427,7 +436,7 @@ T6522_0
 ; Post: Z=1(OK), Z=0(NG)
 ;
 ; Test#0 (AppleWin-GH#765)
-; . Enable T1 & T2 IRQs, but don't write to T1H_C
+; . Enable T1 & T2 IRQs, but don't write to T1C_h
 ; . Wait for T1 underflow
 ; . Check no T1|T2 ints are pending
 ; NB. Only runs OK after a MB card reset, or T1 has been set to one-shot mode
@@ -1102,6 +1111,58 @@ T6522_6
 	sta		subTestNum
 	clc
 ++	rts
+
+;--------------------------------------
+
+T6522_7
+	lda		#SY6522_TIMER1L_COUNTER
+	sta		zpTmp2
+	bne		+
+T6522_8
+	lda		#SY6522_TIMER2L_COUNTER
+	sta		zpTmp2
++
+; Pre: zpTmp2 = SY6522_TIMER1L_COUNTER or SY6522_TIMER2L_COUNTER
+;	MBBaseL = $00 or $80
+; Post: Z=1(OK), Z=0(NG)
+;
+; Test#7 (AppleWin-GH#833)
+; . Test reading T1|2C_h when T1|2C_l underflows
+
+	jsr		resetSubTest
+	jsr		incTotalTests
+
+	lda		#4							; Set T1|2C=$0104
+	ldy		zpTmp2						; y=SY6522_TIMER1|2L_COUNTER
+	sta		(MBBase),y
+	lda		#1
+	iny									; y=SY6522_TIMER1|2H_COUNTER
+	sta		(MBBase),y
+	lda		(MBBase),y					; 5cy
+	beq		+							; error
+
+	ldx		#3
+-		txa								; Set T1|2C=$0103,...,$0100
+		ldy		zpTmp2					; y=SY6522_TIMER1|2L_COUNTER
+		sta		(MBBase),y
+		lda		#1
+		iny								; y=SY6522_TIMER1|2H_COUNTER
+		sta		(MBBase),y
+		lda		(MBBase),y				; 5cy
+		bne		+						; error
+		dex
+		bpl		-
+
+	lda		#0							; Z=1(OK)
+	rts
+
++	tax
+	lda		#$00
+	sta		zpTmp2						; expected
+	txa									; actual
+
+	lda		#1							; Z=0(NG)
+	rts
 
 ;------------------------------------------------------------------------------
 
