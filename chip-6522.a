@@ -342,6 +342,7 @@ Check6522ISR
 Test6522
 ; Pre: has6522
 ; Post:
+; Uses: zpTmp1 (so don't use in sub-funcs)
 
 	sei
 
@@ -379,6 +380,13 @@ Test6522
 		inc		testNum			; test #04, ??
 		jsr		T6522_4
 		bne		@error
+
+		inc		testNum			; test #05, ??
+		jsr		T6522_5
+		bne		@error
+
+		jsr		WaitT1OneShotUnderflow	; clear & disable any T1 ints
+		jsr		WaitT2OneShotUnderflow	; clear & disable any T2 ints
 
 @next6522
 		lda		MBBaseL
@@ -708,10 +716,18 @@ T6522_3
 ;--------------------------------------
 
 T6522_4
-; Pre:
+	lda		#SY6522_TIMER1L_COUNTER
+	sta		zpTmp2
+	bne		+
+T6522_5
+	lda		#SY6522_TIMER2L_COUNTER
+	sta		zpTmp2
++
+; Pre: zpTmp2 = SY6522_TIMER1L_COUNTER or SY6522_TIMER2L_COUNTER
+;	MBBaseL = $00 or $80
 ; Post: Z=1(OK), Z=0(NG)
 ;
-; Test#4
+; Test#4,#5
 ; . Test all the insn's that can read from $Cn04 (excluding RMW: DEC,INC,ASL,LSR,ROL,ROR & 65C02: TRB,TSB)
 
 	jsr		resetSubTest
@@ -741,7 +757,7 @@ T6522_4
 	sta		@C0+1
 	sta		@B+1
 	sta		@C+1
-	ora		#SY6522_TIMER1L_COUNTER
+	ora		zpTmp2					; SY6522_TIMER1|2L_COUNTER
 	sta		@1+1
 	sta		@3+1
 	sta		@4+1
@@ -753,12 +769,12 @@ T6522_4
 	lda		MBBaseH
 	sta		zpTmpPtrH
 	lda		MBBaseL
-	ora		#SY6522_TIMER1L_COUNTER
+	ora		zpTmp2					; SY6522_TIMER1|2L_COUNTER
 	sta		zpTmpPtrL
 
 	; BIT, BIT addr,x (65C02)
 
-	jsr		@setT1C2				; subTest #0
+	jsr		@setT1C_2cy				; subTest #0
 	lda		#$FF
 @1	bit		CARD_BASE+SY6522_TIMER1L_COUNTER
 	; Z = 0xFC & Acc  => Z=0
@@ -773,9 +789,9 @@ T6522_4
 !cpu 65c02
 	lda		is65C02
 	beq		+
-		jsr		@setT1C3			; subTest #1
+		jsr		@setT1C_5cy			; subTest #1
 		lda		#$FF
-		ldx		#SY6522_TIMER1L_COUNTER
+		ldx		zpTmp2				; x=SY6522_TIMER1|2L_COUNTER
 @2		bit		CARD_BASE,x
 	; Z = 0xFC & Acc  => Z=0
 	; N = 0xFC & 0x80 => N=1
@@ -789,14 +805,14 @@ T6522_4
 
 	; CPX, CPY
 
-	jsr		@setT1C2				; subTest #2
+	jsr		@setT1C_2cy				; subTest #2
 	ldx		#$FC
 @3	cpx		CARD_BASE+SY6522_TIMER1L_COUNTER
 	beq		+
 	jmp		@readErrX
 +
 
-	jsr		@setT1C2				; subTest #3
+	jsr		@setT1C_2cy				; subTest #3
 	ldy		#$FC
 @4	cpy		CARD_BASE+SY6522_TIMER1L_COUNTER
 	beq		+
@@ -812,8 +828,8 @@ T6522_4
 	jmp		@readErrX
 +
 
-	jsr		@setT1C2				; subTest #5
-	ldy		#SY6522_TIMER1L_COUNTER
+	jsr		@setT1C_3cy				; subTest #5
+	ldy		zpTmp2					; y=SY6522_TIMER1|2L_COUNTER
 @6	ldx		CARD_BASE,y
 	cpx		#$FC
 	beq		+
@@ -829,8 +845,8 @@ T6522_4
 	jmp		@readErrY
 +
 
-	jsr		@setT1C2				; subTest #7
-	ldx		#SY6522_TIMER1L_COUNTER
+	jsr		@setT1C_3cy				; subTest #7
+	ldx		zpTmp2					; x=SY6522_TIMER1|2L_COUNTER
 @8	ldy		CARD_BASE,x
 	cpy		#$FC
 	beq		+
@@ -842,25 +858,25 @@ T6522_4
 	lda		#$1f
 	sta		subTestNum
 
-	jsr		@setT1C2				; subTest #$20
+	jsr		@setT1C_2cy				; subTest #$20
 	lda		#$FC
 @A0	cmp		CARD_BASE+SY6522_TIMER1L_COUNTER
 	bne		@readErrCMP
 
-	jsr		@setT1C3				; subTest #$21
-	ldx		#SY6522_TIMER1L_COUNTER
+	jsr		@setT1C_5cy				; subTest #$21
+	ldx		zpTmp2					; x=SY6522_TIMER1|2L_COUNTER
 	lda		#$FC
 @B0	cmp		CARD_BASE,x
 	bne		@readErrCMP
 
-	jsr		@setT1C3				; subTest #$22
-	ldy		#SY6522_TIMER1L_COUNTER
+	jsr		@setT1C_5cy				; subTest #$22
+	ldy		zpTmp2					; y=SY6522_TIMER1|2L_COUNTER
 	lda		#$FC
 @C0	cmp		CARD_BASE,y
 	bne		@readErrCMP
 
-	jsr		@setT1C3				; subTest #$23
-	ldy		#SY6522_TIMER1L_COUNTER
+	jsr		@setT1C_5cy				; subTest #$23
+	ldy		zpTmp2					; y=SY6522_TIMER1|2L_COUNTER
 	lda		#$FB
 	cmp		(MBBase),y
 	bne		@readErrCMP
@@ -868,14 +884,14 @@ T6522_4
 !cpu 65c02
 	lda		is65C02
 	beq		+
-		jsr		@setT1C2			; subTest #$24
+		jsr		@setT1C_2cy			; subTest #$24
 		lda		#$FB
 		cmp		(zpTmpPtr)
 		bne		@readErrCMP
 +
 !cpu 6502
 
-	jsr		@setT1C3				; subTest #$25
+	jsr		@setT1C_4cy				; subTest #$25
 	ldx		#0
 	lda		#$FA
 	cmp		(zpTmpPtr,x)
@@ -919,14 +935,14 @@ T6522_4
 		cmp		#$FC
 		bne		@readErrA
 
-		jsr		@setT1C2			; subTest #$31, ...
-		ldx		#SY6522_TIMER1L_COUNTER
+		jsr		@setT1C_3cy			; subTest #$31, ...
+		ldx		zpTmp2				; x=SY6522_TIMER1|2L_COUNTER
 @B		ora		CARD_BASE,x
 		cmp		#$FC
 		bne		@readErrA
 
-		jsr		@setT1C2			; subTest #$32, ...
-		ldy		#SY6522_TIMER1L_COUNTER
+		jsr		@setT1C_3cy			; subTest #$32, ...
+		ldy		zpTmp2				; y=SY6522_TIMER1|2L_COUNTER
 @C		ora		CARD_BASE,y
 		cmp		#$FC
 		bne		@readErrA
@@ -935,8 +951,8 @@ T6522_4
 		cmp		#$F1				; opcode == 'sbc (zp),y' ?
 		bne		+
 			dec		@X+1			; only for sbc opcodes
-+		jsr		@setT1C2
-		ldy		#SY6522_TIMER1L_COUNTER
++		jsr		@setT1C_3cy
+		ldy		zpTmp2				; y=SY6522_TIMER1|2L_COUNTER
 @D		ora		(MBBase),y
 		cmp		#$FB
 		bne		@readErrA
@@ -956,7 +972,7 @@ T6522_4
 		cmp		#$E1				; opcode == 'sbc (zp,x)' ?
 		bne		+
 			dec		@X+1			; only for sbc opcodes
-		jsr		@setT1C2			; subTest #$35, ...
+		jsr		@setT1C_2cy			; subTest #$35, ...
 		ldx		#0
 @F		ora		(zpTmpPtr,x)
 		cmp		#$FA
@@ -983,29 +999,39 @@ T6522_4
 
 	;
 
-@setT1C
+@setT1C		; after RTS, 6522 access occurs immediately
 ; Post: T1C=nnFF, A=0, C=0
 	lda		#$09
 	bne		+
 
-@setT1C2
+@setT1C_2cy	; after RTS, 2 cycles until the 6522 access
 ; Post: T1C=nn01, A=0, C=0
 	lda		#$0B
 	bne		+
 
-@setT1C3
+@setT1C_3cy	; after RTS, 3 cycles until the 6522 access
+; Post: T1C=nn02, A=0, C=0
+	lda		#$0C
+	bne		+
+
+@setT1C_4cy	; after RTS, 4 cycles until the 6522 access
 ; Post: T1C=nn03, A=0, C=0
 	lda		#$0D
+	bne		+
+
+@setT1C_5cy	; after RTS, 5 cycles until the 6522 access
+; Post: T1C=nn04, A=0, C=0
+	lda		#$0E
 
 +	inc		subTestNum
 
-	ldy		#SY6522_TIMER1L_COUNTER
+	ldy		zpTmp2						; y=SY6522_TIMER1|2L_COUNTER
 	sta		(MBBase),y
-	ldy		#SY6522_TIMER1H_COUNTER
-	sta		(MBBase),y					; post: T1C = $0509
-@X	lda		#0							; post: T1C = $0507
-	clc		; clc for adc/sbc-opcodes	; post: T1C = $0505
-	rts									; post: T1C = $04FF (as RTS is 6cy)
+	iny									; y=SY6522_TIMER1|2H_COUNTER
+	sta		(MBBase),y					; For @setT1C: post: T1C = $0509
+@X	lda		#0							;              post: T1C = $0507
+	clc		; clc for adc/sbc-opcodes	;              post: T1C = $0505
+	rts									;              post: T1C = $04FF (as RTS is 6cy)
 
 	;
 
@@ -1067,6 +1093,12 @@ WaitT1OneShotUnderflow
 	ldy		#SY6522_ACR
 	sta		(MBBase),y				; T1 one-shot mode
 
+	lda		#1						; Set T1C=$0101
+	ldy		#SY6522_TIMER1L_COUNTER
+	sta		(MBBase),y
+	ldy		#SY6522_TIMER1H_COUNTER
+	sta		(MBBase),y
+
 	jsr		WaitT1Underflow
 
 	lda		#IER_CLR|IxR_TIMER1
@@ -1077,20 +1109,43 @@ WaitT1OneShotUnderflow
 
 	rts
 
+WaitT1Underflow
+	ldy		#SY6522_TIMER1H_COUNTER
+-		lda		(MBBase),y			; wait $00nn
+		bne		-
+-		lda		(MBBase),y			; wait $NNnn, where T1L_h = NN (assume it's not $00!)
+		beq		-
+	rts
+
 ;--------------------------------------
 
-WaitT1Underflow
+WaitT2OneShotUnderflow
+; (T2 only supports one-shot mode) and wait for underflow to clear internal 6522 state
 
+	sei
+
+	lda		#1						; Set T2C=$0101
+	ldy		#SY6522_TIMER2L_COUNTER
+	sta		(MBBase),y
 	ldy		#SY6522_TIMER1H_COUNTER
+	sta		(MBBase),y
 
-;wait_00nn
--		lda		(MBBase),y
+	jsr		WaitT2Underflow
+
+	lda		#IER_CLR|IxR_TIMER2
+	ldy		#SY6522_IER
+	sta		(MBBase),y				; Disable Timer2 IRQ
+	ldy		#SY6522_IFR
+	sta		(MBBase),y				; Clear any Timer2 IRQ
+
+	rts
+
+WaitT2Underflow
+	ldy		#SY6522_TIMER2H_COUNTER
+-		lda		(MBBase),y			; wait $00nn
 		bne		-
-
-;wait_FFnn
--		lda		(MBBase),y
+-		lda		(MBBase),y			; wait $FFnn (as there's no T2L_h, then "after timing out, the counter will continue to decrement")
 		beq		-
-
 	rts
 
 ;------------------------------------------------------------------------------
