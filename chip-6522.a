@@ -385,6 +385,10 @@ Test6522
 		jsr		T6522_5
 		bne		@error
 
+		inc		testNum			; test #06, ??
+		jsr		T6522_6
+		bne		@error
+
 		jsr		WaitT1OneShotUnderflow	; clear & disable any T1 ints
 		jsr		WaitT2OneShotUnderflow	; clear & disable any T2 ints
 
@@ -599,18 +603,27 @@ T6522_2
 ;--------------------------------------
 
 T6522_3
-; Pre:
+	lda		#SY6522_TIMER1H_COUNTER
+	sta		zpTmp2
+	bne		+
+T6522_4
+	lda		#SY6522_TIMER2H_COUNTER
+	sta		zpTmp2
++
+; Pre: zpTmp2 = SY6522_TIMER1L_COUNTER or SY6522_TIMER2L_COUNTER
+;	MBBaseL = $00 or $80
 ; Post: Z=1(OK), Z=0(NG)
 ;
-; Test#3
-; . Test all the insn's that can write to $Cn04 (excluding RMW: DEC,INC,ASL,LSR,ROL,ROR & 65C02: TRB,TSB)
+; Test#3,#4
+; . Test all the insn's that can write to T1C_h & T2C_h (excluding RMW: DEC,INC,ASL,LSR,ROL,ROR & 65C02: TRB,TSB)
 
 	jsr		resetSubTest
 
 	lda		#$FF
-	ldy		#SY6522_TIMER1L_COUNTER
+	ldy		zpTmp2
+	dey								; SY6522_TIMER1|2L_COUNTER
 	sta		(MBBase),y
-	ldy		#SY6522_TIMER1H_COUNTER
+	iny								; SY6522_TIMER1|2H_COUNTER
 	sta		(MBBase),y
 
 	lda		MBBaseH
@@ -628,11 +641,17 @@ T6522_3
 	sta		@5+1
 	sta		@7+1
 	sta		@8+1
-	ora		#SY6522_TIMER1H_COUNTER
+	ora		zpTmp2					; SY6522_TIMER1|2H_COUNTER
 	sta		@1+1
 	sta		@2+1
 	sta		@3+1
 	sta		@6+1
+
+	lda		MBBaseH
+	sta		zpTmpPtrH
+	lda		MBBaseL
+	ora		zpTmp2					; SY6522_TIMER1|2H_COUNTER
+	sta		zpTmpPtrL
 
 	;
 
@@ -649,27 +668,22 @@ T6522_3
 	jsr		@readT1C				; subTest #2
 
 	lda		#$00
-	ldy		#SY6522_TIMER1H_COUNTER
+	ldy		zpTmp2					; y=SY6522_TIMER1|2H_COUNTER
 @4	sta		CARD_BASE,y
 	jsr		@readT1C				; subTest #3
 
 	lda		#$00
-	ldx		#SY6522_TIMER1H_COUNTER
+	ldx		zpTmp2					; x=SY6522_TIMER1|2H_COUNTER
 @5	sta		CARD_BASE,x
 	jsr		@readT1C				; subTest #4
 
-	lda		MBBaseH
-	sta		zpTmpPtrH
-	lda		MBBaseL
-	ora		#SY6522_TIMER1H_COUNTER
-	sta		zpTmpPtrL
 	ldx		#0
 	txa
 	sta		(zpTmpPtr,x)
 	jsr		@readT1C				; subTest #5
 
 	lda		#$00
-	ldy		#SY6522_TIMER1H_COUNTER
+	ldy		zpTmp2					; y=SY6522_TIMER1|2H_COUNTER
 	sta		(MBBase),y
 	jsr		@readT1C				; subTest #6
 
@@ -684,7 +698,7 @@ T6522_3
 @6		stz		CARD_BASE+SY6522_TIMER1H_COUNTER
 		jsr		@readT1C			; subTest #8
 
-		ldx		#SY6522_TIMER1H_COUNTER
+		ldx		zpTmp2				; x=SY6522_TIMER1|2H_COUNTER
 @7		stz		CARD_BASE,x
 		jsr		@readT1C			; subTest #9
 
@@ -696,10 +710,11 @@ T6522_3
 
 	;
 
-@readT1C
-	ldy		#SY6522_TIMER1L_COUNTER
-@8	lda		CARD_BASE,y
-	cmp		#$F4
+@readT1C							; 6cy -> T1|2C=$FFFA
+	ldy		zpTmp2					; 3cy -> T1|2C=$FFF7
+	dey								; 2cy -> T1|2C=$FFF5 / y=SY6522_TIMER1|2L_COUNTER
+@8	lda		CARD_BASE,y				; 4cy -> T1|2C=$FFF1
+	cmp		#$F1
 	bne		+
 	inc		subTestNum
 	rts
@@ -707,7 +722,7 @@ T6522_3
 +	tax
 	pla
 	pla
-	lda		#$F4
+	lda		#$F1
 	sta		zpTmp2					; expected
 	txa								; actual
 	ldx		#1						; Z=0(NG)
@@ -715,11 +730,11 @@ T6522_3
 
 ;--------------------------------------
 
-T6522_4
+T6522_5
 	lda		#SY6522_TIMER1L_COUNTER
 	sta		zpTmp2
 	bne		+
-T6522_5
+T6522_6
 	lda		#SY6522_TIMER2L_COUNTER
 	sta		zpTmp2
 +
@@ -728,7 +743,7 @@ T6522_5
 ; Post: Z=1(OK), Z=0(NG)
 ;
 ; Test#4,#5
-; . Test all the insn's that can read from $Cn04 (excluding RMW: DEC,INC,ASL,LSR,ROL,ROR & 65C02: TRB,TSB)
+; . Test all the insn's that can read from T1C_l & T2C_l (excluding RMW: DEC,INC,ASL,LSR,ROL,ROR & 65C02: TRB,TSB)
 
 	jsr		resetSubTest
 	dec		subTestNum
