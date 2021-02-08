@@ -419,34 +419,17 @@ DisplayCardUpdate
 
 ;------------------------------------------------------------------------------
 
-PrintTestFailedErrBytes
-	lda		#<msg_Slot
-	ldx		#>msg_Slot
-	jsr		Print
-	lda		slotUnderTest
-	ora		#$80+$30
-	jsr		COUT
-	lda		#$80+' '
-	jsr		COUT
-	lda		#$80+':'
-	jsr		COUT
-	jsr		PrintTestFailed
+PrintTestFailed		; No error bytes
+	jsr		PrintLineTestFailed
 	; (next line)
-	lda		#<msg_testNum
-	ldx		#>msg_testNum
-	jsr		Print
-	ldx		testComponentNum
-	jsr		PRNTX
-	lda		#$80+':'
-	jsr		COUT
-	ldx		testNum
-	jsr		PRNTX
-	lda		#$80+':'
-	jsr		COUT
-	ldx		subTestNum
-	jsr		PRNTX
-	lda		#$80+$0d
-	jsr		COUT
+	jmp		PrintLineTestNum
+
+	;
+
+PrintTestFailedErrBytes
+	jsr		PrintLineTestFailed
+	; (next line)
+	jsr		PrintLineTestNum
 	; (next line)
 	lda		#<msg_Expected
 	ldx		#>msg_Expected
@@ -461,7 +444,20 @@ PrintTestFailedErrBytes
 	lda		#$80+$0d
 	jmp		COUT
 
-PrintTestFailed
+	;
+
+PrintLineTestFailed
+	lda		#<msg_Slot
+	ldx		#>msg_Slot
+	jsr		Print
+	lda		slotUnderTest
+	ora		#$80+$30
+	jsr		COUT
+	lda		#$80+' '
+	jsr		COUT
+	lda		#$80+':'
+	jsr		COUT
+
 	lda		#<msg_TestFailed
 	ldx		#>msg_TestFailed
 	jsr		Print
@@ -498,6 +494,25 @@ PrintTestFailed
 ;	lda		#$80+$0d		; exactly 40 char, so no need for CR
 ;	jsr		COUT
 	rts
+
+	;
+
+PrintLineTestNum
+	lda		#<msg_testNum
+	ldx		#>msg_testNum
+	jsr		Print
+	ldx		testComponentNum
+	jsr		PRNTX
+	lda		#$80+':'
+	jsr		COUT
+	ldx		testNum
+	jsr		PRNTX
+	lda		#$80+':'
+	jsr		COUT
+	ldx		subTestNum
+	jsr		PRNTX
+	lda		#$80+$0d
+	jmp		COUT
 
 ;------------------------------------------------------------------------------
 
