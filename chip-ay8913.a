@@ -8,6 +8,7 @@
 
 DetectAY8913
 ; Pre: zpTmp1 = 6522 bitmap in b1:0
+;	hasAY8913 = 0
 ; Post:
 
 	lda		#SY6522_A_BASE
@@ -64,13 +65,13 @@ DetectAY8913
 ;------------------------------------------------------------------------------
 
 TestAY8913
-; Pre:
+; Pre: hasAY8913
 ; Post:
 
-	lda		#3
-	sta		testNum
+	lda		#COMPONENT_AY8913+1	; test component $21
+	sta		testComponentNum
 	lda		#$ff
-	sta		subTestNum			; test #03.00
+	sta		testNum				; test #00
 
 	lda		#SY6522_A_BASE
 	sta		zpTmp3				; 6522 base addr
@@ -80,17 +81,17 @@ TestAY8913
 
 -		lsr		zpTmp1
 		bcs		+
-			inc		subTestNum
-			inc		subTestNum
+			inc		testNum
+			inc		testNum
 			bne		++
 
 +		jsr		Init6522ForAY
 
-		inc		subTestNum		; test #03.00, 03.02
+		inc		testNum			; test #00, #02
 		jsr		TestAYDatalines
 		bne		@error
 
-		inc		subTestNum		; test #03.01, 03.03
+		inc		testNum			; test #01, #03
 		jsr		TestAYAddrlines
 		bne		@error
 
@@ -99,7 +100,7 @@ TestAY8913
 		sta		zpTmp3
 		bne		-
 
-	inc		subTestNum			; test #03.04
+	inc		testNum				; test #04
 	jsr		TestAYPhasor		; only do this test once, since it covers both SY6522's
 	bne		@error
 
@@ -120,11 +121,16 @@ TestAY8913
 ;--------------------------------------
 
 TestAYDatalines
+; Pre:
+;	zpTmp3 = SY6522_A_BASE or SY6522_A_PH_BASE or SY6522_B_BASE
 ; Post: Z=1(OK),0(NG)
 ;	zpTmp2 = expected, A = actual
 
 	; Test the 8 data lines:
 	; . Write then Read: $01, $02, $04, ..., $80
+
+	jsr		resetSubTest
+	jsr		incTotalTests
 
 	lda		#1					; data to test
 	sta		zpTmp2
@@ -149,12 +155,17 @@ TestAYDatalines
 ;--------------------------------------
 
 TestAYAddrlines
+; Pre:
+;	zpTmp3 = SY6522_A_BASE or SY6522_A_PH_BASE or SY6522_B_BASE
 ; Post: Z=1(OK),0(NG)
 ;	zpTmp2 = expected, A = actual
 
 	; Test the 4 addr lines:
 	; . Write regs: [0..$D] with values [0..$D]
 	; . then read back
+
+	jsr		resetSubTest
+	jsr		incTotalTests
 
 	lda		#0					; reg & data to test
 	sta		zpTmp2
@@ -195,6 +206,8 @@ TestAYAddrlines
 ;--------------------------------------
 
 TestAYPhasor
+; Pre:
+;	zpTmp3 = SY6522_A_BASE or SY6522_A_PH_BASE or SY6522_B_BASE
 ; Post: Z=1(OK),0(NG)
 ;	zpTmp2 = expected, A = actual
 
@@ -206,6 +219,9 @@ TestAYPhasor
 	; Test for 4 AYs (Phasor only)
 	; . Write to each AY's reg#0 with values: $11,$22,$33,$44
 	; . then read back
+
+	jsr		resetSubTest
+	jsr		incTotalTests
 
 	lda		#PH_PHASOR
 	jsr		SetPhasorMode
