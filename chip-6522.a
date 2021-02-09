@@ -398,6 +398,10 @@ Test6522
 		jsr		T6522_8
 		bne		@error
 
+		inc		testNum			; test #09, ??
+		jsr		T6522_9
+		bne		@error
+
 		jsr		WaitT1OneShotUnderflow	; clear & disable any T1 ints
 		jsr		WaitT2OneShotUnderflow	; clear & disable any T2 ints
 
@@ -754,7 +758,7 @@ T6522_6
 ;	MBBaseL = $00 or $80
 ; Post: Z=1(OK), Z=0(NG)
 ;
-; Test#4,#5
+; Test#5,#6
 ; . Test all the insn's that can read from T1C_l & T2C_l (excluding RMW: DEC,INC,ASL,LSR,ROL,ROR & 65C02: TRB,TSB)
 
 	jsr		resetSubTest
@@ -1123,45 +1127,131 @@ T6522_8
 ;	MBBaseL = $00 or $80
 ; Post: Z=1(OK), Z=0(NG)
 ;
-; Test#7 (AppleWin-GH#833)
+; Test#7,8 (AppleWin-GH#833)
 ; . Test reading T1|2C_h when T1|2C_l underflows
 
 	jsr		resetSubTest
 	jsr		incTotalTests
 
-	lda		#4							; Set T1|2C=$0104
-	ldy		zpTmp2						; y=SY6522_TIMER1|2L_COUNTER
+	lda		#4						; Set T1|2C=$0104
+	ldy		zpTmp2					; y=SY6522_TIMER1|2L_COUNTER
 	sta		(MBBase),y
 	lda		#1
-	iny									; y=SY6522_TIMER1|2H_COUNTER
+	iny								; y=SY6522_TIMER1|2H_COUNTER
 	sta		(MBBase),y
-	lda		(MBBase),y					; 5cy
-	beq		+							; error
+	lda		(MBBase),y				; 5cy
+	beq		+						; error
 
-	jsr		incSubTestNum				; subTest #1
+	jsr		incSubTestNum			; subTest #1
 
 	ldx		#3
--		txa								; Set T1|2C=$0103,...,$0100
-		ldy		zpTmp2					; y=SY6522_TIMER1|2L_COUNTER
+-		txa							; Set T1|2C=$0103,...,$0100
+		ldy		zpTmp2				; y=SY6522_TIMER1|2L_COUNTER
 		sta		(MBBase),y
 		lda		#1
-		iny								; y=SY6522_TIMER1|2H_COUNTER
+		iny							; y=SY6522_TIMER1|2H_COUNTER
 		sta		(MBBase),y
-		lda		(MBBase),y				; 5cy
-		bne		+						; error
+		lda		(MBBase),y			; 5cy
+		bne		+					; error
 		dex
 		bpl		-
 
-	lda		#0							; Z=1(OK)
+	lda		#0						; Z=1(OK)
 	rts
 
 +	tax
 	lda		#$00
-	sta		zpTmp2						; expected
-	txa									; actual
-
-	lda		#1							; Z=0(NG)
+	sta		zpTmp2					; expected
+	txa								; actual
+	ldx		#1						; Z=0(NG)
 	rts
+
+;------------------------------------------------------------------------------
+
+T6522_9
+; Pre: MBBaseL = $00 or $80
+; Post: Z=1(OK), Z=0(NG)
+;
+; Test#9 (AppleWin-GH#833)
+; . Test T1C in free-running mode (on underflow) gets reloaded with T1L
+; . Test T1C in one-shot mode (on underflow) gets reloaded with T1L
+
+	jsr		resetSubTest			; subTest #0
+	jsr		incTotalTests
+
+	lda		#$80					; set T1C = T1L = $0180
+	ldy		#SY6522_TIMER1L_COUNTER
+	sta		(MBBase),y
+	lda		#$01
+	ldy		#SY6522_TIMER1H_COUNTER
+	sta		(MBBase),y
+	tax
+
+	lda		#ACR_FREERUNNING
+	ldy		#SY6522_ACR
+	sta		(MBBase),y				; Free-running timer
+
+	lda		#4
+	sta		zpTmp2
+
+-		jsr		WaitT1Underflow
+		ldy		#SY6522_TIMER1H_COUNTER
+		lda		(MBBase),y
+		cmp		#$01
+		bne		@error
+		dec		zpTmp2
+		bne		-
+
+	;
+
+	jsr		incSubTestNum			; subTest #1
+
+	lda		#$80					; set T1C = T1L = $0280
+	ldy		#SY6522_TIMER1L_COUNTER
+	sta		(MBBase),y
+	lda		#$02
+	ldy		#SY6522_TIMER1H_COUNTER
+	sta		(MBBase),y
+	tax
+
+	lda		#ACR_ONESHOT
+	ldy		#SY6522_ACR
+	sta		(MBBase),y				; One-shot timer
+
+	lda		#4
+	sta		zpTmp2
+
+-		jsr		WaitT1Underflow
+		ldy		#SY6522_TIMER1H_COUNTER
+		lda		(MBBase),y
+		cmp		#$02
+		bne		@error
+		dec		zpTmp2
+		bne		-
+
+	;
+
+	jsr		incSubTestNum			; subTest #2
+
+	lda		#$80					; set T2C = $0380 (only one-shot for timer2)
+	ldy		#SY6522_TIMER2L_COUNTER
+	sta		(MBBase),y
+	lda		#$03
+	ldy		#SY6522_TIMER2H_COUNTER
+	sta		(MBBase),y
+	tax
+
+	jsr		WaitT2Underflow
+	ldy		#SY6522_TIMER2H_COUNTER
+	lda		(MBBase),y
+	cmp		#$FF					; there is no latch, so continues decrementing
+	bne		@error
+
+	; Z=1(OK), so fall through...
+
+@error	; Pre: A=actual, X=expected
+	stx		zpTmp2					; expected
+	rts								; Z=1(OK), Z=0(NG)
 
 ;------------------------------------------------------------------------------
 
