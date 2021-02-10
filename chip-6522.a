@@ -334,6 +334,7 @@ Check6522ISR
 ;	. 6522 -> IRQ cycle (detect a2heaven's MEGA Audio)
 ;	. 6502|65C02 addr modes access of 6522 T1C
 ;	. oneshot|continuous underflow, then T1L -> T1C
+;	. T1L=$0000, can only read T1C values of $00 and $FF
 ;	T2:
 ;	. oneshot x IRQ|poll
 ;	. oneshot underflow, then T1L -> T1C
@@ -400,6 +401,10 @@ Test6522
 
 		inc		testNum			; test #09, ??
 		jsr		T6522_9
+		bne		@error
+
+		inc		testNum			; test #0A, ??
+		jsr		T6522_A
 		bne		@error
 
 		jsr		WaitT1OneShotUnderflow	; clear & disable any T1 ints
@@ -1255,6 +1260,66 @@ T6522_9
 
 ;------------------------------------------------------------------------------
 
+T6522_A
+; Pre: MBBaseL = $00 or $80
+; Post: Z=1(OK), Z=0(NG)
+;
+; Test#A
+; . Check T1 bounds on underflow
+
+	jsr		resetSubTest			; subTest #0
+	jsr		incTotalTests
+
+	lda		#ACR_ONESHOT
+	ldy		#SY6522_ACR
+	sta		(MBBase),y				; One-shot timer
+
+	lda		#7
+	sta		zpTmp2					; T1C_l
+
+-		lda		zpTmp2				; set T1C = T1L = $0007, $0006, .... $0000
+		ldy		#SY6522_TIMER1L_COUNTER
+		sta		(MBBase),y
+		lda		#$00
+		ldy		#SY6522_TIMER1H_COUNTER
+		sta		(MBBase),y
+
+		ldy		#SY6522_TIMER1L_COUNTER	; 2cy
+		lda		(MBBase),y				; 5cy
+		sta		zpTmp3
+
+		; calc the expected T1C_l
+		lda		zpTmp2
+		sec
+		sbc		#6						; 2cy + (5cy - 1cy)
+--			bpl		+					; repeat until in range...
+			cmp		#$ff
+			beq		+
+			clc
+			adc		zpTmp2				; += T1C_l
+			clc
+			adc		#2					; += 2 (as 6522 counts N+2 cycles)
+			jmp		--
++		tax								; expected
+		lda		zpTmp3					; actual
+		cpx		zpTmp3
+		bne		@error
+		dec		zpTmp2
+		bpl		-
+
+	lda		#0
+
+@error	; Pre: A=actual, X=expected
+	stx		zpTmp2					; expected
+	php
+	pha
+	jsr		WaitT1OneShotUnderflow	; don't leave T1L set to a very small value (else 6522 detection will fail next time!)
+	pla
+	plp
+	rts								; Z=1(OK), Z=0(NG)
+
+;------------------------------------------------------------------------------
+
 WaitT1OneShotUnderflow
 ; Set to T1 one-shot mode, and wait for underflow to clear internal 6522 state
 
@@ -1264,7 +1329,7 @@ WaitT1OneShotUnderflow
 	ldy		#SY6522_ACR
 	sta		(MBBase),y				; T1 one-shot mode
 
-	lda		#1						; Set T1C=$0101
+	lda		#1						; Set T1C=T1L=$0101
 	ldy		#SY6522_TIMER1L_COUNTER
 	sta		(MBBase),y
 	ldy		#SY6522_TIMER1H_COUNTER
