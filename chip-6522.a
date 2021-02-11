@@ -1277,6 +1277,7 @@ T6522_A
 	lda		#7
 	sta		zpTmp2					; T1C_l
 
+	; subTest#            0,     1,     2,     3,     4,     5,     6,     7
 	; set T1C = T1L = $0007, $0006, $0005, $0004, $0003, $0002, $0001, $0000
 	; expected read :   $01,   $00,   $FF,   $04,   $02,   $00,   $01,   $00
 -		lda		zpTmp2
@@ -1306,6 +1307,7 @@ T6522_A
 		lda		zpTmp3				; actual
 		cpx		zpTmp3
 		bne		@error
+		jsr		incSubTestNum		; subTest (next)
 		dec		zpTmp2
 		bpl		-
 
