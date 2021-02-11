@@ -1277,7 +1277,9 @@ T6522_A
 	lda		#7
 	sta		zpTmp2					; T1C_l
 
--		lda		zpTmp2				; set T1C = T1L = $0007, $0006, .... $0000
+	; set T1C = T1L = $0007, $0006, $0005, $0004, $0003, $0002, $0001, $0000
+	; expected read :   $01,   $00,   $FF,   $04,   $02,   $00,   $01,   $00
+-		lda		zpTmp2
 		ldy		#SY6522_TIMER1L_COUNTER
 		sta		(MBBase),y
 		lda		#$00
@@ -1291,17 +1293,17 @@ T6522_A
 		; calc the expected T1C_l
 		lda		zpTmp2
 		sec
-		sbc		#6						; 2cy + (5cy - 1cy)
---			bpl		+					; repeat until in range...
+		sbc		#6					; 2cy + (5cy - 1cy)
+--			bpl		+				; repeat until in range...
 			cmp		#$ff
 			beq		+
 			clc
-			adc		zpTmp2				; += T1C_l
+			adc		zpTmp2			; += T1C_l
 			clc
-			adc		#2					; += 2 (as 6522 counts N+2 cycles)
+			adc		#2				; += 2 (as 6522 counts N+2 cycles)
 			jmp		--
-+		tax								; expected
-		lda		zpTmp3					; actual
++		tax							; expected
+		lda		zpTmp3				; actual
 		cpx		zpTmp3
 		bne		@error
 		dec		zpTmp2
