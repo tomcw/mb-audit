@@ -1332,17 +1332,17 @@ T6522_B
 ; Pre: MBBaseL = $00 or $80
 ; Post: Z=1(OK), Z=0(NG)
 ;
-; Test#B
-; . Check T1's bounds on $ffff underflow
+; Test#B (AppleWin-GH#652)
+; . Check T1's bounds on $ffff underflow, with big gaps between 6522 accesses
+; EG.
+;    ]CALL-151
+;    *C404:0 0	; T1C=T1L=$0000
+;    *C400.C47F
+; Then verify that both $C4n4(l) and $C4n5(h) = $00 or $FF (and nothing else - but one can be $00, the other $FF)
+;
 
 	jsr		resetSubTest			; subTest #0
 	jsr		incTotalTests
-
-	lda		MBBaseH
-	sta		zpTmpPtrH
-	lda		MBBaseL
-	ora		#SY6522_TIMER1L_COUNTER
-	sta		zpTmpPtrL
 
 	lda		#ACR_ONESHOT
 	ldy		#SY6522_ACR
@@ -1355,17 +1355,13 @@ T6522_B
 	ldy		#SY6522_TIMER1H_COUNTER
 	sta		(MBBase),y
 
-	ldx		#0						; 2cy, so T1 underflows and clears the 6522 internal state
-	lda		(zpTmpPtrL,x)			; 6cy, A=$FF (so next cycle underflows)
-
-	; Delay for ~$8000cy
+	; Delay for ~$9000cy (ie. T1C -> ~$7000)
 	; . For just-in-time 6522 emulation, then 6522 T1 won't be updated after every opcode (or 6502 cycle)
 	;   so a "big" gap between 6522 accesses may result in an out of bounds value.
 	ldx		#0						; 2cy (*)
-	lda		#$70
-	jsr		WAIT					; WAIT $8075cy => T1=$7F86 (ie. sign extended it's now +ve)
+	lda		#$78
+	jsr		WAIT					; WAIT $9301cy => T1=$7nnn (ie. sign extended it's now +ve)
 
-	; TODO: runs OK normal mode, NG in debugging mode
 	ldy		#SY6522_TIMER1H_COUNTER
 	lda		(MBBase),y
 	ldx		#$FF					; expected
@@ -1383,15 +1379,12 @@ T6522_B
 	ldy		#SY6522_TIMER1H_COUNTER
 	sta		(MBBase),y
 
-	ldx		#0						; 2cy, so T1 underflows and clears the 6522 internal state
-	lda		(zpTmpPtrL,x)			; 6cy, A=$FF (so next cycle underflows)
-
-	; Delay for ~$8000cy
+	; Delay for ~$9000cy (ie. T1C -> ~$7000)
 	; . For just-in-time 6522 emulation, then 6522 T1 won't be updated after every opcode (or 6502 cycle)
 	;   so a "big" gap between 6522 accesses may result in an out of bounds value.
 	ldx		0						; 3cy (*)
-	lda		#$70
-	jsr		WAIT					; WAIT $8075cy => T1=$7F85 (ie. sign extended it's now +ve)
+	lda		#$78
+	jsr		WAIT					; WAIT $9301cy => T1=$7nnn (ie. sign extended it's now +ve)
 
 	ldy		#SY6522_TIMER1H_COUNTER
 	lda		(MBBase),y
