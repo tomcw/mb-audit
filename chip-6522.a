@@ -343,7 +343,7 @@ Check6522ISR
 
 Test6522
 ; Pre: has6522
-; Post:
+; Post: return to top-level: Z=0(OK), Z=1(NG)... NB opposite to TestX's below!
 ; Uses: zpTmp1 (so don't use in sub-funcs)
 
 	sei
@@ -429,8 +429,10 @@ Test6522
 	rts
 
 @error
+Test6522Error
 ; Pre: zpTmp2 = expected value
 ;	A = actual value
+; Post: Z=1(NG)
 
 	sta		errorActual
 	lda		zpTmp2
@@ -1487,6 +1489,9 @@ Test6522ISR
 	sta		(MBBase),y
 	sta		isrIFR
 
+	lda		#1
+	sta		isrFlag
+
 	;------
 
 	pla
@@ -1496,3 +1501,157 @@ Test6522ISR
 
 	lda		$45		; for Apple II/II+
 	rti
+
+;------------------------------------------------------------------------------
+
+RESET_T1L_l = $34
+RESET_T1L_h = $02
+
+Setup6522ForReset
+; Pre: X=slot#
+;	has6522
+; Post: return to top-level: Z=0(OK), Z=1(NG)... NB opposite to TestX's above!
+;	NG: zpTmp2 = expected value; A = actual value
+;
+; Notes:
+; 6522 regs that persist across reset: T1L_l ,T1L_h
+; 6522 state that is cleared on reset: IRQ, ACR.T1_RUNMODE?
+;
+
+	sei
+
+	txa
+	ora		#$c0
+	sta		MBBaseH
+	lda		#0
+	sta		MBBaseL
+
+	lsr		has6522
+	bcs		+
+		lda		#$80
+		sta		MBBaseL
++
+
+	lda		#COMPONENT_6522+2		; test component $12
+	sta		testComponentNum
+	lda		#$f0
+	sta		testNum					; test #f0
+	jsr		resetSubTest			; subTest #0
+	jsr		incTotalTests
+
+	lda		#ACR_FREERUNNING
+	ldy		#SY6522_ACR
+	sta		(MBBase),y				; Free-running timer
+
+	lda		#IER_SET|IxR_TIMER1|IxR_TIMER2
+	ldy		#SY6522_IER
+	sta		(MBBase),y				; Enable T1 & T2 IRQ
+
+	lda		#RESET_T1L_l			; T1C = T1L = $0234
+	ldy		#SY6522_TIMER1L_COUNTER
+	sta		(MBBase),y
+	lda		#RESET_T1L_h
+	ldy		#SY6522_TIMER1H_COUNTER
+	sta		(MBBase),y
+
+	lda		#$00					; T1C = $0000
+	ldy		#SY6522_TIMER2L_COUNTER
+	sta		(MBBase),y
+	ldy		#SY6522_TIMER2H_COUNTER
+	sta		(MBBase),y				; will underflow immediately & assert T2 IRQ
+
+	jsr		WaitT1Underflow			; Post: T1 IRQ asserted
+
+	ldy		#SY6522_IFR
+	lda		(MBBase),y
+	ldx		#IER_SET|IxR_TIMER1|IxR_TIMER2	; expected
+	and		#IER_SET|IxR_TIMER1|IxR_TIMER2
+	cmp		#IER_SET|IxR_TIMER1|IxR_TIMER2
+	bne		@error
+
+	lda		#1
+	rts								; Z=0(OK)
+
+@error	; Pre: A=actual, X=expected
+	stx		zpTmp2					; expected
+	pha
+	jsr		WaitT1OneShotUnderflow	; don't leave T1L set to a very small value (else 6522 detection will fail next time!)
+	pla
+	jmp		Test6522Error
+
+
+;------------------------------------------------------------------------------
+
+Skip6522ForReset
+	jsr		WaitT1OneShotUnderflow	; de-assert T1 IRQ & set T1L to a sensible value
+	jmp		WaitT2OneShotUnderflow	; de-assert T2 IRQ
+
+;------------------------------------------------------------------------------
+
+Test6522AfterReset
+; Pre: has6522
+; Post: Z=1(OK), Z=0(NG)
+;	NG: zpTmp2 = expected value; A = actual value
+;
+
+	lsr		has6522
+	bcs		+
+		lda		#$80
+		sta		MBBaseL
++
+
+	lda		#$f1
+	sta		testNum					; test #f1
+	jsr		resetSubTest			; subTest #0
+	jsr		incTotalTests
+
+	; Test T1L_l/h
+	ldy		#SY6522_TIMER1L_LATCH
+	lda		(MBBase),y
+	ldx		#RESET_T1L_l
+	cmp		#RESET_T1L_l
+	bne		@error
+	ldy		#SY6522_TIMER1H_LATCH
+	lda		(MBBase),y
+	ldx		#RESET_T1L_h
+	cmp		#RESET_T1L_h
+	bne		@error
+
+	; Test that T1 & T2 IRQs are now de-asserted
+	jsr		incSubTestNum			; subTest #1
+	ldy		#SY6522_IFR
+	lda		(MBBase),y
+	ldx		#0						; expected
+	and		#IxR_TIMER1|IxR_TIMER2
+	cmp		#0
+	bne		@error
+
+	; Test that no IRQs are still asserted
+	jsr		incSubTestNum			; subTest #2
+	ldx		#0						; expected
+	stx		isrIFR
+	stx		isrFlag
+	cli
+	sei
+	lda		isrIFR
+	bne		@error
+	jsr		incSubTestNum			; subTest #3
+	lda		isrFlag
+	bne		@error
+
+	; fall through...
+
+@error	; Pre: A=actual, X=expected
+	stx		zpTmp2					; expected
+	php
+	pha
+	jsr		WaitT1OneShotUnderflow	; de-assert T1 IRQ & set T1L to a sensible value
+	jsr		WaitT2OneShotUnderflow	; de-assert T2 IRQ
+	pla
+	plp
+	bne		+
+
+	lda		#1
+	rts								; Z=0(OK)
+
++	jmp		Test6522Error

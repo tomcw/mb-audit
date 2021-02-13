@@ -1,3 +1,8 @@
+
+SOFTEV_L = $3F2
+SOFTEV_H = $3F3
+PWREDUP  = $3F4
+
 IRQL	= $3FE
 IRQH	= $3FF
 

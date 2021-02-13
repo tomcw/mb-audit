@@ -79,6 +79,13 @@ entrypoint
 	lda		IRQH
 	sta		saveIRQH
 
+	lda		SOFTEV_L
+	sta		saveRESETL
+	lda		SOFTEV_H
+	sta		saveRESETH
+	lda		PWREDUP
+	sta		savePWREDUP
+
 	;
 
 	sed
@@ -160,7 +167,52 @@ entrypoint
 
 	;
 
+TestReset
+	tsx
+	jsr		SetupResetVector
+
+	lda		#7
+	sta		slotUnderTest
+nextSlot
+		ldx		slotUnderTest
+		lda		slotInfo,x
+		beq		+
+			sta		has6522
+			jsr		Setup6522ForReset
+			beq		error
+			jsr		PrintSlotNum
+			lda		#<msg_PressReset
+			ldx		#>msg_PressReset
+			jsr		Print
+			lda		#0
+			sta		hasBeenReset
+TestResetLoop
+-				lda		hasBeenReset
+				bne		++
+				lda		KBD
+				bpl		-
+				bit		KBDSTRB
+				cmp		#$80+27
+				bne		-
+			jsr		Skip6522ForReset
+			jmp		+
+++			jsr		Test6522AfterReset
+			bne		+
+error			jsr		PrintTestFailedErrBytes
+				jmp		exit
++		dec		slotUnderTest
+		bne		nextSlot
+
+	;
+
 exit
+
+	lda		saveRESETL
+	sta		SOFTEV_L
+	lda		saveRESETH
+	sta		SOFTEV_H
+	lda		savePWREDUP
+	sta		PWREDUP
 
 	lda		saveIRQL
 	sta		IRQL
@@ -173,6 +225,32 @@ exit
 		dex
 		bpl		-
 
+	rts
+
+;------------------------------------------------------------------------------
+
+ResetVector
+
+	lda		#1
+	sta		hasBeenReset
+
+	ldx		userlandSP
+	txs
+	jmp		TestResetLoop
+
+	;
+
+SetupResetVector
+; Pre: X=SP
+
+	stx		userlandSP
+
+	lda		#<ResetVector
+	sta		SOFTEV_L
+	lda		#>ResetVector
+	sta		SOFTEV_H
+	eor		#$A5
+	sta		PWREDUP
 	rts
 
 ;------------------------------------------------------------------------------
@@ -447,16 +525,7 @@ PrintTestFailedErrBytes
 	;
 
 PrintLineTestFailed
-	lda		#<msg_Slot
-	ldx		#>msg_Slot
-	jsr		Print
-	lda		slotUnderTest
-	ora		#$80+$30
-	jsr		COUT
-	lda		#$80+' '
-	jsr		COUT
-	lda		#$80+':'
-	jsr		COUT
+	jsr		PrintSlotNum
 
 	lda		#<msg_TestFailed
 	ldx		#>msg_TestFailed
@@ -512,6 +581,19 @@ PrintLineTestNum
 	ldx		subTestNum
 	jsr		PRNTX
 	lda		#$80+$0d
+	jmp		COUT
+
+
+PrintSlotNum
+	lda		#<msg_Slot
+	ldx		#>msg_Slot
+	jsr		Print
+	lda		slotUnderTest
+	ora		#$80+$30
+	jsr		COUT
+	lda		#$80+' '
+	jsr		COUT
+	lda		#$80+':'
 	jmp		COUT
 
 ;------------------------------------------------------------------------------
@@ -578,12 +660,20 @@ hasSC01			!byte 0
 isrIFR_A		!byte 0
 isrIFR_B		!byte 0
 isrIFR			!byte 0
+isrFlag			!byte 0
 
 saveIRQL		!byte 0
 saveIRQH		!byte 0
 
+saveRESETL		!byte 0
+saveRESETH		!byte 0
+savePWREDUP		!byte 0
+
 errorExpected	!byte 0
 errorActual		!byte 0
+
+hasBeenReset	!byte 0
+userlandSP		!byte 0
 
 msg_mbaudit	!text "mb-audit v0.01, 2021",0xd
 msg_mbauditEnd !text 0
@@ -621,3 +711,6 @@ msg_ActualEnd !text 0
 
 msg_OK !text "All tests passed (total=$"	; 0000)
 msg_OKEnd !text 0
+
+msg_PressReset !text "Press CTRL+RESET (ESC to skip)",0xd
+msg_PressResetEnd !text 0
