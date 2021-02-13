@@ -203,6 +203,10 @@ error			jsr		PrintTestFailedErrBytes
 +		dec		slotUnderTest
 		bne		nextSlot
 
+	lda		#<msg_ResetOK
+	ldx		#>msg_ResetOK
+	jsr		Print
+
 	;
 
 exit
@@ -714,3 +718,6 @@ msg_OKEnd !text 0
 
 msg_PressReset !text "Press CTRL+RESET (ESC to skip)",0xd
 msg_PressResetEnd !text 0
+
+msg_ResetOK !text "Reset tests passed",0xd
+msg_ResetOKEnd !text 0

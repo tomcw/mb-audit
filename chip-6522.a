@@ -1605,7 +1605,15 @@ Test6522AfterReset
 	jsr		resetSubTest			; subTest #0
 	jsr		incTotalTests
 
+	ldy		#SY6522_ACR
+	lda		(MBBase),y
+	ldx		#ACR_ONESHOT
+	and		#ACR_FREERUNNING
+	cmp		#ACR_ONESHOT
+	bne		@error
+
 	; Test T1L_l/h
+	jsr		incSubTestNum			; subTest #1
 	ldy		#SY6522_TIMER1L_LATCH
 	lda		(MBBase),y
 	ldx		#RESET_T1L_l
@@ -1617,8 +1625,16 @@ Test6522AfterReset
 	cmp		#RESET_T1L_h
 	bne		@error
 
+	; Test that all IRQs are disabled
+	jsr		incSubTestNum			; subTest #2
+	ldy		#SY6522_IER
+	lda		(MBBase),y
+	ldx		#$80					; expected
+	cmp		#$80
+	bne		@error
+
 	; Test that T1 & T2 IRQs are now de-asserted
-	jsr		incSubTestNum			; subTest #1
+	jsr		incSubTestNum			; subTest #3
 	ldy		#SY6522_IFR
 	lda		(MBBase),y
 	ldx		#0						; expected
@@ -1627,7 +1643,7 @@ Test6522AfterReset
 	bne		@error
 
 	; Test that no IRQs are still asserted
-	jsr		incSubTestNum			; subTest #2
+	jsr		incSubTestNum			; subTest #4
 	ldx		#0						; expected
 	stx		isrIFR
 	stx		isrFlag
@@ -1635,7 +1651,7 @@ Test6522AfterReset
 	sei
 	lda		isrIFR
 	bne		@error
-	jsr		incSubTestNum			; subTest #3
+	jsr		incSubTestNum			; subTest #5
 	lda		isrFlag
 	bne		@error
 
