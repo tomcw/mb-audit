@@ -168,9 +168,6 @@ entrypoint
 	;
 
 TestReset
-	tsx
-	jsr		SetupResetVector
-
 	lda		#7
 	sta		slotUnderTest
 nextSlot
@@ -184,6 +181,8 @@ nextSlot
 			lda		#<msg_PressReset
 			ldx		#>msg_PressReset
 			jsr		Print
+			tsx
+			jsr		SetupResetVector	; NB. do this after Print, as we save the text screen vars
 			lda		#0
 			sta		hasBeenReset
 TestResetLoop
@@ -238,8 +237,16 @@ ResetVector
 	lda		#1
 	sta		hasBeenReset
 
+	ldx		#0
+-		lda		saveZPTextVars,x
+		sta		CH,x
+		inx
+		cpx		#(BAS2H-CH)+1
+		bne		-
+
 	ldx		userlandSP
 	txs
+
 	jmp		TestResetLoop
 
 	;
@@ -248,6 +255,13 @@ SetupResetVector
 ; Pre: X=SP
 
 	stx		userlandSP
+
+	ldx		#0
+-		lda		CH,x
+		sta		saveZPTextVars,x
+		inx
+		cpx		#(BAS2H-CH)+1
+		bne		-
 
 	lda		#<ResetVector
 	sta		SOFTEV_L
@@ -665,6 +679,8 @@ isrIFR_A		!byte 0
 isrIFR_B		!byte 0
 isrIFR			!byte 0
 isrFlag			!byte 0
+
+saveZPTextVars	!fill (BAS2H-CH)+1,0
 
 saveIRQL		!byte 0
 saveIRQH		!byte 0

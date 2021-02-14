@@ -1,4 +1,17 @@
 
+WNDLFT  = $20
+WNDWDTH = $21
+WNDTOP  = $22
+WNDBTM  = $23
+CH      = $24
+CV      = $25
+GBASL   = $26
+GBASH   = $27
+BASL    = $28
+BASH    = $29
+BAS2L   = $2A
+BAS2H   = $2B
+
 SOFTEV_L = $3F2
 SOFTEV_H = $3F3
 PWREDUP  = $3F4
