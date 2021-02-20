@@ -428,10 +428,12 @@ AY1_ReadReg
 ; Post: Y = SY6522_ORA for chip A or B
 ;	A = data
 	lda		#AY_READ|AY_CS1
-	bne		++
+	jsr		+
+	lda		(MBBase),y		; Read Port-A
+	rts
 AY2_ReadReg
 	lda		#AY_READ|AY_CS2
-++	jsr		+
+	jsr		++
 	lda		(MBBase),y		; Read Port-A
 	rts
 
@@ -445,7 +447,7 @@ AY1_SelectReg
 AY2_SelectReg
 	sta		(MBBase),y
 	lda		#AY_LATCH|AY_CS2
-	bne		+
+	bne		++
 
 AY1_WriteReg
 ; Pre: Y = SY6522_ORA for chip A or B
@@ -458,11 +460,18 @@ AY1_WriteReg
 AY2_WriteReg
 	sta		(MBBase),y
 	lda		#AY_WRITE|AY_CS2
-	bne		+
+	bne		++
 
 +	dey		; Y = ORB (reg#0)
 	sta		(MBBase),y
-	lda		#AY_INACTIVE		; NB. Always deactivate both AY's (as it's simpler!)
+	lda		#AY_INACTIVE|AY_CS1
+	sta		(MBBase),y
+	iny		; Y = ORA (reg#1)
+	rts
+
+++	dey		; Y = ORB (reg#0)
+	sta		(MBBase),y
+	lda		#AY_INACTIVE|AY_CS2
 	sta		(MBBase),y
 	iny		; Y = ORA (reg#1)
 	rts
