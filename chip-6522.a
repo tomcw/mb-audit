@@ -1526,7 +1526,8 @@ Setup6522ForReset
 	lda		#0
 	sta		MBBaseL
 
-	lsr		has6522
+	lda		has6522
+	lsr
 	bcs		+
 		lda		#$80
 		sta		MBBaseL
@@ -1594,7 +1595,8 @@ Test6522AfterReset
 ;	NG: zpTmp2 = expected value; A = actual value
 ;
 
-	lsr		has6522
+	lda		has6522
+	lsr
 	bcs		+
 		lda		#$80
 		sta		MBBaseL

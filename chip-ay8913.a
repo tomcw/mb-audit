@@ -10,6 +10,7 @@ DetectAY8913
 ; Pre: zpTmp1 = 6522 bitmap in b1:0
 ;	hasAY8913 = 0
 ; Post:
+;	hasAY8913 = 0,1,2
 
 	lda		#SY6522_A_BASE
 	sta		zpTmp3
@@ -207,7 +208,6 @@ TestAYAddrlines
 
 TestAYPhasor
 ; Pre:
-;	zpTmp3 = SY6522_A_BASE or SY6522_A_PH_BASE or SY6522_B_BASE
 ; Post: Z=1(OK),0(NG)
 ;	zpTmp2 = expected, A = actual
 
@@ -317,7 +317,7 @@ Init6522ForAY
 	cmp		#PH_PHASOR
 	beq		+
 		lda		#$07
-		beq		++
+		bne		++
 +		lda		#$1f
 ++	sta		(MBBase),y
 
