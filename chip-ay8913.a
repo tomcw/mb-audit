@@ -9,6 +9,7 @@
 DetectAY8913
 ; Pre: zpTmp1 = 6522 bitmap in b1:0
 ;	hasAY8913 = 0
+;	isPhasorCard
 ; Post:
 ;	hasAY8913 = 0,1,2
 
@@ -66,8 +67,8 @@ DetectAY8913
 ;------------------------------------------------------------------------------
 
 TestAY8913
-; Pre: hasAY8913
-; Post:
+; Pre: hasAY8913 (Phasor: will be 0)
+; Post: hasAY8913 (Phasor: set to %1111)
 
 	lda		#COMPONENT_AY8913+1	; test component $21
 	sta		testComponentNum
@@ -216,9 +217,13 @@ TestAYPhasor
 	rts							; Z=1(OK)
 +
 
+	lda		#%00001111
+	sta		hasAY8913			; can't test them, so just assume they are all working
+
 	; Test for 4 AYs (Phasor only)
 	; . Write to each AY's reg#0 with values: $11,$22,$33,$44
-	; . then read back
+	; . then read back (all should be $FF)
+	; NB. Phasor doesn't support PortA input - so can't read the AY8913 regs
 
 	jsr		resetSubTest
 	jsr		incTotalTests
@@ -262,14 +267,14 @@ TestAYPhasor
 
 	ldx		#AY_AFINE
 	jsr		AY1_ReadRegValue
-	ldx		#$11
-	cmp		#$11
+	ldx		#$FF				; $11
+	cmp		#$FF
 	bne		+
 
 	ldx		#AY_AFINE
 	jsr		AY2_ReadRegValue
-	ldx		#$22
-	cmp		#$22
+	ldx		#$FF				; $22
+	cmp		#$FF
 	bne		+
 
 	;
@@ -278,13 +283,13 @@ TestAYPhasor
 
 	ldx		#AY_AFINE
 	jsr		AY1_ReadRegValue
-	ldx		#$33
-	cmp		#$33
+	ldx		#$FF				; $33
+	cmp		#$FF
 	bne		+
 
 	ldx		#AY_AFINE
 	jsr		AY2_ReadRegValue
-	ldx		#$44
+	ldx		#$FF				; $44
 
 +	stx		zpTmp2				; expected
 	sta		zpTmp1				; actual
