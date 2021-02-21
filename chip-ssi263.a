@@ -14,7 +14,7 @@ DetectSSI263
 	; - Speech using 6522 PCR w/o IRQ (based on Willy Byte's SSI263 detection code)
 
 	lda		zpTmp1
-	and		#2						; SSI_B is connected to 2nd 6522
+	and		#2						; SSI263 is connected to 2nd 6522
 	beq		+
 
 	lda		#IxR_SSI263
@@ -63,7 +63,7 @@ DisableSSI263
 	ldy		#SSI_CTTRAMP
 	sta		(MBBase),y
 
-	lda		#MODE_IRQ_DISABLED+$00	; DR1:DR0=3 , P5:P0=$00
+	lda		#MODE_IRQ_DISABLED+$00	; DR1:DR0=0, P5:P0=$00
 	ldy		#SSI_DURPHON
 	sta		(MBBase),y
 
@@ -83,7 +83,7 @@ DetectSSI263_B
 	; - Speech using 6522 PCR w/o IRQ (based on Willy Byte's SSI263 detection code)
 
 	lda		zpTmp1
-	and		#1						; SSI_B is connected to 1st 6522
+	and		#1						; SSI263_B is connected to 1st 6522
 	beq		+
 
 	lda		#IxR_SSI263
@@ -133,7 +133,7 @@ DisableSSI263_B
 	ldy		#SSI_B_CTTRAMP
 	sta		(MBBase),y
 
-	lda		#MODE_IRQ_DISABLED+$00	; DR1:DR0=3 , P5:P0=$00
+	lda		#MODE_IRQ_DISABLED+$00	; DR1:DR0=0, P5:P0=$00
 	ldy		#SSI_B_DURPHON
 	sta		(MBBase),y
 
