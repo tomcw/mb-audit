@@ -17,29 +17,11 @@ DetectSSI263
 	and		#2						; SSI263 is connected to 2nd 6522
 	beq		+
 
-	lda		#IxR_SSI263
+	lda		#IER_CLR|IxR_SSI263
 	ldy		#SY6522_B_BASE+SY6522_IER
 	sta		(MBBase),y				; disable CA1(Speech) IRQ
-	ldy		#SY6522_B_BASE+SY6522_IFR
-	sta		(MBBase),y				; clear CA1(Speech) IRQ
 
-	lda		#$0C					; Peripheral for PA port Control: CA2 = low output (Pin18: Power Down/Reset)
-									; CA1 = negative active edge (input) (Pin4: A/!R)
-	ldy		#SY6522_B_BASE+SY6522_PCR
-	sta		(MBBase),y
-
-	lda		#CONTROL_H
-	ldy		#SSI_CTTRAMP
-	sta		(MBBase),y
-
-	; Warning: stepping this won't yield an IRQ, since the phoneme completes before H->L (assuming prev mode=MODE_IRQ_DISABLED)
-	lda		#MODE_PHONEME_TRANSITIONED_INFLECTION+$00	; DR1:DR0=3 , P5:P0=$00
-	ldy		#SSI_DURPHON
-	sta		(MBBase),y
-
-	lda		#$70					; H->L sets SSI263 operation mode = DR1:DR0, ie. IRQ active (also set Articulation=7, as Willy Byte does)
-	ldy		#SSI_CTTRAMP
-	sta		(MBBase),y
+	jsr		KickSSI263A
 
 	lda		#$FF
 	jsr		WAIT					; delay for 0x28882 (166018) cycles / ~163ms
@@ -86,29 +68,11 @@ DetectSSI263_B
 	and		#1						; SSI263_B is connected to 1st 6522
 	beq		+
 
-	lda		#IxR_SSI263
+	lda		#IER_CLR|IxR_SSI263
 	ldy		#SY6522_A_BASE+SY6522_IER
 	sta		(MBBase),y				; disable CA1(Speech) IRQ
-	ldy		#SY6522_A_BASE+SY6522_IFR
-	sta		(MBBase),y				; clear CA1(Speech) IRQ
 
-	lda		#$0C					; Peripheral for PA port Control: CA2 = low output (Pin18: Power Down/Reset)
-									; CA1 = negative active edge (input) (Pin4: A/!R)
-	ldy		#SY6522_A_BASE+SY6522_PCR
-	sta		(MBBase),y
-
-	lda		#CONTROL_H
-	ldy		#SSI_B_CTTRAMP
-	sta		(MBBase),y
-
-	; Warning: stepping this won't yield an IRQ, since the phoneme completes before H->L (assuming prev mode=MODE_IRQ_DISABLED)
-	lda		#MODE_PHONEME_TRANSITIONED_INFLECTION+$00	; DR1:DR0=3 , P5:P0=$00
-	ldy		#SSI_B_DURPHON
-	sta		(MBBase),y
-
-	lda		#$70					; H->L sets SSI263 operation mode = DR1:DR0, ie. IRQ active (also set Articulation=7, as Willy Byte does)
-	ldy		#SSI_B_CTTRAMP
-	sta		(MBBase),y
+	jsr		KickSSI263B
 
 	lda		#$FF
 	jsr		WAIT					; delay for 0x28882 (166018) cycles / ~163ms
@@ -142,3 +106,296 @@ DisableSSI263_B
 	sta		(MBBase),y
 
 	rts
+
+;------------------------------------------------------------------------------
+
+KickSSI263A
+
+	lda		#IxR_SSI263
+	ldy		#SY6522_B_BASE+SY6522_IFR
+	sta		(MBBase),y				; clear CA1(Speech) IRQ
+
+	lda		#$0C					; Peripheral for PA port Control: CA2 = low output (Pin18: Power Down/Reset)
+									; CA1 = negative active edge (input) (Pin4: A/!R)
+	ldy		#SY6522_B_BASE+SY6522_PCR
+	sta		(MBBase),y
+
+	lda		#CONTROL_H
+	ldy		#SSI_CTTRAMP
+	sta		(MBBase),y
+
+	; Warning: stepping this won't yield an IRQ, since the phoneme completes before H->L (assuming prev mode=MODE_IRQ_DISABLED)
+	lda		#MODE_PHONEME_TRANSITIONED_INFLECTION+$00	; DR1:DR0=3 , P5:P0=$00
+	ldy		#SSI_DURPHON
+	sta		(MBBase),y
+
+	lda		#$70					; H->L sets SSI263 operation mode = DR1:DR0, ie. IRQ active (also set Articulation=7, as Willy Byte does)
+	ldy		#SSI_CTTRAMP
+	sta		(MBBase),y
+
+	rts
+
+;------------------------------------------------------------------------------
+
+KickSSI263B
+
+	lda		#IxR_SSI263
+	ldy		#SY6522_A_BASE+SY6522_IFR
+	sta		(MBBase),y				; clear CA1(Speech) IRQ
+
+	lda		#$0C					; Peripheral for PA port Control: CA2 = low output (Pin18: Power Down/Reset)
+									; CA1 = negative active edge (input) (Pin4: A/!R)
+	ldy		#SY6522_A_BASE+SY6522_PCR
+	sta		(MBBase),y
+
+	lda		#CONTROL_H
+	ldy		#SSI_B_CTTRAMP
+	sta		(MBBase),y
+
+	; Warning: stepping this won't yield an IRQ, since the phoneme completes before H->L (assuming prev mode=MODE_IRQ_DISABLED)
+	lda		#MODE_PHONEME_TRANSITIONED_INFLECTION+$00	; DR1:DR0=3 , P5:P0=$00
+	ldy		#SSI_B_DURPHON
+	sta		(MBBase),y
+
+	lda		#$70					; H->L sets SSI263 operation mode = DR1:DR0, ie. IRQ active (also set Articulation=7, as Willy Byte does)
+	ldy		#SSI_B_CTTRAMP
+	sta		(MBBase),y
+
+	rts
+
+;------------------------------------------------------------------------------
+
+PlaySSI263A
+; Pre: X:A = phoneme data
+
+	sta		SpeechDataL
+	stx		SpeechDataH
+
+	lda		hasSSI263
+	and		#1
+	beq		+
+
+	inc		doingSpeech
+
+	lda		#IER_SET|IxR_SSI263
+	ldy		#SY6522_B_BASE+SY6522_IER
+	sta		(MBBase),y				; disable CA1(Speech) IRQ
+
+	jsr		KickSSI263A
+	lda		#SY6522_B_BASE
+	sta		MBBaseL
+	lda		#SSI_BASE
+	sta		isrSSI263Base
+	cli
+
++	rts
+
+;------------------------------------------------------------------------------
+
+PlaySSI263B
+; Pre: X:A = phoneme data
+
+	sta		SpeechDataL
+	stx		SpeechDataH
+
+	lda		hasSSI263
+	and		#2
+	beq		+
+
+	inc		doingSpeech
+
+	lda		#IER_SET|IxR_SSI263
+	ldy		#SY6522_A_BASE+SY6522_IER
+	sta		(MBBase),y				; disable CA1(Speech) IRQ
+
+	jsr		KickSSI263B
+	lda		#SY6522_A_BASE
+	sta		MBBaseL
+	lda		#SSI_B_BASE
+	sta		isrSSI263Base
+	cli
+
++	rts
+
+;------------------------------------------------------------------------------
+
+TestSSI263
+
+	lda		has6522
+	and		#1
+	beq		+
+		lda		#IER_CLR|IxR_TIMER1|IxR_TIMER2
+		ldy		#SY6522_A_BASE+SY6522_IER	; disable IRQ
+		sta		(MBBase),y
+		ldy		#SY6522_A_BASE+SY6522_IFR	; clear IRQ flag
+		sta		(MBBase),y
++	lda		has6522
+	and		#2
+	beq		+
+		lda		#IER_CLR|IxR_TIMER1|IxR_TIMER2
+		ldy		#SY6522_B_BASE+SY6522_IER	; disable IRQ
+		sta		(MBBase),y
+		ldy		#SY6522_B_BASE+SY6522_IFR	; clear IRQ flag
+		sta		(MBBase),y
++
+
+	lda		#<TestSSI263ISR
+	sta		IRQL
+	lda		#>TestSSI263ISR
+	sta		IRQH
+
+	jsr		TestSSI263A
+
+	jsr		TestSSI263B
+
+	lda		#1
+	rts
+
+;------------------------------------------------------------------------------
+
+TestSSI263A
+
+	lda		hasSSI263
+	and		#1
+	beq		+
+
+	lda		#<ClassicAdv
+	ldx		#>ClassicAdv
+	jsr		PlaySSI263A
+
+	ldy		#10	; delay of 0x19555F cycles = 1,660,255 = ~1.623s
+-		lda #$ff
+		jsr WAIT
+		dey
+		bne		-
+
+	lda		doingSpeech
+	beq		@done
+
+-		lda		doingSpeech
+		bne		-
+
+@done
+	lda		#0
+	sta		MBBaseL
+
+	sei
++	rts
+
+;------------------------------------------------------------------------------
+
+TestSSI263B
+
+	lda		hasSSI263
+	and		#2
+	beq		+
+
+	lda		#<ClassicAdv
+	ldx		#>ClassicAdv
+	jsr		PlaySSI263B
+
+	ldy		#10	; delay of 0x19555F cycles = 1,660,255 = ~1.623s
+-		lda #$ff
+		jsr WAIT
+		dey
+		bne		-
+
+	lda		doingSpeech
+	beq		@done
+
+-		lda		doingSpeech
+		bne		-
+
+@done
+	lda		#0
+	sta		MBBaseL
+
+	sei
++	rts
+
+;------------------------------------------------------------------------------
+
+TestSSI263ISR
+; Pre:
+;	6502 has pushed P
+;	Apple ROM has stored A to $45 (not Apple //e ROM!)
+;	MBBaseL = $00 or $80
+;
+
+	txa
+	pha
+	tya
+	pha
+
+	;------
+
+	ldy		#SY6522_IFR
+	lda		(MBBase),y
+	sta		(MBBase),y
+	sta		isrIFR
+
+	ldx		MBBaseL				; save MBBaseL
+	lda		isrSSI263Base
+	sta		MBBaseL
+
+	ldy		#4					; start with reg4
+-		lda		(SpeechData),y
+		sta		(MBBase),y
+		dey
+		bpl		-
+
+	stx		MBBaseL				; restore MBBaseL
+
+	lda		SpeechDataL
+	clc
+	adc		#5
+	sta		SpeechDataL
+	bcc		+
+	inc		SpeechDataH
++
+
+	lda		#0
+	ldy		#4					; start with reg4
+-		ora		(SpeechData),y
+		dey
+		bpl		-
+	sta		doingSpeech
+
+	;------
+
+	pla
+	tay
+	pla
+	tax
+
+	lda		$45		; for Apple II/II+
+	rti
+
+;------------------------------------------------------------------------------
+
+!zone data
+
+doingSpeech		!byte 0
+isrSSI263Base	!byte 0
+
+ClassicAdv
+; SMS's Mockingboard - Crowther and Woods Adventure "CLASSIC ADVENTURE" (duration=1200ms)
+	!byte $29,$52,$B8,$7B,$E6
+	!byte $2D,$52,$B8,$7B,$E6
+	!byte $60,$52,$B8,$7B,$E6
+	!byte $0C,$52,$B8,$7B,$E6
+	!byte $30,$52,$B8,$7B,$E6
+	!byte $47,$52,$B8,$7B,$E6
+	!byte $29,$52,$B8,$7B,$E6
+	!byte $4C,$52,$B8,$7B,$E6
+	!byte $0C,$52,$B8,$7B,$E6
+	!byte $25,$52,$B8,$7B,$E6
+	!byte $33,$52,$B8,$7B,$E6
+	!byte $EC,$52,$B8,$7B,$E6
+	!byte $47,$52,$B8,$7B,$E6
+	!byte $47,$52,$B8,$7B,$E6
+	!byte $78,$52,$B8,$7B,$E6
+	!byte $68,$52,$B8,$7B,$E6
+	!byte $72,$52,$B8,$7B,$E6
+	!byte $5C,$52,$B8,$7B,$E6
+	!byte 0,0,0,0,0

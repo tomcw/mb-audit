@@ -44,6 +44,9 @@
 
 ZP_BASE = $f0
 
+SpeechData = $f8
+SpeechDataL = SpeechData
+SpeechDataH = SpeechData+1
 zpTmp4 = $fa
 zpTmp3 = $fb
 zpTmpPtr = $fa
@@ -146,6 +149,8 @@ entrypoint
 			jsr		Test6522
 			beq		@error
 			jsr		TestAY8913
+			beq		@error
+			jsr		TestSSI263
 			bne		++
 @error			jsr		PrintTestFailedErrBytes
 				jmp		exit
