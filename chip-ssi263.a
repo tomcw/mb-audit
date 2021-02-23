@@ -338,12 +338,30 @@ TestSSI263ISR
 	lda		isrSSI263Base
 	sta		MBBaseL
 
+	lda		#0
+	ldy		#4					; start with reg4
+-		ora		(SpeechData),y
+		dey
+		bpl		-
+	tay
+	bne		+
+
+	; last phoneme complete, so finalise with PAUSE phoneme
+	sta		doingSpeech			; =0
+	sta		(SpeechData),y		; DUR=%00, PHON=$00
+	ldy		#3
+	lda		#$70
+	sta		(SpeechData),y		; CTL=0
+	bne		++
+
++
 	ldy		#4					; start with reg4
 -		lda		(SpeechData),y
 		sta		(MBBase),y
 		dey
 		bpl		-
 
+++
 	stx		MBBaseL				; restore MBBaseL
 
 	lda		SpeechDataL
@@ -353,13 +371,6 @@ TestSSI263ISR
 	bcc		+
 	inc		SpeechDataH
 +
-
-	lda		#0
-	ldy		#4					; start with reg4
--		ora		(SpeechData),y
-		dey
-		bpl		-
-	sta		doingSpeech
 
 	;------
 
