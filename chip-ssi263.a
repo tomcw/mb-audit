@@ -6,7 +6,7 @@
 
 ;------------------------------------------------------------------------------
 
-DetectSSI263
+DetectSSI263A
 ; Pre: zpTmp1 = 6522 bitmap in b1:0
 ; Post:
 
@@ -32,32 +32,32 @@ DetectSSI263
 	beq		+
 	sta		(MBBase),y				; clear CA1(Speech) IRQ
 
-		jsr		DisableSSI263
+		jsr		DisableSSI263A
 		inc		hasSSI263
 
 +	rts
 
 ;------------------------------------------------------------------------------
 
-DisableSSI263
+DisableSSI263A
 
 	lda		#CONTROL_H
-	ldy		#SSI_CTTRAMP
+	ldy		#SSI_A_CTTRAMP
 	sta		(MBBase),y
 
 	lda		#MODE_IRQ_DISABLED+$00	; DR1:DR0=0, P5:P0=$00
-	ldy		#SSI_DURPHON
+	ldy		#SSI_A_DURPHON
 	sta		(MBBase),y
 
 	lda		#CONTROL_L				; H->L sets SSI263 operation mode = DR1:DR0, ie. IRQ inactive
-	ldy		#SSI_CTTRAMP
+	ldy		#SSI_A_CTTRAMP
 	sta		(MBBase),y
 
 	rts
 
 ;------------------------------------------------------------------------------
 
-DetectSSI263_B
+DetectSSI263B
 ; Pre: zpTmp1 = 6522 bitmap in b1:0
 ; Post:
 
@@ -83,7 +83,7 @@ DetectSSI263_B
 	beq		+
 	sta		(MBBase),y				; clear CA1(Speech) IRQ
 
-		jsr		DisableSSI263_B
+		jsr		DisableSSI263B
 		inc		hasSSI263
 		inc		hasSSI263
 
@@ -91,7 +91,7 @@ DetectSSI263_B
 
 ;------------------------------------------------------------------------------
 
-DisableSSI263_B
+DisableSSI263B
 
 	lda		#CONTROL_H
 	ldy		#SSI_B_CTTRAMP
@@ -121,16 +121,16 @@ KickSSI263A
 	sta		(MBBase),y
 
 	lda		#CONTROL_H
-	ldy		#SSI_CTTRAMP
+	ldy		#SSI_A_CTTRAMP
 	sta		(MBBase),y
 
 	; Warning: stepping this won't yield an IRQ, since the phoneme completes before H->L (assuming prev mode=MODE_IRQ_DISABLED)
 	lda		#MODE_PHONEME_TRANSITIONED_INFLECTION+$00	; DR1:DR0=3 , P5:P0=$00
-	ldy		#SSI_DURPHON
+	ldy		#SSI_A_DURPHON
 	sta		(MBBase),y
 
 	lda		#$70					; H->L sets SSI263 operation mode = DR1:DR0, ie. IRQ active (also set Articulation=7, as Willy Byte does)
-	ldy		#SSI_CTTRAMP
+	ldy		#SSI_A_CTTRAMP
 	sta		(MBBase),y
 
 	rts
@@ -175,17 +175,16 @@ PlaySSI263A
 	and		#1
 	beq		+
 
+	sei
 	inc		doingSpeech
 
 	lda		#IER_SET|IxR_SSI263
 	ldy		#SY6522_B_BASE+SY6522_IER
-	sta		(MBBase),y				; disable CA1(Speech) IRQ
+	sta		(MBBase),y				; enable CA1(Speech) IRQ
 
 	jsr		KickSSI263A
 	lda		#SY6522_B_BASE
 	sta		MBBaseL
-	lda		#SSI_BASE
-	sta		isrSSI263Base
 	cli
 
 +	rts
@@ -202,17 +201,16 @@ PlaySSI263B
 	and		#2
 	beq		+
 
+	sei
 	inc		doingSpeech
 
 	lda		#IER_SET|IxR_SSI263
 	ldy		#SY6522_A_BASE+SY6522_IER
-	sta		(MBBase),y				; disable CA1(Speech) IRQ
+	sta		(MBBase),y				; enable CA1(Speech) IRQ
 
 	jsr		KickSSI263B
 	lda		#SY6522_A_BASE
 	sta		MBBaseL
-	lda		#SSI_B_BASE
-	sta		isrSSI263Base
 	cli
 
 +	rts
@@ -259,6 +257,11 @@ TestSSI263A
 	and		#1
 	beq		+
 
+	lda		#SSI_A_BASE
+	sta		SSI263BaseL
+	lda		MBBaseH
+	sta		SSI263BaseH
+
 	lda		#<ClassicAdv
 	ldx		#>ClassicAdv
 	jsr		PlaySSI263A
@@ -289,6 +292,11 @@ TestSSI263B
 	lda		hasSSI263
 	and		#2
 	beq		+
+
+	lda		#SSI_B_BASE
+	sta		SSI263BaseL
+	lda		MBBaseH
+	sta		SSI263BaseH
 
 	lda		#<ClassicAdv
 	ldx		#>ClassicAdv
@@ -334,12 +342,8 @@ TestSSI263ISR
 	sta		(MBBase),y
 	sta		isrIFR
 
-	ldx		MBBaseL				; save MBBaseL
-	lda		isrSSI263Base
-	sta		MBBaseL
-
 	lda		#0
-	ldy		#4					; start with reg4
+	ldy		#_SSI_FILFREQ		; start with reg4
 -		ora		(SpeechData),y
 		dey
 		bpl		-
@@ -348,25 +352,22 @@ TestSSI263ISR
 
 	; last phoneme complete, so finalise with PAUSE phoneme
 	sta		doingSpeech			; =0
-	sta		(MBBase),y			; DUR=%00, PHON=$00
-	ldy		#3
+	sta		(SSI263Base),y		; DUR=%00, PHON=$00
+	ldy		#_SSI_CTTRAMP
 	lda		#$70
-	sta		(MBBase),y			; CTL=0
+	sta		(SSI263Base),y		; CTL=0
 	bne		++
 
 +
-	ldy		#4					; start with reg4
+	ldy		#_SSI_FILFREQ		; start with reg4
 -		lda		(SpeechData),y
-		sta		(MBBase),y
+		sta		(SSI263Base),y
 		dey
 		bpl		-
 
-++
-	stx		MBBaseL				; restore MBBaseL
-
-	lda		SpeechDataL
+++	lda		SpeechDataL
 	clc
-	adc		#5
+	adc		#SSI_NUM_REGS
 	sta		SpeechDataL
 	bcc		+
 	inc		SpeechDataH
@@ -387,7 +388,6 @@ TestSSI263ISR
 !zone data
 
 doingSpeech		!byte 0
-isrSSI263Base	!byte 0
 
 ClassicAdv
 ; SMS's Mockingboard - Crowther and Woods Adventure "CLASSIC ADVENTURE" (duration=1200ms)

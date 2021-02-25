@@ -351,8 +351,8 @@ DetectSubunits
 
 	;
 
-	jsr		DetectSSI263			; pre: zpTmp1
-	jsr		DetectSSI263_B			; pre: zpTmp1
+	jsr		DetectSSI263A			; pre: zpTmp1
+	jsr		DetectSSI263B			; pre: zpTmp1
 	jsr		DetectSC01				; pre: zpTmp1
 	jmp		DetectAY8913			; pre: zpTmp1
 
