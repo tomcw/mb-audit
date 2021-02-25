@@ -348,10 +348,10 @@ TestSSI263ISR
 
 	; last phoneme complete, so finalise with PAUSE phoneme
 	sta		doingSpeech			; =0
-	sta		(SpeechData),y		; DUR=%00, PHON=$00
+	sta		(MBBase),y			; DUR=%00, PHON=$00
 	ldy		#3
 	lda		#$70
-	sta		(SpeechData),y		; CTL=0
+	sta		(MBBase),y			; CTL=0
 	bne		++
 
 +

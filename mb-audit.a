@@ -44,6 +44,9 @@
 
 ZP_BASE = $f0
 
+SSI263Base = $f6
+SSI263BaseL = SSI263Base
+SSI263BaseH = SSI263Base+1
 SpeechData = $f8
 SpeechDataL = SpeechData
 SpeechDataH = SpeechData+1
