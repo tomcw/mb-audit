@@ -343,7 +343,7 @@ TestSSI263ISR
 	sta		isrIFR
 
 	lda		#0
-	ldy		#_SSI_FILFREQ		; start with reg4
+	ldy		#SSI_FILFREQ		; start with reg4
 -		ora		(SpeechData),y
 		dey
 		bpl		-
@@ -353,13 +353,13 @@ TestSSI263ISR
 	; last phoneme complete, so finalise with PAUSE phoneme
 	sta		doingSpeech			; =0
 	sta		(SSI263Base),y		; DUR=%00, PHON=$00
-	ldy		#_SSI_CTTRAMP
+	ldy		#SSI_CTTRAMP
 	lda		#$70
 	sta		(SSI263Base),y		; CTL=0
 	bne		++
 
 +
-	ldy		#_SSI_FILFREQ		; start with reg4
+	ldy		#SSI_FILFREQ		; start with reg4
 -		lda		(SpeechData),y
 		sta		(SSI263Base),y
 		dey
