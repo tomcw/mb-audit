@@ -325,9 +325,107 @@ T263_0
 T263_1
 ; Pre:
 ; Post: Z=1(OK), Z=0(NG)
+;
+; Test#1 (AppleWin-GH#52)
+; . With a pending T1 IRQ, writing to SSI_FILFREQ clears the T1 IRQ
+; . With a pending T2 IRQ, writing to reg8 clears the T2 IRQ
+
+	sei
+
+	; Ensure we are using the 6522 at $Cn00 regardless of the SSI263 we are testing
+	lda		MBBaseL
+	pha
+	lda		#SY6522_A_BASE
+	sta		MBBaseL
+
+	; SMC to set correct addr
+	lda		SSI263BaseL
+	sta		@smc1+1
+	sta		@smc2+1
+	lda		SSI263BaseH
+	sta		@smc1+2
+	sta		@smc2+2
+
+	lda		#IER_SET|IxR_TIMER1|IxR_TIMER2
+	ldy		#SY6522_IER
+	sta		(MBBase),y				; Enable Timer1/Timer2 IRQ
+	ldy		#SY6522_IFR
+	sta		(MBBase),y				; Clear any Timer1/Timer2 IRQ
+
+	; Timer1 IRQ
+
+	jsr		resetSubTest			; subTest #0
+	jsr		incTotalTests
+
+	lda		#ACR_ONESHOT
+	ldy		#SY6522_ACR
+	sta		(MBBase),y				; T1 one-shot mode
+
+	lda		#0						; Set T1C=T1L=$0000
+	ldy		#SY6522_TIMER1L_COUNTER
+	sta		(MBBase),y
+	ldy		#SY6522_TIMER1H_COUNTER
+	sta		(MBBase),y
+
+	ldy		#SY6522_IFR
+	lda		(MBBase),y
+	ldx		#IxR_TIMER1
+	and		#IxR_TIMER1
+	beq		@error
+
+	jsr		incSubTestNum			; subTest #1
 
 	lda		#0
+	ldy		#SSI_FILFREQ			; reg4
+@smc1								; SMC... and can't be sta (zp),y opcode, as this doesn't do the false read for 65C02
+	sta		$C440,y					; write to 6522.T1C_l & the write does a false read from 6522.T1C_l to clear the IRQ!
+
+	ldy		#SY6522_IFR
+	lda		(MBBase),y
+	ldx		#0
+	and		#IxR_TIMER1
+	bne		@error
+
+	; Timer2 IRQ
+
+	jsr		incSubTestNum			; subTest #2
+
+	lda		#0						; Set T2C=$0000
+	ldy		#SY6522_TIMER2L_COUNTER
+	sta		(MBBase),y
+	ldy		#SY6522_TIMER2H_COUNTER
+	sta		(MBBase),y
+
+	ldy		#SY6522_IFR
+	lda		(MBBase),y
+	ldx		#IxR_TIMER2
+	and		#IxR_TIMER2
+	beq		@error
+
+	jsr		incSubTestNum			; subTest #3
+
+	lda		#0
+	ldy		#8						; reg8 (only 3 addr bits for SSI263, so wraps to SSI_DURPHON)
+@smc2								; SMC... and can't be sta (zp),y opcode, as this doesn't do the false read for 65C02
+	sta		$C440,y					; write to 6522.T1C_l & the write does a false read from 6522.T1C_l to clear the IRQ!
+
+	ldy		#SY6522_IFR
+	lda		(MBBase),y
+	ldx		#0
+	and		#IxR_TIMER2
+	bne		@error
+
+	pla
+	sta		MBBaseL
+	lda		#0
 	rts
+
+@error	; pre: A=actual, X=expected
+	stx		zpTmp2					; expected
+	pla
+	sta		MBBaseL
+	ldx		#1
+	rts								; Z=0(NG)
 
 ;------------------------------------------------------------------------------
 
