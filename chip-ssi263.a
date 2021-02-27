@@ -94,6 +94,7 @@ DetectSSI263B
 ;------------------------------------------------------------------------------
 
 DisableSSI263
+; NB. Called from userland & ISR
 
 	lda		#CONTROL_H
 	ldy		#SSI_CTTRAMP
@@ -148,14 +149,28 @@ PlaySSI263
 	sei
 	inc		doingSpeech
 
-	lda		#IER_SET|IxR_SSI263
-	ldy		#SY6522_IER
-	sta		(MBBase),y				; enable CA1(Speech) IRQ
+	lda		#0
+	sta		irqT1IntCount
 
 	jsr		KickSSI263
+
+	lda		#$ff					; T1C = T1L = $FFFF
+	ldy		#SY6522_TIMER1L_COUNTER
+	sta		(MBBase),y
+	iny								; SY6522_TIMER1H_COUNTER
+	sta		(MBBase),y				; (and clears IFR.b6)
+
+	lda		#ACR_FREERUNNING
+	ldy		#SY6522_ACR
+	sta		(MBBase),y				; Free-running timer
+
+	lda		#IER_SET|IxR_TIMER1|IxR_SSI263
+	ldy		#SY6522_IER
+	sta		(MBBase),y				; Enable Timer1 IRQ & CA1(Speech) IRQ
+
 	cli
 
-+	rts
+	rts
 
 ;------------------------------------------------------------------------------
 
@@ -193,6 +208,34 @@ TestSSI263
 
 ;------------------------------------------------------------------------------
 
+CalcPhraseDuration
+
+	lda		irqT1IntCount
+	sta		phraseDuration+0			;# T1 ints
+
+	lda		irqT1H
+	cmp		irqT1H2
+	beq		+
+		; T1 underflow between T1H & T1H2, so use: T1=T1H|00
+		; and irqT1IntCount will account for the underflow
+		lda		#0
+		sta		irqT1L
+
+	; NB. normally for multi-byte subtraction you'd start with T1L, but since there's no borrow ($FFFF-HHLL) it's OK this way!
+	; (do it this way so that the order is: phraseDuration-H,M,L)
++	sec									; $FFFF - T1H|T1L
+	lda		#$ff
+	sbc		irqT1H
+	sta		phraseDuration+1			;T1H
+
+	lda		#$ff
+	sbc		irqT1L
+	sta		phraseDuration+2			;T1L
+
+	rts
+
+;------------------------------------------------------------------------------
+
 TestSSI263A
 
 	lda		hasSSI263
@@ -224,10 +267,17 @@ TestSSI263A
 		bne		-
 
 @done
+	sei
+
+	lda		#IER_CLR|IxR_TIMER1|IxR_SSI263
+	ldy		#SY6522_IER
+	sta		(MBBase),y				; Disable Timer1 IRQ & CA1(Speech) IRQ
+
+	jsr		CalcPhraseDuration
+
 	lda		#0
 	sta		MBBaseL
 
-	sei
 +	rts
 
 ;------------------------------------------------------------------------------
@@ -263,10 +313,17 @@ TestSSI263B
 		bne		-
 
 @done
+	sei
+
+	lda		#IER_CLR|IxR_TIMER1|IxR_SSI263
+	ldy		#SY6522_IER
+	sta		(MBBase),y				; Disable Timer1 IRQ & CA1(Speech) IRQ
+
+	jsr		CalcPhraseDuration
+
 	lda		#0
 	sta		MBBaseL
 
-	sei
 +	rts
 
 ;------------------------------------------------------------------------------
@@ -285,33 +342,57 @@ TestSSI263ISR
 
 	;------
 
+	ldy		#SY6522_TIMER1H_COUNTER
+	lda		(MBBase),y
+	sta		irqT1H
+
+	; NB. read IFR.b6 between the 2 reads of T1H, so that irqT1IntCount is consistent with T1H vs T1H2
+	; Eg. IFR.b6 could become 1 between reading T1H & T1H2
 	ldy		#SY6522_IFR
 	lda		(MBBase),y
-	sta		(MBBase),y
-	sta		isrIFR
+	tax								; keep a copy of IFR, as reading T1L clears IFR.b6
+
+	ldy		#SY6522_TIMER1L_COUNTER
+	lda		(MBBase),y				; (reading T1C_l clears IFR.b6)
+	sta		irqT1L
+	ldy		#SY6522_TIMER1H_COUNTER
+	lda		(MBBase),y
+	sta		irqT1H2
+
+	txa
+	and		#IxR_TIMER1
+	beq		+
+		inc		irqT1IntCount		; Timer1 IRQ
+		jmp		@exit
+
++	ldy		#SY6522_IFR
+	txa
+	sta		(MBBase),y				; clear all remaining IRQs (ie. Speech)
+
+	;------
 
 	lda		#0
-	ldy		#SSI_FILFREQ		; start with reg4
+	ldy		#SSI_FILFREQ			; start with reg4
 -		ora		(SpeechData),y
 		dey
 		bpl		-
 	tay
 	bne		+
 
-	; last phoneme complete, so finalise with PAUSE phoneme
-	sta		doingSpeech			; =0
-	sta		(SSI263Base),y		; DUR=%00, PHON=$00
-	ldy		#SSI_CTTRAMP
-	lda		#$70
-	sta		(SSI263Base),y		; CTL=0
-	bne		++
+	; last phoneme complete, so finalise with PAUSE phoneme + disable IRQ
+	sta		doingSpeech				; =0
+	jsr		DisableSSI263
+	jmp		@exit					; NB. don't go via code to SpeechData+=SSI_NUM_REGS
 
 +
-	ldy		#SSI_FILFREQ		; start with reg4
+	ldy		#SSI_FILFREQ			; start with reg4
 -		lda		(SpeechData),y
 		sta		(SSI263Base),y
 		dey
 		bpl		-
+
+	; NB. don't reset T1C to $ffff - just let it continue to count down
+	; So total speech phrase will be more accurate, but individual phonemes won't be. Maybe use T2 for each phoneme?
 
 ++	lda		SpeechDataL
 	clc
@@ -321,8 +402,7 @@ TestSSI263ISR
 	inc		SpeechDataH
 +
 
-	;------
-
+@exit
 	pla
 	tay
 	pla
@@ -336,6 +416,12 @@ TestSSI263ISR
 !zone data
 
 doingSpeech		!byte 0
+
+irqT1H			!byte 0
+irqT1L			!byte 0
+irqT1H2			!byte 0
+irqT1IntCount	!byte 0
+phraseDuration	!byte 0,0,0
 
 ClassicAdv
 ; SMS's Mockingboard - Crowther and Woods Adventure "CLASSIC ADVENTURE" (duration=1200ms)
