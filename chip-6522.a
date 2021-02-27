@@ -61,6 +61,7 @@ Detect6522
 
 SF_GetTimerL				; Based on Skyfox's detection code
 ; Pre: Y = SY6522_TIMER1L_COUNTER for chip A or B
+;	MBBaseL=$00 (whether checking chip A or B)
 ; Post: Z=1(OK), Z=0(NG)
 	lda		(MBBase),y
 	cmp		MBBaseL			; 3cy, C=1 since A>=0 as (MBBaseL) == 0x00
@@ -409,6 +410,10 @@ Test6522
 
 		inc		testNum			; test #0B, ??
 		jsr		T6522_B
+		bne		@error
+
+		inc		testNum			; test #0C, ??
+		jsr		T6522_C
 		bne		@error
 
 		jsr		WaitT1OneShotUnderflow	; clear & disable any T1 ints
@@ -1392,7 +1397,7 @@ T6522_B
 	lda		(MBBase),y
 	ldx		#$00					; expected
 	cmp		#$00
-	bne		@error
+;	bne		@error
 
 @error	; Pre: A=actual, X=expected
 	stx		zpTmp2					; expected
@@ -1402,6 +1407,88 @@ T6522_B
 	pla
 	plp
 	rts								; Z=1(OK), Z=0(NG)
+
+;------------------------------------------------------------------------------
+
+T6522_C
+; Pre: MBBaseL = $00 or $80
+; Post: Z=1(OK), Z=0(NG)
+;
+; Test#C
+; . Check MB detection by reading T1C_l either side of the underflow
+;
+
+	jsr		resetSubTest			; subTest #0
+	jsr		incTotalTests
+
+	; #0: Start with a sanity check for the mainline case (no underflow)
+	jsr		WaitT1OneShotUnderflow	; T1C = T1L = $0101
+	ldy		#SY6522_TIMER1L_COUNTER
+	lda		(MBBase),y
+	sbc		(MBBase),y
+	ldx		#$05					; expect: $DA-$D5 = $05
+	cmp		#$05
+	bne		@error
+
+	;
+
+	jsr		incSubTestNum			; subTest #1
+
+	; #1: A very small latch (MB detection will fail)
+	lda		#$08					; T1C = T1L = $0008
+	ldy		#SY6522_TIMER1L_COUNTER
+	sta		(MBBase),y
+	lda		#$00
+	ldy		#SY6522_TIMER1H_COUNTER
+	sta		(MBBase),y				; --- T1C=$0008
+
+	sec								; 2cy T1C=$0006
+	ldy		#SY6522_TIMER1L_COUNTER	; 2cy T1C=$0004
+	lda		(MBBase),y				; 5cy T1C=$ffff read:$00
+	sbc		(MBBase),y				; 5cy T1C=$0004 read:$05
+	ldx		#$FB					; expect: $00-$05 = $FB
+	cmp		#$FB
+	bne		@error
+
+	;
+
+	jsr		incSubTestNum			; subTest #2
+
+	; #2: T1C_l reads $FF for 2 cycles (MB detection will fail)
+	lda		#$ff					; T1C = T1L = $00ff
+	ldy		#SY6522_TIMER1L_COUNTER
+	sta		(MBBase),y
+	lda		#$00
+	ldy		#SY6522_TIMER1H_COUNTER
+	sta		(MBBase),y				; --- T1C=$00ff
+
+	; delay $f7 cycles: 2 + 14*(12+2+3)-1 + 4+4
+	ldx		#14						; 2cy
+-		jsr		@rts				;12cy
+		dex							; 2cy
+		bne		-					; 3cy (except 2cy on last loop)
+	bit		$100					; 4cy
+	bit		$100					; 4cy
+
+									; --- T1C=$0008
+	sec								; 2cy T1C=$0006
+	ldy		#SY6522_TIMER1L_COUNTER	; 2cy T1C=$0004
+	lda		(MBBase),y				; 5cy T1C=$ffff read:$00
+	sbc		(MBBase),y				; 5cy T1C=$00fb read:$fc
+	ldx		#$04					; expect: $00-$FC = $04
+	cmp		#$04
+	bne		@error
+
+@rts
+	rts
+
+@error	; Pre: A=actual, X=expected
+	stx		zpTmp2					; expected
+	pha
+	jsr		WaitT1OneShotUnderflow	; don't leave T1L set to a very small value (else 6522 detection will fail next time!)
+	pla
+	ldx		#1
+	rts								; Z=0(NG)
 
 ;------------------------------------------------------------------------------
 
