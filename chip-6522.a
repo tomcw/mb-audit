@@ -416,6 +416,10 @@ Test6522
 		jsr		T6522_C
 		bne		@error
 
+		inc		testNum			; test #0D, ??
+		jsr		T6522_D
+		bne		@error
+
 		jsr		WaitT1OneShotUnderflow	; clear & disable any T1 ints
 		jsr		WaitT2OneShotUnderflow	; clear & disable any T2 ints
 
@@ -619,7 +623,8 @@ T6522_2
 	sta		(MBBase),y				; Enable Timer1 IRQ
 
 	nop								; 1 insn for IRQ (6502 pipelining)
-	jsr		WaitT1OneShotUnderflow	; Post: SEI
+	jsr		WaitT1OneShotUnderflow	; SEI & Disable Timer1 IRQ
+	jsr		WaitT2OneShotUnderflow	; SEI & Disable Timer2 IRQ
 
 	lda		#IxR_TIMER1
 	and		isrIFR
@@ -1416,6 +1421,7 @@ T6522_C
 ;
 ; Test#C
 ; . Check MB detection by reading T1C_l either side of the underflow
+; (ie. in these cases, MB detection will correctly fail!)
 ;
 
 	jsr		resetSubTest			; subTest #0
@@ -1480,7 +1486,7 @@ T6522_C
 	bne		@error
 
 @rts
-	rts
+	rts								; Z=1(OK)
 
 @error	; Pre: A=actual, X=expected
 	stx		zpTmp2					; expected
@@ -1488,6 +1494,84 @@ T6522_C
 	jsr		WaitT1OneShotUnderflow	; don't leave T1L set to a very small value (else 6522 detection will fail next time!)
 	pla
 	ldx		#1
+	rts								; Z=0(NG)
+
+;------------------------------------------------------------------------------
+
+T6522_D
+; Pre: MBBaseL = $00 or $80
+; Post: Z=1(OK), Z=0(NG)
+;
+; Test#D
+; . Check reading T2C_l either side of the underflow
+;
+
+	jsr		resetSubTest			; subTest #0
+	jsr		incTotalTests
+
+	; #0: Start with a sanity check for the mainline case (no underflow)
+	jsr		WaitT2OneShotUnderflow	; T2C =$0101
+	ldy		#SY6522_TIMER2L_COUNTER
+	lda		(MBBase),y
+	sbc		(MBBase),y
+	ldx		#$05					; expect: $D7-$D2 = $05
+	cmp		#$05
+	bne		@error
+
+	;
+
+	jsr		incSubTestNum			; subTest #1
+
+	; #1: No latch, so T2C continues counting down from $ffff
+	lda		#$08					; T2C = $0008
+	ldy		#SY6522_TIMER2L_COUNTER
+	sta		(MBBase),y
+	lda		#$00
+	ldy		#SY6522_TIMER2H_COUNTER
+	sta		(MBBase),y				; --- T2C=$0008
+
+	sec								; 2cy T2C=$0006
+	ldy		#SY6522_TIMER2L_COUNTER	; 2cy T2C=$0004
+	lda		(MBBase),y				; 5cy T2C=$ffff read:$00
+	sbc		(MBBase),y				; 5cy T2C=$fffa read:$fb
+	ldx		#$05					; expect: $00-$FB = $05
+	cmp		#$05
+	bne		@error
+
+	;
+
+	jsr		incSubTestNum			; subTest #2
+
+	; #2: T2C_l reads $FF for 1 cycle
+	lda		#$ff					; T2C = $00ff
+	ldy		#SY6522_TIMER2L_COUNTER
+	sta		(MBBase),y
+	lda		#$00
+	ldy		#SY6522_TIMER2H_COUNTER
+	sta		(MBBase),y				; --- T2C=$00ff
+
+	; delay $f7 cycles: 2 + 14*(12+2+3)-1 + 4+4
+	ldx		#14						; 2cy
+-		jsr		@rts				;12cy
+		dex							; 2cy
+		bne		-					; 3cy (except 2cy on last loop)
+	bit		$100					; 4cy
+	bit		$100					; 4cy
+
+									; --- T2C=$0008
+	sec								; 2cy T2C=$0006
+	ldy		#SY6522_TIMER2L_COUNTER	; 2cy T2C=$0004
+	lda		(MBBase),y				; 5cy T2C=$ffff read:$00
+	sbc		(MBBase),y				; 5cy T2C=$fffa read:$fb
+	ldx		#$05					; expect: $00-$FB = $05
+	cmp		#$05
+	bne		@error
+
+@rts
+	rts								; Z=1(OK)
+
+@error	; Pre: A=actual, X=expected
+	stx		zpTmp2					; expected
 	rts								; Z=0(NG)
 
 ;------------------------------------------------------------------------------
@@ -1535,7 +1619,7 @@ WaitT2OneShotUnderflow
 	lda		#1						; Set T2C=$0101
 	ldy		#SY6522_TIMER2L_COUNTER
 	sta		(MBBase),y
-	ldy		#SY6522_TIMER1H_COUNTER
+	ldy		#SY6522_TIMER2H_COUNTER
 	sta		(MBBase),y
 
 	jsr		WaitT2Underflow
