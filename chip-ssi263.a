@@ -329,6 +329,7 @@ T263_1
 ; Test#1 (AppleWin-GH#52)
 ; . With a pending T1 IRQ, writing to SSI_FILFREQ clears the T1 IRQ
 ; . With a pending T2 IRQ, writing to reg8 clears the T2 IRQ
+; . test the 3 addr modes: sta addr16,x; sta addr16,y; sta (zp),y
 
 	sei
 
@@ -340,11 +341,11 @@ T263_1
 
 	; SMC to set correct addr
 	lda		SSI263BaseL
-	sta		@smc1+1
-	sta		@smc2+1
+	sta		@smc16x+1
+	sta		@smc16y+1
 	lda		SSI263BaseH
-	sta		@smc1+2
-	sta		@smc2+2
+	sta		@smc16x+2
+	sta		@smc16y+2
 
 	lda		#IER_SET|IxR_TIMER1|IxR_TIMER2
 	ldy		#SY6522_IER
@@ -352,68 +353,102 @@ T263_1
 	ldy		#SY6522_IFR
 	sta		(MBBase),y				; Clear any Timer1/Timer2 IRQ
 
-	; Timer1 IRQ
-
-	jsr		resetSubTest			; subTest #0
-	jsr		incTotalTests
-
 	lda		#ACR_ONESHOT
 	ldy		#SY6522_ACR
 	sta		(MBBase),y				; T1 one-shot mode
 
-	lda		#0						; Set T1C=T1L=$0000
-	ldy		#SY6522_TIMER1L_COUNTER
-	sta		(MBBase),y
-	ldy		#SY6522_TIMER1H_COUNTER
-	sta		(MBBase),y
+	jsr		resetSubTest
+	dec		subTestNum
+	jsr		incTotalTests
 
-	ldy		#SY6522_IFR
-	lda		(MBBase),y
-	ldx		#IxR_TIMER1
-	and		#IxR_TIMER1
-	beq		@error
+	lda		#2
+	sta		zpTmp2
+@loop
+		; Timer1 IRQ
 
-	jsr		incSubTestNum			; subTest #1
+		jsr		incSubTestNum		; subTest #0, 4, 8
 
-	lda		#0
-	ldy		#SSI_FILFREQ			; reg4
-@smc1								; SMC... and can't be sta (zp),y opcode, as this doesn't do the false read for 65C02
-	sta		$C440,y					; write to 6522.T1C_l & the write does a false read from 6522.T1C_l to clear the IRQ!
+		lda		#0					; Set T1C=T1L=$0000
+		ldy		#SY6522_TIMER1L_COUNTER
+		sta		(MBBase),y
+		ldy		#SY6522_TIMER1H_COUNTER
+		sta		(MBBase),y
 
-	ldy		#SY6522_IFR
-	lda		(MBBase),y
-	ldx		#0
-	and		#IxR_TIMER1
-	bne		@error
+		ldy		#SY6522_IFR
+		lda		(MBBase),y
+		ldx		#IxR_TIMER1
+		and		#IxR_TIMER1
+		beq		@error
 
-	; Timer2 IRQ
+		jsr		incSubTestNum		; subTest #1, 5, 9
 
-	jsr		incSubTestNum			; subTest #2
+		ldy		#SSI_FILFREQ		; reg4
+		jsr		@FalseRead			; write to 6522.T1C_l & the write does a false read from 6522.T1C_l to clear the IRQ!
 
-	lda		#0						; Set T2C=$0000
-	ldy		#SY6522_TIMER2L_COUNTER
-	sta		(MBBase),y
-	ldy		#SY6522_TIMER2H_COUNTER
-	sta		(MBBase),y
+		lda		zpTmp2
+		bne		+
+		lda		is65C02
+		beq		+
 
-	ldy		#SY6522_IFR
-	lda		(MBBase),y
-	ldx		#IxR_TIMER2
-	and		#IxR_TIMER2
-	beq		@error
+			; sta (zp),y && 65C02
+			ldy		#SY6522_IFR
+			lda		(MBBase),y
+			ldx		#IxR_TIMER1
+			and		#IxR_TIMER1
+			beq		@error
+			bne		++
 
-	jsr		incSubTestNum			; subTest #3
++		ldy		#SY6522_IFR
+		lda		(MBBase),y
+		ldx		#0
+		and		#IxR_TIMER1
+		bne		@error
 
-	lda		#0
-	ldy		#8						; reg8 (only 3 addr bits for SSI263, so wraps to SSI_DURPHON)
-@smc2								; SMC... and can't be sta (zp),y opcode, as this doesn't do the false read for 65C02
-	sta		$C440,y					; write to 6522.T1C_l & the write does a false read from 6522.T1C_l to clear the IRQ!
+++		; Timer2 IRQ
 
-	ldy		#SY6522_IFR
-	lda		(MBBase),y
-	ldx		#0
-	and		#IxR_TIMER2
-	bne		@error
+		jsr		incSubTestNum		; subTest #2, 6, A
+
+		lda		#0					; Set T2C=$0000
+		ldy		#SY6522_TIMER2L_COUNTER
+		sta		(MBBase),y
+		ldy		#SY6522_TIMER2H_COUNTER
+		sta		(MBBase),y
+
+		ldy		#SY6522_IFR
+		lda		(MBBase),y
+		ldx		#IxR_TIMER2
+		and		#IxR_TIMER2
+		beq		@error
+
+		jsr		incSubTestNum		; subTest #3, 7, B
+
+		ldy		#8					; reg8 (only 3 addr bits for SSI263, so wraps to SSI_DURPHON)
+		jsr		@FalseRead			; write to 6522.T1C_l & the write does a false read from 6522.T1C_l to clear the IRQ!
+
+		lda		zpTmp2
+		bne		+
+		lda		is65C02
+		beq		+
+
+			; sta (zp),y && 65C02
+			ldy		#SY6522_IFR
+			lda		(MBBase),y
+			ldx		#IxR_TIMER2
+			and		#IxR_TIMER2
+			beq		@error
+			bne		++
+
++		ldy		#SY6522_IFR
+		lda		(MBBase),y
+		ldx		#0
+		and		#IxR_TIMER2
+		bne		@error
+
+++		dec		zpTmp2
+		bpl		@loop
+
+	jsr		WaitT1OneShotUnderflow
+	jsr		WaitT2OneShotUnderflow
 
 	pla
 	sta		MBBaseL
@@ -422,10 +457,42 @@ T263_1
 
 @error	; pre: A=actual, X=expected
 	stx		zpTmp2					; expected
+	tax
 	pla
 	sta		MBBaseL
+	txa
 	ldx		#1
 	rts								; Z=0(NG)
+
+;
+
+@FalseRead
+; Pre: zpTmp2=addr mode to test
+;	Y=SSI reg#
+
+	lda		#0
+
+	ldx		zpTmp2
+	beq		@addr8y
+	dex
+	beq		@addr16y
+
+@addr16x
+	tya
+	tax
+	lda		#0
+@smc16x
+	sta		$C440,x					; (smc)
+	rts
+
+@addr16y
+@smc16y
+	sta		$C440,y					; (smc)
+	rts
+
+@addr8y
+	sta		(SSI263Base),y			; false-read only for 6502 (not 65C02)
+	rts
 
 ;------------------------------------------------------------------------------
 
