@@ -175,6 +175,9 @@ PlaySSI263
 ;------------------------------------------------------------------------------
 
 TestSSI263
+; Pre: has6522, hasSSI263
+; Post: return to top-level: Z=0(OK), Z=1(NG)... NB opposite to TestX's below!
+; Uses: zpTmp1 (so don't use in sub-funcs)
 
 	lda		has6522
 	and		#1
@@ -199,11 +202,57 @@ TestSSI263
 	lda		#>TestSSI263ISR
 	sta		IRQH
 
-	jsr		TestSSI263A
+	lda		#COMPONENT_SSI263+1	; test component $41
+	sta		testComponentNum
+	lda		#$ff
+	sta		testNum				; test #00
 
-	jsr		TestSSI263B
+	lda		#SSI_A_BASE
+	sta		SSI263BaseL
+	lda		MBBaseH
+	sta		SSI263BaseH
+	lda		#SY6522_B_BASE
+	sta		MBBaseL
+
+	lda		hasSSI263
+	lsr
+	sta		zpTmp1
+	bcc		@nextSSI263
+
+@loop	inc		testNum				; test #00, ??
+		jsr		T263_0
+		bne		@error
+
+		inc		testNum				; test #01, ??
+		jsr		T263_1
+		bne		@error
+
+@nextSSI263
+		lda		#SSI_B_BASE
+		sta		SSI263BaseL
+		lda		MBBaseH
+		sta		SSI263BaseH
+		lda		#SY6522_A_BASE
+		sta		MBBaseL
+
+		lsr		zpTmp1
+		bcs		@loop
 
 	lda		#1
+	rts
+
+@error
+; Pre: zpTmp2 = expected value
+;	A = actual value
+; Post: Z=1(NG)
+
+	sta		errorActual
+	lda		zpTmp2
+	sta		errorExpected
+
+	lda		#0
+	sta		MBBaseL
+
 	rts
 
 ;------------------------------------------------------------------------------
@@ -236,19 +285,12 @@ CalcPhraseDuration
 
 ;------------------------------------------------------------------------------
 
-TestSSI263A
-
-	lda		hasSSI263
-	and		#1
-	beq		+
-
-	lda		#SSI_A_BASE
-	sta		SSI263BaseL
-	lda		MBBaseH
-	sta		SSI263BaseH
-
-	lda		#SY6522_B_BASE
-	sta		MBBaseL
+T263_0
+; Pre: MBBase, SSI263Base
+; Post: Z=1(OK), Z=0(NG)
+;
+; Test#0
+; . Play phrase "CLASSIC ADVENTURE" and check total duration is within tolerance
 
 	lda		#<ClassicAdv
 	ldx		#>ClassicAdv
@@ -276,55 +318,16 @@ TestSSI263A
 	jsr		CalcPhraseDuration
 
 	lda		#0
-	sta		MBBaseL
-
-+	rts
+	rts
 
 ;------------------------------------------------------------------------------
 
-TestSSI263B
-
-	lda		hasSSI263
-	and		#2
-	beq		+
-
-	lda		#SSI_B_BASE
-	sta		SSI263BaseL
-	lda		MBBaseH
-	sta		SSI263BaseH
-
-	lda		#SY6522_A_BASE
-	sta		MBBaseL
-
-	lda		#<ClassicAdv
-	ldx		#>ClassicAdv
-	jsr		PlaySSI263
-
-	ldy		#10	; delay of 0x19555F cycles = 1,660,255 = ~1.623s
--		lda #$ff
-		jsr WAIT
-		dey
-		bne		-
-
-	lda		doingSpeech
-	beq		@done
-
--		lda		doingSpeech
-		bne		-
-
-@done
-	sei
-
-	lda		#IER_CLR|IxR_TIMER1|IxR_SSI263
-	ldy		#SY6522_IER
-	sta		(MBBase),y				; Disable Timer1 IRQ & CA1(Speech) IRQ
-
-	jsr		CalcPhraseDuration
+T263_1
+; Pre:
+; Post: Z=1(OK), Z=0(NG)
 
 	lda		#0
-	sta		MBBaseL
-
-+	rts
+	rts
 
 ;------------------------------------------------------------------------------
 

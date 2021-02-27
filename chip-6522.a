@@ -1542,7 +1542,7 @@ T6522_D
 
 	jsr		incSubTestNum			; subTest #2
 
-	; #2: T2C_l reads $FF for 1 cycle
+	; #2: T2C_l reads $FF for 1 cycle (cf. T1C_l reads $FF for 2 cycles)
 	lda		#$ff					; T2C = $00ff
 	ldy		#SY6522_TIMER2L_COUNTER
 	sta		(MBBase),y
