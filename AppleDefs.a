@@ -47,9 +47,11 @@ DHIRESOFF = $C05F
 
 ;--------------------------------------
 
+; See Apple //c TRM, Appendix F, "Machine identification"
+VERSION_II = $38	; II
 VERSION_IIP = $EA	; II+ / Autostart Monitor
 VERSION_IIJP = $C9	; II J-Plus
-VERSION_IIE = $06	; IIe
+VERSION_IIE_OR_HIGHER = $06	; IIe(both variants), IIc(all variants)
 
 PRNTYX = $F940
 PRNTX = $F944

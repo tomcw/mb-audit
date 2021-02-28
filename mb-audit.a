@@ -105,10 +105,8 @@ entrypoint
 +
 
 	lda		VERSION
-	cmp		#VERSION_IIP
-	beq		+
-	cmp		#VERSION_IIJP
-	beq		+
+	cmp		#VERSION_IIE_OR_HIGHER
+	bne		+
 		lda		#1
 		sta		hasLowerCase
 +
