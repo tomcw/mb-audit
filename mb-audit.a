@@ -104,6 +104,15 @@ entrypoint
 		sta		is65C02
 +
 
+	lda		VERSION
+	cmp		#VERSION_IIP
+	beq		+
+	cmp		#VERSION_IIJP
+	beq		+
+		lda		#1
+		sta		hasLowerCase
++
+
 	lda		TEXTON
 	lda		MIXEDOFF
 	lda		PAGE2OFF
@@ -633,6 +642,14 @@ Print
 	ldy		#0
 @loop	lda		(String),y
 		beq		+
+		ldx		hasLowerCase
+		bne		++
+			cmp		#'a'
+			bcc		++
+			cmp		#'z'+1
+			bcs		++
+			and		#!($20)
+++
 		ora		#$80	; set high bit
 		tax
 		tya
@@ -680,6 +697,7 @@ isPhasorCard	!byte 0
 phasorMode:		!byte PH_MOCKINGBOARD
 
 has6522			!byte 0
+hasLowerCase	!byte 0
 hasAY8913		!byte 0
 hasSSI263		!byte 0
 hasSC01			!byte 0

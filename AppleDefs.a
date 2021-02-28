@@ -47,8 +47,13 @@ DHIRESOFF = $C05F
 
 ;--------------------------------------
 
+VERSION_IIP = $EA	; II+ / Autostart Monitor
+VERSION_IIJP = $C9	; II J-Plus
+VERSION_IIE = $06	; IIe
+
 PRNTYX = $F940
 PRNTX = $F944
+VERSION = $FBB3		; Signature Byte
 HOME = $FC58
 WAIT = $FCA8
 COUT = $FDED
