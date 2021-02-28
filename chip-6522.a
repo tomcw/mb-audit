@@ -337,7 +337,7 @@ Check6522ISR
 ;	. 6522 count is N+2 cycles
 ;	. 6522 -> IRQ cycle (detect a2heaven's MEGA Audio)
 ;	T2:
-;	. oneshot x IRQ|poll
+;	. [T6522_2] oneshot x IRQ|poll
 ;	. [T6522_4, T6522_6] 6502|65C02 addr modes access of 6522 T2C
 ;	. [T6522_8, T6522_9, T6522_D] oneshot underflow, then T1L -> T1C
 ;	. 6522 count is N+2 cycles
@@ -585,16 +585,16 @@ T6522_1
 T6522_2
 ; Pre:
 ; Post: Z=1(OK), Z=0(NG)
-;
-; Test#2 (AppleWin-GH#567)
-; . Setup T1C=0x0202 and ACR=free-running
-; . Disable T1 IRQ, enable T2 IRQ
-; . CLI
-; . Poll for T1 int
-; . Enable T1 IRQ
-; . Expect ISR to immediately set flag
 
-	jsr		resetSubTest
+	; Test#2 (AppleWin-GH#567)
+	; . Setup T1C=0x0202 and ACR=free-running
+	; . Disable T1 IRQ, enable T2 IRQ
+	; . CLI
+	; . Poll for T1 int
+	; . Enable T1 IRQ
+	; . Expect ISR to immediately set flag
+
+	jsr		resetSubTest			; subTest #0
 	jsr		incTotalTests
 
 	sei
@@ -634,6 +634,53 @@ T6522_2
 	jsr		WaitT2OneShotUnderflow	; SEI & Disable Timer2 IRQ
 
 	lda		#IxR_TIMER1
+	sta		zpTmp2					; expected
+	and		isrIFR
+	beq		+
+
+	; Repeat test but for T2
+	; . Setup T2C=0x0202 (implicit one-shot for T2)
+	; . Disable T2 IRQ, enable T1 IRQ
+	; . CLI
+	; . Poll for T2 int
+	; . Enable T2 IRQ
+	; . Expect ISR to immediately set flag
+
+	jsr		incSubTestNum			; subTest #1
+
+	lda		#0
+	sta		isrIFR
+
+	lda		#$02
+	ldy		#SY6522_TIMER2L_COUNTER
+	sta		(MBBase),y
+	ldy		#SY6522_TIMER2H_COUNTER
+	sta		(MBBase),y
+
+	lda		#IER_SET|IxR_TIMER1
+	ldy		#SY6522_IER
+	sta		(MBBase),y				; Enable Timer1 IRQ (to catch any false T1 ints)
+	lda		#IER_CLR|IxR_TIMER2
+	ldy		#SY6522_IER
+	sta		(MBBase),y				; Disable Timer2 IRQ
+
+	cli
+
+	ldy		#SY6522_IFR
+-		lda		(MBBase),y
+		and		#IxR_TIMER2			; Poll Timer2 IRQ flag
+		beq		-
+
+	lda		#IER_SET|IxR_TIMER2
+	ldy		#SY6522_IER
+	sta		(MBBase),y				; Enable Timer2 IRQ
+
+	nop								; 1 insn for IRQ (6502 pipelining)
+	jsr		WaitT1OneShotUnderflow	; SEI & Disable Timer1 IRQ
+	jsr		WaitT2OneShotUnderflow	; SEI & Disable Timer2 IRQ
+
+	lda		#IxR_TIMER2
+	sta		zpTmp2					; expected
 	and		isrIFR
 	beq		+
 
