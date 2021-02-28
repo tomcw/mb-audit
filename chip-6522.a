@@ -330,17 +330,19 @@ Check6522ISR
 ;------------------------------------------------------------------------------
 ; Notes:
 ;	T1:
-;	. oneshot|continuous x IRQ|poll
+;	. [T6522_1, T6522_2] oneshot|continuous x IRQ|poll
+;	. [T6522_3, T6522_5] 6502|65C02 addr modes access of 6522 T1C
+;	. [T6522_7, T6522_9, T6522_A, T6522_C] oneshot|continuous underflow, then T1L -> T1C
+;	. [T6522_B] T1L=$0000, can only read T1C values of $00 and $FF
 ;	. 6522 count is N+2 cycles
 ;	. 6522 -> IRQ cycle (detect a2heaven's MEGA Audio)
-;	. 6502|65C02 addr modes access of 6522 T1C
-;	. oneshot|continuous underflow, then T1L -> T1C
-;	. T1L=$0000, can only read T1C values of $00 and $FF
 ;	T2:
 ;	. oneshot x IRQ|poll
-;	. oneshot underflow, then T1L -> T1C
-;	All 6522: write chip A,B; read chip A,B
-;   6522 IRQ pending, CTRL+RESET should clear it (currently doesn't in AppleWin)
+;	. [T6522_4, T6522_6] 6502|65C02 addr modes access of 6522 T2C
+;	. [T6522_8, T6522_9, T6522_D] oneshot underflow, then T1L -> T1C
+;	. 6522 count is N+2 cycles
+;   [Test6522AfterReset] 6522 IRQ pending, CTRL+RESET should clear it
+;	Both 6522: test T1 & T2 (from chips A&B) all running at the same time
 
 Test6522
 ; Pre: has6522
@@ -465,7 +467,7 @@ T6522_0
 ; . Check no T1|T2 ints are pending
 ; NB. Only runs OK after a MB card reset, or T1 has been set to one-shot mode
 
-	jsr		resetSubTest
+	jsr		resetSubTest			; subTest #0
 	jsr		incTotalTests
 
 	jsr		WaitT1OneShotUnderflow	; Post: SEI
@@ -481,10 +483,14 @@ T6522_0
 -		lda		(MBBase),y			; wait $00nn
 		bne		-
 
+	sta		zpTmp2					; expected ($00)
+
 	ldy		#SY6522_IFR
 	lda		(MBBase),y
 	and		#IxR_TIMER1|IxR_TIMER2	; Poll Timer1&2 IRQ flag
 	bne		+
+
+	jsr		incSubTestNum			; subTest #1
 
 	ldy		#SY6522_TIMER1H_COUNTER
 -		lda		(MBBase),y			; wait $FFnn
@@ -511,7 +517,7 @@ T6522_1
 ; . wait for ISR to set flag (T1 one-shot)
 ; . SEI & wait for T1 underflow & check that no T1|T2 ints pending
 
-	jsr		resetSubTest
+	jsr		resetSubTest			; subTest #0
 	jsr		incTotalTests
 
 	sei
@@ -548,10 +554,11 @@ T6522_1
 	nop								; 1 insn for IRQ (6502 pipelining)
 
 	lda		#IxR_TIMER1
+	sta		zpTmp2					; expected
 	and		isrIFR					; T1 int from free-running mode
 	bne		+
-		lda		#0
-		beq		++					; subTest #0 (failed)
+		ldx		#1
+		bne		++					; subTest #0 (failed)
 +	lda		#0
 	sta		isrIFR
 
@@ -563,7 +570,7 @@ T6522_1
 
 	jsr		incSubTestNum			; subTest #1
 
-	; NB. T1C reloaded with T1L (except it doesn't for AppleWin, due to one-shot mode)
+	; NB. T1C reloaded with T1L
 
 	jsr		WaitT1Underflow
 
@@ -1686,7 +1693,7 @@ Setup6522ForReset
 ;
 ; Notes:
 ; 6522 regs that persist across reset: T1L_l ,T1L_h
-; 6522 state that is cleared on reset: IRQ, ACR.T1_RUNMODE?
+; 6522 state that is cleared on reset: IRQ, ACR.T1_RUNMODE
 ;
 
 	sei
