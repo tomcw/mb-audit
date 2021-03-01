@@ -334,15 +334,16 @@ Check6522ISR
 ;	. [T6522_3, T6522_5] 6502|65C02 addr modes access of 6522 T1C
 ;	. [T6522_7, T6522_9, T6522_A, T6522_C] oneshot|continuous underflow, then T1L -> T1C
 ;	. [T6522_B] T1L=$0000, can only read T1C values of $00 and $FF
-;	. 6522 count is N+2 cycles
+;	. 6522 count is N+2 cycles (just read IFR, not using IRQ)
 ;	. 6522 -> IRQ cycle (detect a2heaven's MEGA Audio)
 ;	T2:
 ;	. [T6522_2] oneshot x IRQ|poll
 ;	. [T6522_4, T6522_6] 6502|65C02 addr modes access of 6522 T2C
 ;	. [T6522_8, T6522_9, T6522_D] oneshot underflow, then T1L -> T1C
-;	. 6522 count is N+2 cycles
+;	. 6522 count is N+2 cycles (just read IFR, not using IRQ)
 ;   [Test6522AfterReset] 6522 IRQ pending, CTRL+RESET should clear it
-;	Both 6522: test T1 & T2 (from chips A&B) all running at the same time
+;	Both 6522s: test T1 & T2 (from chips A&B) all running at the same time
+;
 
 Test6522
 ; Pre: has6522
@@ -364,15 +365,20 @@ Test6522
 	lda		has6522
 	lsr
 	sta		zpTmp1
-	bcc		@next6522
+	bcs		@loop
+	jmp		@next6522
 
 @loop	inc		testNum			; test #00, ??
 		jsr		T6522_0
-		bne		@error
+		beq		+
+		jmp		@error
++
 
 		inc		testNum			; test #01, ??
 		jsr		T6522_1
-		bne		@error
+		beq		+
+		jmp		@error
++
 
 		inc		testNum			; test #02, ??
 		jsr		T6522_2
@@ -422,6 +428,10 @@ Test6522
 		jsr		T6522_D
 		bne		@error
 
+		inc		testNum			; test #0E (only for MBBaseL=$00)
+		jsr		T6522_E
+		bne		@error
+
 		jsr		WaitT1OneShotUnderflow	; clear & disable any T1 ints
 		jsr		WaitT2OneShotUnderflow	; clear & disable any T2 ints
 
@@ -431,7 +441,9 @@ Test6522
 		sta		MBBaseL
 
 		lsr		zpTmp1
-		bcs		@loop
+		bcc		+
+		jmp		@loop
++
 
 	lda		#0
 	sta		MBBaseL
@@ -1627,6 +1639,191 @@ T6522_D
 @error	; Pre: A=actual, X=expected
 	stx		zpTmp2					; expected
 	rts								; Z=0(NG)
+
+;------------------------------------------------------------------------------
+
+T6522_E
+; Pre: MBBaseL = $00
+;	has6522
+; Post: Z=1(OK), Z=0(NG)
+;
+; Test#E
+; . Setup counters on all the 6522's T1+T2
+;	6522-A T1 is one-shot: T1L=$0707
+;	6522-A T2 is one-shot: T2C=$0505
+;	6522-B T1 is one-shot: T1L=$0303
+;	6522-B T2 is one-shot: T2C=$0101
+; . NB. don't use free-running for T1, else 6522-B T1 can fire again before 6522-A T1
+;	- depends on length of the *enhanced* //e ROM's interrupt handler before calling the user ISR.
+;	- this will manifest as a subTest#3 failure.
+;	- So make the test more robust by disabling that Timer int after it fires.
+;
+
+	lda		MBBaseL					; must be $00 for ISR (and because this test uses both 6522s)
+	beq		+
+		lda		#0
+		rts
++
+
+	jsr		resetSubTest			; subTest #0
+	jsr		incTotalTests
+
+	sei
+
+;@6522_A
+	lda		has6522
+	and		#1
+	beq		@6522_B
+
+	lda		#ACR_ONESHOT
+	ldy		#SY6522_A_BASE+SY6522_ACR
+	sta		(MBBase),y
+
+	lda		#$07
+	ldy		#SY6522_A_BASE+SY6522_TIMER1L_COUNTER
+	sta		(MBBase),y
+	ldy		#SY6522_A_BASE+SY6522_TIMER1H_COUNTER
+	sta		(MBBase),y
+
+	lda		#$05
+	ldy		#SY6522_A_BASE+SY6522_TIMER2L_COUNTER
+	sta		(MBBase),y
+	ldy		#SY6522_A_BASE+SY6522_TIMER2H_COUNTER
+	sta		(MBBase),y
+
+	lda		#IER_SET|IxR_TIMER1|IxR_TIMER2
+	ldy		#SY6522_A_BASE+SY6522_IER
+	sta		(MBBase),y				; Enable T1 & T2 IRQs
+	ldy		#SY6522_A_BASE+SY6522_IFR
+	sta		(MBBase),y				; Clear any T1 & T2 IRQs
+
+@6522_B
+	lda		has6522
+	and		#2
+	beq		@test
+
+	lda		#ACR_ONESHOT
+	ldy		#SY6522_B_BASE+SY6522_ACR
+	sta		(MBBase),y
+
+	lda		#$03
+	ldy		#SY6522_B_BASE+SY6522_TIMER1L_COUNTER
+	sta		(MBBase),y
+	ldy		#SY6522_B_BASE+SY6522_TIMER1H_COUNTER
+	sta		(MBBase),y
+
+	lda		#$01
+	ldy		#SY6522_B_BASE+SY6522_TIMER2L_COUNTER
+	sta		(MBBase),y
+	ldy		#SY6522_B_BASE+SY6522_TIMER2H_COUNTER
+	sta		(MBBase),y
+
+	lda		#IER_SET|IxR_TIMER1|IxR_TIMER2
+	ldy		#SY6522_B_BASE+SY6522_IER
+	sta		(MBBase),y				; Enable T1 & T2 IRQs
+	ldy		#SY6522_B_BASE+SY6522_IFR
+	sta		(MBBase),y				; Clear any T1 & T2 IRQs
+
+@test
+	lda		#<expectedIrqs
+	sta		zpTmpPtrL
+	lda		#>expectedIrqs
+	sta		zpTmpPtrH
+
+	lda		#0
+	sta		expectedIrqsOffset
+
+	lda		#<Check6522ISR
+	sta		IRQL
+	lda		#>Check6522ISR
+	sta		IRQH
+
+@loop	lda		#0
+		sta		isrIFR_A
+		sta		isrIFR_B
+
+		cli							; enable ints
+		ldx		#0					; timeout
+-			lda		isrIFR_A
+			ora		isrIFR_B
+			bne		+
+			dex
+			bne		-
+		iny
+		lda		(zpTmpPtr),y
+		tax							; X = expected
+		lda		#0
+		beq		@error
+
++		sei							; disable ints
+		ldy		expectedIrqsOffset
+		lda		(zpTmpPtr),y
+		bne		+
+			lda		isrIFR_A
+			jmp		++
++			lda		isrIFR_B
+
+++		tax							; X = copy of 'actual' for error case
+		iny
+		and		(zpTmpPtr),y
+		bne		+
+
+		txa
+		pha
+		lda		(zpTmpPtr),y
+		tax							; X = expected
+		pla							; A = actual
+		jmp		@error
+
++		jsr		incSubTestNum		; next subTest #1,2,3
+		iny
+		sty		expectedIrqsOffset
+		lda		(zpTmpPtr),y
+		bpl		@loop
+
+	lda		#<Test6522ISR
+	sta		IRQL
+	lda		#>Test6522ISR
+	sta		IRQH
+
+	jsr		@cleanup
+	lda		#0						; Z=1(OK)
+	rts
+
+@error	; Pre: A=actual, X=expected
+	pha
+	stx		zpTmp2					; expected
+	jsr		@cleanup
+	pla
+	ldx		#1						; Z=0(NG)
+	rts
+
+@cleanup
+; Post:	MBBaseL = SY6522_A_BASE
+	lda		#SY6522_B_BASE
+	sta		MBBaseL
+	jsr		WaitT1OneShotUnderflow
+	jsr		WaitT2OneShotUnderflow
+	lda		#SY6522_A_BASE
+	sta		MBBaseL
+	jsr		WaitT1OneShotUnderflow
+	jmp		WaitT2OneShotUnderflow
+
+	;
+
+!zone data
+
+expectedIrqsOffset
+	!byte	0
+
+expectedIrqs
+	!byte 1,IxR_TIMER2	; 6522-B T2
+	!byte 1,IxR_TIMER1	; 6522-B T1
+	!byte 0,IxR_TIMER2	; 6522-A T2
+	!byte 0,IxR_TIMER1	; 6522-A T1
+	!byte $ff		; end
+
+!zone code
 
 ;------------------------------------------------------------------------------
 
