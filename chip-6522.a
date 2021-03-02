@@ -1653,9 +1653,7 @@ T6522_E
 ;	6522-A T2 is one-shot: T2C=$0505
 ;	6522-B T1 is free-running: T1L=$0303
 ;	6522-B T2 is one-shot: T2C=$0101
-; . NB. don't use free-running for T1, else 6522-B T1 can fire again before 6522-A T1
-;	- depends on length of the *enhanced* //e ROM's interrupt handler before calling the user ISR.
-;	- So make the test more robust by disabling that Timer int after it fires.
+; . NB Test_E_ISR handles ints in any order, and simultaneously too.
 ;
 
 	lda		MBBaseL					; must be $00 for ISR (and because this test uses both 6522s)
@@ -1668,6 +1666,9 @@ T6522_E
 	jsr		incTotalTests
 
 	sei
+
+	lda		#0
+	sta		intsRemaining
 
 ;@6522_A
 	lda		has6522
@@ -1696,6 +1697,9 @@ T6522_E
 	ldy		#SY6522_A_BASE+SY6522_IFR
 	sta		(MBBase),y				; Clear any T1 & T2 IRQs
 
+	lda		#%00000011
+	sta		intsRemaining
+
 @6522_B
 	lda		has6522
 	and		#2
@@ -1723,62 +1727,36 @@ T6522_E
 	ldy		#SY6522_B_BASE+SY6522_IFR
 	sta		(MBBase),y				; Clear any T1 & T2 IRQs
 
+	lda		#%00001100
+	ora		intsRemaining
+	sta		intsRemaining
+
 @test
-	lda		#<expectedIrqs
-	sta		zpTmpPtrL
-	lda		#>expectedIrqs
-	sta		zpTmpPtrH
-
-	lda		#0
-	sta		expectedIrqsOffset
-
 	lda		#<T6522_E_ISR
 	sta		IRQL
 	lda		#>T6522_E_ISR
 	sta		IRQH
 
-@loop	lda		#0
-		sta		isrIFR_A
-		sta		isrIFR_B
+	ldx		#0						; timeout_l
+	stx		zpTmp3					; timeout_h
+	stx		isrError+0
+	stx		isrError+1
 
-		cli							; enable ints
-		ldx		#0					; timeout
--			lda		isrIFR_A
-			ora		isrIFR_B
-			bne		+
-			dex
-			bne		-
-		iny
-		lda		(zpTmpPtr),y
-		tax							; X = expected
-		lda		#0
-		beq		@error
+	cli
 
-+		sei							; disable ints
-		ldy		expectedIrqsOffset
-		lda		(zpTmpPtr),y
-		bne		+
-			lda		isrIFR_A
-			jmp		++
-+			lda		isrIFR_B
+@loop	lda		intsRemaining
+		beq		+
+		lda		isrError+0
+		bne		@error0
+		;
+		dex
+		bne		@loop
+		dec		zpTmp3
+		bne		@loop
+		; timeout:
+		beq		@error				; A=X=0
 
-++		tax							; X = copy of 'actual' for error case
-		iny
-		and		(zpTmpPtr),y
-		bne		+
-
-		txa
-		pha
-		lda		(zpTmpPtr),y
-		tax							; X = expected
-		pla							; A = actual
-		jmp		@error
-
-+		jsr		incSubTestNum		; next subTest #1,2,3
-		iny
-		sty		expectedIrqsOffset
-		lda		(zpTmpPtr),y
-		bpl		@loop
++	sei
 
 	lda		#<Test6522ISR
 	sta		IRQL
@@ -1789,13 +1767,19 @@ T6522_E
 	lda		#0						; Z=1(OK)
 	rts
 
+@error0
+	ldx		isrError+1
+
 @error	; Pre: A=actual, X=expected
+	sei
 	pha
 	stx		zpTmp2					; expected
 	jsr		@cleanup
 	pla
 	ldx		#1						; Z=0(NG)
 	rts
+
+	;
 
 @cleanup
 ; Post:	MBBaseL = SY6522_A_BASE
@@ -1808,15 +1792,13 @@ T6522_E
 	jsr		WaitT1OneShotUnderflow
 	jmp		WaitT2OneShotUnderflow
 
-	;
-
 ;------------------------------------------------------------------------------
 
 T6522_E_ISR
 ; Pre:
 ;	6502 has pushed P
 ;	Apple ROM has stored A to $45 (not Apple //e ROM!)
-;
+; Uses: zpTmp2
 
 	txa
 	pha
@@ -1825,34 +1807,50 @@ T6522_E_ISR
 
 	;------
 
+	; Handles all combos of:
+	; . chipA: T1 or T2 ints
+	; . chipB: T1 or T2 ints
+
+;@chipA
 	ldy		#SY6522_A_BASE+SY6522_IFR
 	lda		(MBBase),y
-	beq		+
+	beq		@chipB
 		and		#!(IER_SET)&0xff
 		iny							; Y = SY6522_IER
 		and		(MBBase),y			; is this interrupt enabled?
-		beq		+
+		beq		@chipB				; NB. not an error - may've been disabled on a prior call to the ISR
 		;
 		sta		(MBBase),y			; disable this interrupt (+ stops the IRQ to the 6502)
 		dey							; Y = SY6522_IFR
 		sta		(MBBase),y			; clear this interrupt
-		sta		isrIFR_A
 
-+	ldy		#SY6522_B_BASE+SY6522_IFR
+				; C -XX- ----
+		rol		; C XX-- ----
+		rol		; X X--- ----
+		rol		; X ---- ---X
+		rol		; C ---- --XX
+		jsr		@checkInts
+
+@chipB
+	ldy		#SY6522_B_BASE+SY6522_IFR
 	lda		(MBBase),y
-	beq		+
+	beq		@done
 		and		#!(IER_SET)&0xff
 		iny							; Y = SY6522_IER
 		and		(MBBase),y			; is this interrupt enabled?
-		beq		+
+		beq		@done				; NB. not an error - may've been disabled on a prior call to the ISR
 		;
 		sta		(MBBase),y			; disable this interrupt (+ stops the IRQ to the 6502)
 		dey							; Y = SY6522_IFR
 		sta		(MBBase),y			; clear this interrupt
-		sta		isrIFR_B
 
-+
+				; -XX- ----
+		lsr		; --XX ----
+		lsr		; ---X X---
+		lsr		; ---- XX--
+		jsr		@checkInts
 
+@done
 	;------
 
 	pla
@@ -1863,21 +1861,29 @@ T6522_E_ISR
 	lda		$45		; for Apple II/II+
 	rti
 
-;------------------------------------------------------------------------------
+;
 
-!zone data
+@checkInts
+	sta		zpTmp2
+	and		intsRemaining		; T1 or T2 or T1|T2 have occurred
+	cmp		zpTmp2				; ...so check against those remaining int(s)
+	bne		@error				; error: unexpected int
+	eor		#$ff
+	and		intsRemaining
+	sta		intsRemaining		; clear the bits of those int(s) that just occurred
+	rts
 
-expectedIrqsOffset
+@error
+	lda		zpTmp2
+	sta		isrError+0			; actual: int(s)
+	lda		intsRemaining
+	sta		isrError+1			; expected: int(s) remaining
+	rts
+
+;
+
+intsRemaining
 	!byte	0
-
-expectedIrqs
-	!byte 1,IxR_TIMER2	; 6522-B T2
-	!byte 1,IxR_TIMER1	; 6522-B T1
-	!byte 0,IxR_TIMER2	; 6522-A T2
-	!byte 0,IxR_TIMER1	; 6522-A T1
-	!byte $ff		; end
-
-!zone code
 
 ;------------------------------------------------------------------------------
 

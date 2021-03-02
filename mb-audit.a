@@ -704,6 +704,7 @@ isrIFR_A		!byte 0
 isrIFR_B		!byte 0
 isrIFR			!byte 0
 isrFlag			!byte 0
+isrError		!byte 0,0
 
 saveZPTextVars	!fill (BAS2H-CH)+1,0
 
