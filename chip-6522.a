@@ -1649,13 +1649,12 @@ T6522_E
 ;
 ; Test#E
 ; . Setup counters on all the 6522's T1+T2
-;	6522-A T1 is one-shot: T1L=$0707
+;	6522-A T1 is free-running: T1L=$0707
 ;	6522-A T2 is one-shot: T2C=$0505
-;	6522-B T1 is one-shot: T1L=$0303
+;	6522-B T1 is free-running: T1L=$0303
 ;	6522-B T2 is one-shot: T2C=$0101
 ; . NB. don't use free-running for T1, else 6522-B T1 can fire again before 6522-A T1
 ;	- depends on length of the *enhanced* //e ROM's interrupt handler before calling the user ISR.
-;	- this will manifest as a subTest#3 failure.
 ;	- So make the test more robust by disabling that Timer int after it fires.
 ;
 
@@ -1675,7 +1674,7 @@ T6522_E
 	and		#1
 	beq		@6522_B
 
-	lda		#ACR_ONESHOT
+	lda		#ACR_FREERUNNING
 	ldy		#SY6522_A_BASE+SY6522_ACR
 	sta		(MBBase),y
 
@@ -1702,7 +1701,7 @@ T6522_E
 	and		#2
 	beq		@test
 
-	lda		#ACR_ONESHOT
+	lda		#ACR_FREERUNNING
 	ldy		#SY6522_B_BASE+SY6522_ACR
 	sta		(MBBase),y
 
@@ -1733,9 +1732,9 @@ T6522_E
 	lda		#0
 	sta		expectedIrqsOffset
 
-	lda		#<Check6522ISR
+	lda		#<T6522_E_ISR
 	sta		IRQL
-	lda		#>Check6522ISR
+	lda		#>T6522_E_ISR
 	sta		IRQH
 
 @loop	lda		#0
@@ -1810,6 +1809,61 @@ T6522_E
 	jmp		WaitT2OneShotUnderflow
 
 	;
+
+;------------------------------------------------------------------------------
+
+T6522_E_ISR
+; Pre:
+;	6502 has pushed P
+;	Apple ROM has stored A to $45 (not Apple //e ROM!)
+;
+
+	txa
+	pha
+	tya
+	pha
+
+	;------
+
+	ldy		#SY6522_A_BASE+SY6522_IFR
+	lda		(MBBase),y
+	beq		+
+		and		#!(IER_SET)&0xff
+		iny							; Y = SY6522_IER
+		and		(MBBase),y			; is this interrupt enabled?
+		beq		+
+		;
+		sta		(MBBase),y			; disable this interrupt (+ stops the IRQ to the 6502)
+		dey							; Y = SY6522_IFR
+		sta		(MBBase),y			; clear this interrupt
+		sta		isrIFR_A
+
++	ldy		#SY6522_B_BASE+SY6522_IFR
+	lda		(MBBase),y
+	beq		+
+		and		#!(IER_SET)&0xff
+		iny							; Y = SY6522_IER
+		and		(MBBase),y			; is this interrupt enabled?
+		beq		+
+		;
+		sta		(MBBase),y			; disable this interrupt (+ stops the IRQ to the 6502)
+		dey							; Y = SY6522_IFR
+		sta		(MBBase),y			; clear this interrupt
+		sta		isrIFR_B
+
++
+
+	;------
+
+	pla
+	tay
+	pla
+	tax
+
+	lda		$45		; for Apple II/II+
+	rti
+
+;------------------------------------------------------------------------------
 
 !zone data
 
