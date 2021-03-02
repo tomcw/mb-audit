@@ -1649,11 +1649,12 @@ T6522_E
 ;
 ; Test#E
 ; . Setup counters on all the 6522's T1+T2
-;	6522-A T1 is free-running: T1L=$0707
-;	6522-A T2 is one-shot: T2C=$0505
-;	6522-B T1 is free-running: T1L=$0303
-;	6522-B T2 is one-shot: T2C=$0101
+;	6522-A T1 is free-running
+;	6522-A T2 is one-shot
+;	6522-B T1 is free-running
+;	6522-B T2 is one-shot
 ; . NB Test_E_ISR handles ints in any order, and simultaneously too.
+; . ISR disables the T1/T2 int so it only generates an IRQ once.
 ;
 
 	lda		MBBaseL					; must be $00 for ISR (and because this test uses both 6522s)
@@ -1665,96 +1666,124 @@ T6522_E
 	jsr		resetSubTest			; subTest #0
 	jsr		incTotalTests
 
-	sei
+	ldx		#-1						; timerConfig index
 
-	lda		#0
-	sta		intsRemaining
+@loop	sei
+
+		lda		#0
+		sta		intsRemaining
 
 ;@6522_A
-	lda		has6522
-	and		#1
-	beq		@6522_B
+		lda		has6522
+		and		#1
+		beq		@6522_B
 
-	lda		#ACR_FREERUNNING
-	ldy		#SY6522_A_BASE+SY6522_ACR
-	sta		(MBBase),y
+		lda		#ACR_FREERUNNING
+		ldy		#SY6522_A_BASE+SY6522_ACR
+		sta		(MBBase),y
 
-	lda		#$07
-	ldy		#SY6522_A_BASE+SY6522_TIMER1L_COUNTER
-	sta		(MBBase),y
-	ldy		#SY6522_A_BASE+SY6522_TIMER1H_COUNTER
-	sta		(MBBase),y
+		inx
+		lda		timerConfig,x
+		ldy		#SY6522_A_BASE+SY6522_TIMER1L_COUNTER
+		sta		(MBBase),y
+		inx
+		lda		timerConfig,x
+		ldy		#SY6522_A_BASE+SY6522_TIMER1H_COUNTER
+		sta		(MBBase),y
 
-	lda		#$05
-	ldy		#SY6522_A_BASE+SY6522_TIMER2L_COUNTER
-	sta		(MBBase),y
-	ldy		#SY6522_A_BASE+SY6522_TIMER2H_COUNTER
-	sta		(MBBase),y
+		inx
+		lda		timerConfig,x
+		ldy		#SY6522_A_BASE+SY6522_TIMER2L_COUNTER
+		sta		(MBBase),y
+		inx
+		lda		timerConfig,x
+		ldy		#SY6522_A_BASE+SY6522_TIMER2H_COUNTER
+		sta		(MBBase),y
 
-	lda		#IER_SET|IxR_TIMER1|IxR_TIMER2
-	ldy		#SY6522_A_BASE+SY6522_IER
-	sta		(MBBase),y				; Enable T1 & T2 IRQs
-	ldy		#SY6522_A_BASE+SY6522_IFR
-	sta		(MBBase),y				; Clear any T1 & T2 IRQs
+		lda		#IER_SET|IxR_TIMER1|IxR_TIMER2
+		ldy		#SY6522_A_BASE+SY6522_IER
+		sta		(MBBase),y			; Enable T1 & T2 IRQs
+		ldy		#SY6522_A_BASE+SY6522_IFR
+		sta		(MBBase),y			; Clear any T1 & T2 IRQs
 
-	lda		#%00000011
-	sta		intsRemaining
+		lda		#%00000011
+		sta		intsRemaining
 
 @6522_B
-	lda		has6522
-	and		#2
-	beq		@test
+		lda		has6522
+		and		#2
+		beq		@test
 
-	lda		#ACR_FREERUNNING
-	ldy		#SY6522_B_BASE+SY6522_ACR
-	sta		(MBBase),y
+		lda		#ACR_FREERUNNING
+		ldy		#SY6522_B_BASE+SY6522_ACR
+		sta		(MBBase),y
 
-	lda		#$03
-	ldy		#SY6522_B_BASE+SY6522_TIMER1L_COUNTER
-	sta		(MBBase),y
-	ldy		#SY6522_B_BASE+SY6522_TIMER1H_COUNTER
-	sta		(MBBase),y
+		inx
+		lda		timerConfig,x
+		ldy		#SY6522_B_BASE+SY6522_TIMER1L_COUNTER
+		sta		(MBBase),y
+		inx
+		lda		timerConfig,x
+		ldy		#SY6522_B_BASE+SY6522_TIMER1H_COUNTER
+		sta		(MBBase),y
 
-	lda		#$01
-	ldy		#SY6522_B_BASE+SY6522_TIMER2L_COUNTER
-	sta		(MBBase),y
-	ldy		#SY6522_B_BASE+SY6522_TIMER2H_COUNTER
-	sta		(MBBase),y
+		inx
+		lda		timerConfig,x
+		ldy		#SY6522_B_BASE+SY6522_TIMER2L_COUNTER
+		sta		(MBBase),y
+		inx
+		lda		timerConfig,x
+		ldy		#SY6522_B_BASE+SY6522_TIMER2H_COUNTER
+		sta		(MBBase),y
 
-	lda		#IER_SET|IxR_TIMER1|IxR_TIMER2
-	ldy		#SY6522_B_BASE+SY6522_IER
-	sta		(MBBase),y				; Enable T1 & T2 IRQs
-	ldy		#SY6522_B_BASE+SY6522_IFR
-	sta		(MBBase),y				; Clear any T1 & T2 IRQs
+		lda		#IER_SET|IxR_TIMER1|IxR_TIMER2
+		ldy		#SY6522_B_BASE+SY6522_IER
+		sta		(MBBase),y			; Enable T1 & T2 IRQs
+		ldy		#SY6522_B_BASE+SY6522_IFR
+		sta		(MBBase),y			; Clear any T1 & T2 IRQs
 
-	lda		#%00001100
-	ora		intsRemaining
-	sta		intsRemaining
+		lda		#%00001100
+		ora		intsRemaining
+		sta		intsRemaining
 
-@test
-	lda		#<T6522_E_ISR
-	sta		IRQL
-	lda		#>T6522_E_ISR
-	sta		IRQH
+@test	stx		timerConfigIdx
 
-	ldx		#0						; timeout_l
-	stx		zpTmp3					; timeout_h
-	stx		isrError+0
-	stx		isrError+1
+		lda		#<T6522_E_ISR
+		sta		IRQL
+		lda		#>T6522_E_ISR
+		sta		IRQH
 
-	cli
+		ldx		#0					; timeout_l
+		stx		zpTmp3				; timeout_h
+		stx		isrError+0
+		stx		isrError+1
 
-@loop	lda		intsRemaining
+		cli
+
+-		lda		intsRemaining
+			beq		+
+			lda		isrError+0
+			bne		@error0
+			;
+			dex
+			bne		-
+			dec		zpTmp3
+			bne		-
+			; timeout:
+			beq		@error			; A=X=0
+
++		ldx		timerConfigIdx
+		inx
+		lda		timerConfig,x
+		inx
+		and		timerConfig,x
+		cmp		#$ff
 		beq		+
-		lda		isrError+0
-		bne		@error0
-		;
+
+		jsr		incSubTestNum		; subTest #1,2,3
 		dex
-		bne		@loop
-		dec		zpTmp3
-		bne		@loop
-		; timeout:
-		beq		@error				; A=X=0
+		dex
+		jmp		@loop
 
 +	sei
 
@@ -1824,6 +1853,7 @@ T6522_E_ISR
 		dey							; Y = SY6522_IFR
 		sta		(MBBase),y			; clear this interrupt
 
+		clc
 				; C -XX- ----
 		rol		; C XX-- ----
 		rol		; X X--- ----
@@ -1865,25 +1895,52 @@ T6522_E_ISR
 
 @checkInts
 	sta		zpTmp2
-	and		intsRemaining		; T1 or T2 or T1|T2 have occurred
-	cmp		zpTmp2				; ...so check against those remaining int(s)
-	bne		@error				; error: unexpected int
+	and		intsRemaining			; T1 or T2 or T1|T2 have occurred
+	cmp		zpTmp2					; ...so check against those remaining int(s)
+	bne		@error					; error: unexpected int
 	eor		#$ff
 	and		intsRemaining
-	sta		intsRemaining		; clear the bits of those int(s) that just occurred
+	sta		intsRemaining			; clear the bits of those int(s) that just occurred
 	rts
 
 @error
 	lda		zpTmp2
-	sta		isrError+0			; actual: int(s)
+	sta		isrError+0				; actual: int(s)
 	lda		intsRemaining
-	sta		isrError+1			; expected: int(s) remaining
+	sta		isrError+1				; expected: int(s) remaining
 	rts
 
 ;
 
 intsRemaining
 	!byte	0
+
+timerConfigIdx
+	!byte	0
+
+timerConfig
+	;       T_l,T-h
+	!byte	$07,$07					; subTest #0
+	!byte	$05,$05
+	!byte	$03,$03
+	!byte	$01,$01
+	;
+	!byte	$01,$01					; subTest #1 (or #2 if only 1x6522 on card)
+	!byte	$01,$01
+	!byte	$01,$01
+	!byte	$01,$01
+	;
+	!byte	$00,$00					; subTest #2 (or #4 if only 1x6522 on card)
+	!byte	$11,$00					; T2: $11 cycles to set IER.T2
+	!byte	$00,$00
+	!byte	$11,$00					; T2: $11 cycles to set IER.T2
+	;
+	!byte	$00,$00					; subTest #3 (or #6 if only 1x6522 on card)
+	!byte	$10,$00					; T2: $10 cycles to set IER.T2 - no good on real h/w
+	!byte	$00,$00
+	!byte	$10,$00					; T2: $10 cycles to set IER.T2 - no good on real h/w
+	;
+	!byte	$ff,$ff					; done
 
 ;------------------------------------------------------------------------------
 
