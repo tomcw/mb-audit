@@ -342,7 +342,8 @@ Check6522ISR
 ;	. [T6522_8, T6522_9, T6522_D] oneshot underflow, then T1L -> T1C
 ;	. 6522 count is N+2 cycles (just read IFR, not using IRQ)
 ;   [Test6522AfterReset] 6522 IRQ pending, CTRL+RESET should clear it
-;	Both 6522s: test T1 & T2 (from chips A&B) all running at the same time
+;	[Test_F] Both 6522s: test T1 & T2 (from chips A&B) all running at the same time
+;	2 cards: Both 6522s: test T1 & T2 (from chips A&B) all running at the same time
 ;
 
 Test6522
@@ -365,74 +366,31 @@ Test6522
 	lda		has6522
 	lsr
 	sta		zpTmp1
-	bcs		@loop
-	jmp		@next6522
+	bcc		@next6522
 
-@loop	inc		testNum			; test #00, ??
-		jsr		T6522_0
-		beq		+
-		jmp		@error
-+
+@loop	lda		#0
+		sta		testTblIdx
 
-		inc		testNum			; test #01, ??
-		jsr		T6522_1
-		beq		+
-		jmp		@error
-+
+@nextTest	ldx		testTblIdx
+			lda		testTbl,x
+			sta		@jmpTest+1
+			inx
+			lda		testTbl,x
+			sta		@jmpTest+2
+			inx
+			stx		testTblIdx
+			ora		@jmpTest+1
+			beq		@done
+			lda		#>(@rts-1)
+			pha
+			lda		#<(@rts-1)
+			pha
+			inc		testNum
+@jmpTest	jmp		$0000
+@rts		beq		@nextTest
+			bne		@error
 
-		inc		testNum			; test #02, ??
-		jsr		T6522_2
-		bne		@error
-
-		inc		testNum			; test #03, ??
-		jsr		T6522_3
-		bne		@error
-
-		inc		testNum			; test #04, ??
-		jsr		T6522_4
-		bne		@error
-
-		inc		testNum			; test #05, ??
-		jsr		T6522_5
-		bne		@error
-
-		inc		testNum			; test #06, ??
-		jsr		T6522_6
-		bne		@error
-
-		inc		testNum			; test #07, ??
-		jsr		T6522_7
-		bne		@error
-
-		inc		testNum			; test #08, ??
-		jsr		T6522_8
-		bne		@error
-
-		inc		testNum			; test #09, ??
-		jsr		T6522_9
-		bne		@error
-
-		inc		testNum			; test #0A, ??
-		jsr		T6522_A
-		bne		@error
-
-		inc		testNum			; test #0B, ??
-		jsr		T6522_B
-		bne		@error
-
-		inc		testNum			; test #0C, ??
-		jsr		T6522_C
-		bne		@error
-
-		inc		testNum			; test #0D, ??
-		jsr		T6522_D
-		bne		@error
-
-		inc		testNum			; test #0E (only for MBBaseL=$00)
-		jsr		T6522_E
-		bne		@error
-
-		jsr		WaitT1OneShotUnderflow	; clear & disable any T1 ints
+@done	jsr		WaitT1OneShotUnderflow	; clear & disable any T1 ints
 		jsr		WaitT2OneShotUnderflow	; clear & disable any T2 ints
 
 @next6522
@@ -441,9 +399,7 @@ Test6522
 		sta		MBBaseL
 
 		lsr		zpTmp1
-		bcc		+
-		jmp		@loop
-+
+		bcs		@loop
 
 	lda		#0
 	sta		MBBaseL
@@ -466,6 +422,30 @@ Test6522Error
 
 	lda		#0
 	rts
+
+;
+
+testTblIdx
+	!byte	0
+
+testTbl
+	!word	T6522_0
+	!word	T6522_1
+	!word	T6522_2
+	!word	T6522_3
+	!word	T6522_4
+	!word	T6522_5
+	!word	T6522_6
+	!word	T6522_7
+	!word	T6522_8
+	!word	T6522_9
+	!word	T6522_A
+	!word	T6522_B
+	!word	T6522_C
+	!word	T6522_D
+	!word	T6522_E
+	!word	T6522_F
+	!word	0
 
 ;--------------------------------------
 
@@ -1643,11 +1623,21 @@ T6522_D
 ;------------------------------------------------------------------------------
 
 T6522_E
+; Pre: MBBaseL = $00 or $80
+; Post: Z=1(OK), Z=0(NG)
+;
+
+	lda		#0
+	rts
+
+;------------------------------------------------------------------------------
+
+T6522_F
 ; Pre: MBBaseL = $00
 ;	has6522
 ; Post: Z=1(OK), Z=0(NG)
 ;
-; Test#E
+; Test#F
 ; . Setup counters on all the 6522's T1+T2
 ;	6522-A T1 is free-running
 ;	6522-A T2 is one-shot
