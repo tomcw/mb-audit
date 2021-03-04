@@ -1628,6 +1628,9 @@ T6522_E
 ;	use IRQ to trigger at start of opcode
 ;
 
+	jsr		resetSubTest			; subTest #0
+	jsr		incTotalTests
+
 	jsr		WaitT2OneShotUnderflow	; clear any T2 ints
 
 	;
@@ -1709,7 +1712,10 @@ T6522_F
 	lda		#0
 	rts
 
-!if 0{
+!if 0{	; tested & works on real h/w
+	jsr		resetSubTest			; subTest #0
+	jsr		incTotalTests
+
 	sei
 
 	lda		#$10
