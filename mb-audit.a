@@ -300,11 +300,15 @@ GetSlotInfo
 		bne		-
 
 	lda		#0
+	sta		numMockingboards
 	ldx		#7
--		ora		slotInfo,x
-		dex
+-		lda		slotInfo,x
+		beq		+
+			inc		numMockingboards
++		dex
 		bne		-
-	tax
+
+	lda		numMockingboards
 	rts
 
 ;------------------------------------------------------------------------------
@@ -681,6 +685,7 @@ COMPONENT_SSI263	= $40
 
 saveZP			!fill ($100-ZP_BASE),0
 slotInfo		!fill 8,0	; slot[0..7] : bits: 1=6522/$80, 0=6522/$00
+numMockingboards	!byte 0
 
 is65C02			!byte 0
 
