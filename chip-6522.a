@@ -334,13 +334,13 @@ Check6522ISR
 ;	. [T6522_3, T6522_5] 6502|65C02 addr modes access of 6522 T1C
 ;	. [T6522_7, T6522_9, T6522_A, T6522_C] oneshot|continuous underflow, then T1L -> T1C
 ;	. [T6522_B] T1L=$0000, can only read T1C values of $00 and $FF
-;	. [T6522_E] 6522 count is N+2 cycles
+;	. [T6522_A, T6522_E] 6522 period is N+2 cycles
 ;	. 6522 -> IRQ cycle (detect a2heaven's MEGA Audio)
 ;	T2:
 ;	. [T6522_2] oneshot x IRQ|poll
 ;	. [T6522_4, T6522_6] 6502|65C02 addr modes access of 6522 T2C
 ;	. [T6522_8, T6522_9, T6522_D] oneshot underflow, then T1L -> T1C
-;	. [T6522_E] 6522 count is N+2 cycles
+;	. [T6522_E] 6522 period is N+2 cycles
 ;   [Test6522AfterReset] 6522 IRQ pending, CTRL+RESET should clear it
 ;	[Test_F] Both 6522s: test T1 & T2 (from chips A&B) all running at the same time
 ;	2 cards: Both 6522s: test T1 & T2 (from chips A&B) all running at the same time
@@ -1624,7 +1624,7 @@ T6522_E
 ; Post: Z=1(OK), Z=0(NG)
 ;
 ; Test#E
-; . Test 6522 count is N+2 cycles
+; . Test 6522 period is N+2 cycles
 ;	use IRQ to trigger at start of opcode
 ;
 
@@ -1701,7 +1701,7 @@ T6522_F
 ; Post: Z=1(OK), Z=0(NG)
 ;
 ; Test#F
-; . Test 6522 count is N+2 cycles
+; . Test 6522 period is N+2 cycles
 ;	alt version: just read IFR, not using IRQ - NG for emulators, since relies on sub-opcode accuracy for setting IFR
 ;
 
@@ -1817,13 +1817,13 @@ T6522_10
 		inx
 		lda		timerConfig,x
 		ldy		#SY6522_A_BASE+SY6522_TIMER2H_COUNTER
-		sta		(MBBase),y
+		sta		(MBBase),y						; T2=$0010 (eg)
 
-		lda		#IER_SET|IxR_TIMER1|IxR_TIMER2
-		ldy		#SY6522_A_BASE+SY6522_IER
-		sta		(MBBase),y			; Enable T1 & T2 IRQs
-		ldy		#SY6522_A_BASE+SY6522_IFR
-		sta		(MBBase),y			; Clear any T1 & T2 IRQs
+		lda		#IER_SET|IxR_TIMER1|IxR_TIMER2	; T2=$000E
+		ldy		#SY6522_A_BASE+SY6522_IER		; T2=$000C
+		sta		(MBBase),y						; T2=$0006 Enable T1 & T2 IRQs
+		ldy		#SY6522_A_BASE+SY6522_IFR		; T2=$0004
+		sta		(MBBase),y						; T2=$0010 Clear any T1 & T2 IRQs && T2C underflow occur on same cycle! [*1]
 
 		lda		#%00000011
 		sta		intsRemaining
@@ -1857,9 +1857,9 @@ T6522_10
 
 		lda		#IER_SET|IxR_TIMER1|IxR_TIMER2
 		ldy		#SY6522_B_BASE+SY6522_IER
-		sta		(MBBase),y			; Enable T1 & T2 IRQs
+		sta		(MBBase),y						; Enable T1 & T2 IRQs
 		ldy		#SY6522_B_BASE+SY6522_IFR
-		sta		(MBBase),y			; Clear any T1 & T2 IRQs
+		sta		(MBBase),y						; Clear any T1 & T2 IRQs
 
 		lda		#%00001100
 		ora		intsRemaining
@@ -2053,11 +2053,13 @@ timerConfig
 	!byte	$11,$00					; T2: $11 cycles to set IER.T2
 	!byte	$00,$00
 	!byte	$11,$00					; T2: $11 cycles to set IER.T2
-	;
+!if 0{
+	; [*1] See above, where write to IFR (clear T2 IRQ) and T2 underflow occur on same cycle - the clear T2 IRQ wins
 	!byte	$00,$00					; subTest #3 (or #6 if only 1x6522 on card)
 	!byte	$10,$00					; T2: $10 cycles to set IER.T2 - no good on real h/w
 	!byte	$00,$00
 	!byte	$10,$00					; T2: $10 cycles to set IER.T2 - no good on real h/w
+}
 	;
 	!byte	$ff,$ff					; done
 
