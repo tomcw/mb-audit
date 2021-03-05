@@ -112,11 +112,11 @@ TestAY8913
 
 		inc		testNum			; test #00, #02
 		jsr		TestAYDatalines
-		bne		@error
+		bcs		@error
 
 		inc		testNum			; test #01, #03
 		jsr		TestAYAddrlines
-		bne		@error
+		bcs		@error
 
 ++		lda		zpTmp3
 		eor		#$80
