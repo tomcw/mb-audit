@@ -159,7 +159,7 @@ entrypoint
 			jsr		Test6522
 			bcs		@error
 			jsr		TestAY8913
-			beq		@error
+			bcs		@error
 			jsr		TestSSI263
 			bne		++
 @error			jsr		PrintTestFailedErrBytes

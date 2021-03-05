@@ -75,7 +75,8 @@ DetectAY8913
 
 TestAY8913
 ; Pre: hasAY8913 (Phasor: will be 0)
-; Post: hasAY8913 (Phasor: set to %1111)
+; Post: C=0(OK), C=1(NG)
+;	hasAY8913 (Phasor: set to %1111)
 
 	lda		#COMPONENT_AY8913+1	; test component $21
 	sta		testComponentNum
@@ -122,8 +123,7 @@ TestAY8913
 		sta		zpTmp3
 		bne		-
 
-@ok
-	lda		#1
+@ok	clc
 	rts
 
 @error
@@ -134,7 +134,7 @@ TestAY8913
 	lda		zpTmp2
 	sta		errorExpected
 
-	lda		#0
+	sec
 	rts
 
 ;--------------------------------------
@@ -142,7 +142,7 @@ TestAY8913
 TestAYDatalines
 ; Pre:
 ;	zpTmp3 = SY6522_A_BASE or SY6522_A_PH_BASE or SY6522_B_BASE
-; Post: Z=1(OK),0(NG)
+; Post: C=0(OK), C=1(NG)
 ;	zpTmp2 = expected, A = actual
 
 	; Test the 8 data lines:
@@ -162,21 +162,23 @@ TestAYDatalines
 		jsr		AY_ReadRegValue
 		cmp		zpTmp2
 		beq		+
-		rts						; Z=0(NG)
+		sec
+		rts						; C=1(NG)
 
 +		jsr		AY_SetPortAOutput	; DDRA=0xFF
 
 		asl		zpTmp2
 		bne		-
 
-	rts							; Z=1(OK)
+	clc
+	rts							; C=0(OK)
 
 ;--------------------------------------
 
 TestAYAddrlines
 ; Pre:
 ;	zpTmp3 = SY6522_A_BASE or SY6522_A_PH_BASE or SY6522_B_BASE
-; Post: Z=1(OK),0(NG)
+; Post: C=0(OK), C=1(NG)
 ;	zpTmp2 = expected, A = actual
 
 	; Test the 4 addr lines:
@@ -207,7 +209,8 @@ TestAYAddrlines
 		jsr		AY_ReadRegValue
 		cmp		zpTmp2
 		beq		+
-		rts						; Z=0(NG)
+		sec
+		rts						; C=1(NG)
 +
 --		inc		zpTmp2
 		lda		zpTmp2
@@ -219,19 +222,20 @@ TestAYAddrlines
 	ldy		zpTmp3
 	jsr		Init6522ForAY
 
-	lda		#0					; Z=1(OK)
+	clc							; C=0(OK)
 	rts
 
 ;--------------------------------------
 
 TestAYPhasor
 ; Pre:
-; Post: Z=1(OK),0(NG)
+; Post: C=0(OK), C=1(NG)
 ;	zpTmp2 = expected, A = actual
 
 	lda		isPhasorCard
 	bne		+
-		rts						; Z=1(OK)
+		clc
+		rts						; C=0(OK)
 +
 
 	; Test for 4 AYs (Phasor only)
@@ -320,7 +324,14 @@ TestAYPhasor
 
 	lda		zpTmp1
 	cmp		zpTmp2
-	rts							; Z=1(OK), Z=0(NG)
+	bne		@error
+
+	clc
+	rts							; C=0(OK)
+
+@error
+	sec
+	rts							; C=1(NG)
 
 ;------------------------------------------------------------------------------
 
