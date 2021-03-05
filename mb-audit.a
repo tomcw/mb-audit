@@ -292,17 +292,14 @@ GetSlotInfo
 ; Scan all slots for 6522s at $Cn00 and $Cn80
 ; Post: Z=1 (BEQ) if nothing found
 
+	lda		#0
+	sta		numMockingboards
+
 	ldx		#7
 -		lda		#0
 		sta		slotInfo,x
 		jsr		Detect6522
-		dex
-		bne		-
-
-	lda		#0
-	sta		numMockingboards
-	ldx		#7
--		lda		slotInfo,x
+		lda		slotInfo,x
 		beq		+
 			inc		numMockingboards
 +		dex
@@ -351,7 +348,7 @@ DetectSubunits
 	iny								; SY6522_DDRA
 	cmp		(MBBase),y
 	bne		+
-	ldy		#SY6522_TIMER1L_COUNTER
+	ldy		#SY6522_TIMER2L_COUNTER
 	jsr		SF_GetTimerL
 	beq		++
 +		inc		isPhasorCard

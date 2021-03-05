@@ -24,15 +24,15 @@ Detect6522
 	rts
 
 @check_A
-	ldy		#SY6522_A_BASE+SY6522_TIMER1L_COUNTER
-	jsr		@Check6522T1C
+	ldy		#SY6522_A_BASE+SY6522_TIMER2L_COUNTER
+	jsr		@Check6522
 	bne		+
 		inc		slotInfo,x	; bit0=1
 +
 
 @check_B
-	ldy		#SY6522_B_BASE+SY6522_TIMER1L_COUNTER
-	jsr		@Check6522T1C
+	ldy		#SY6522_B_BASE+SY6522_TIMER2L_COUNTER
+	jsr		@Check6522
 	bne		+
 		inc		slotInfo,x
 		inc		slotInfo,x	; bit1=1
@@ -42,10 +42,11 @@ Detect6522
 
 	;
 
-@Check6522T1C
-; Pre: Y = SY6522_TIMER1L_COUNTER for chip A or B
+@Check6522
+; Pre: Y = SY6522_TIMER2L_COUNTER for chip A or B
+; 	NB. Checking with T2 is more robust than with T1, as there's no latch
 ; Post: Z=1(OK), Z=0(NG)
-	lda		#4				; try 4 checks (avoid floating bus giving a false-positive, and avoid T1C_L underflow giving a false-negative!)
+	lda		#4				; try 4 checks (avoid floating bus giving a false-positive)
 	sta		zpTmp1
 	lda		#1				; failures (can have 1 failure)
 	sta		zpTmp2
@@ -59,8 +60,8 @@ Detect6522
 
 	;
 
-SF_GetTimerL				; Based on Skyfox's detection code
-; Pre: Y = SY6522_TIMER1L_COUNTER for chip A or B
+SF_GetTimerL				; Based on Skyfox's detection code (but uses T2 instead of T1)
+; Pre: Y = SY6522_TIMER2L_COUNTER for chip A or B
 ;	MBBaseL=$00 (whether checking chip A or B)
 ; Post: Z=1(OK), Z=0(NG)
 	lda		(MBBase),y
