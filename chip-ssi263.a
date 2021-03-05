@@ -176,7 +176,7 @@ PlaySSI263
 
 TestSSI263
 ; Pre: has6522, hasSSI263
-; Post: return to top-level: Z=0(OK), Z=1(NG)... NB opposite to TestX's below!
+; Post: C=0(OK), C=1(NG)
 ; Uses: zpTmp1 (so don't use in sub-funcs)
 
 	lda		has6522
@@ -221,11 +221,11 @@ TestSSI263
 
 @loop	inc		testNum				; test #00, ??
 		jsr		T263_0
-		bne		@error
+		bcs		@error
 
 		inc		testNum				; test #01, ??
 		jsr		T263_1
-		bne		@error
+		bcs		@error
 
 @nextSSI263
 		lda		#SSI_B_BASE
@@ -238,13 +238,13 @@ TestSSI263
 		lsr		zpTmp1
 		bcs		@loop
 
-	lda		#1
+	clc
 	rts
 
 @error
 ; Pre: zpTmp2 = expected value
 ;	A = actual value
-; Post: Z=1(NG)
+; Post: C=1(NG)
 
 	sta		errorActual
 	lda		zpTmp2
@@ -253,6 +253,7 @@ TestSSI263
 	lda		#0
 	sta		MBBaseL
 
+	sec
 	rts
 
 ;------------------------------------------------------------------------------
@@ -287,7 +288,7 @@ CalcPhraseDuration
 
 T263_0
 ; Pre: MBBase, SSI263Base
-; Post: Z=1(OK), Z=0(NG)
+; Post: C=0(OK), C=1(NG)
 ;
 ; Test#0
 ; . Play phrase "CLASSIC ADVENTURE" and check total duration is within tolerance
@@ -317,14 +318,16 @@ T263_0
 
 	jsr		CalcPhraseDuration
 
-	lda		#0
+	; TODO: check total duration is within tolerance
+
+	clc
 	rts
 
 ;------------------------------------------------------------------------------
 
 T263_1
 ; Pre:
-; Post: Z=1(OK), Z=0(NG)
+; Post: C=0(OK), C=1(NG)
 ;
 ; Test#1 (AppleWin-GH#52)
 ; . With a pending T1 IRQ, writing to SSI_FILFREQ clears the T1 IRQ
@@ -452,8 +455,8 @@ T263_1
 
 	pla
 	sta		MBBaseL
-	lda		#0
-	rts
+	clc
+	rts								; C=0(OK)
 
 @error	; pre: A=actual, X=expected
 	stx		zpTmp2					; expected
@@ -461,8 +464,8 @@ T263_1
 	pla
 	sta		MBBaseL
 	txa
-	ldx		#1
-	rts								; Z=0(NG)
+	sec
+	rts								; C=1(NG)
 
 ;
 

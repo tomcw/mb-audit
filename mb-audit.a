@@ -161,7 +161,7 @@ entrypoint
 			jsr		TestAY8913
 			bcs		@error
 			jsr		TestSSI263
-			bne		++
+			bcc		++
 @error			jsr		PrintTestFailedErrBytes
 				jmp		exit
 ++
