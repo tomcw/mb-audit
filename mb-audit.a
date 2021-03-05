@@ -149,7 +149,7 @@ entrypoint
 		beq		+
 			sta		has6522
 			jsr		Check6522		; Basic 6522 checks
-			bne		++
+			bcc		++
 				jsr		PrintTestFailed
 				jmp		exit
 ++			jsr		DetectSubunits	; AY8913 & speech chips
@@ -157,7 +157,7 @@ entrypoint
 			jsr		DisplayCardUpdate
 			;
 			jsr		Test6522
-			beq		@error
+			bcs		@error
 			jsr		TestAY8913
 			beq		@error
 			jsr		TestSSI263
@@ -191,7 +191,7 @@ nextSlot
 		beq		+
 			sta		has6522
 			jsr		Setup6522ForReset
-			beq		error
+			bcs		error
 			jsr		PrintSlotNum
 			lda		#<msg_PressReset
 			ldx		#>msg_PressReset
@@ -211,7 +211,7 @@ TestResetLoop
 			jsr		Skip6522ForReset
 			jmp		+
 ++			jsr		Test6522AfterReset
-			bne		+
+			bcc		+
 error			jsr		PrintTestFailedErrBytes
 				jmp		exit
 +		dec		slotUnderTest

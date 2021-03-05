@@ -76,7 +76,7 @@ SF_GetTimerL				; Based on Skyfox's detection code (but uses T2 instead of T1)
 
 Check6522
 ; Pre: X=slot#
-; Post: Z=0(BNE):OK, Z=1(BEQ):Failed
+; Post: C=0(OK), C=1(NG)
 
 	txa
 	ora		#$c0
@@ -93,18 +93,17 @@ Check6522
 	lda		#0
 	sta		testNum						; test #00
 	jsr		Check6522Datalines
-	bne		+
+	bcc		+
 	rts
 
 +	inc		testNum						; test #01
-	jsr		Check6522IRQ
-	rts
+	jmp		Check6522IRQ
 
 ;------------------
 
 Check6522Datalines
 ; Pre: zpTmp1 = slotInfo[slot]
-; Post: Z=0(BNE):OK, Z=1(BEQ):Failed
+; Post: C=0(OK), C=1(NG)
 
 	;
 	; Check r/w of all 8 data lines
@@ -190,21 +189,19 @@ Check6522Datalines
 	sta		zpTmp2
 	bne		@loop
 
-;
-
 @6522_ok
-	lda		#1
+	clc
 	rts
 
 @6522_err
-	lda		#0
+	sec
 	rts
 
 ;------------------
 
 Check6522IRQ
 ; Pre: zpTmp1 = slotInfo[slot]
-; Post: Z=0(BNE):OK, Z=1(BEQ):Failed
+; Post: C=0(OK), C=1(NG)
 
 	;
 	; Check interrupt line
@@ -283,14 +280,12 @@ Check6522IRQ
 	and		isrIFR_B
 	beq		@6522_err
 
-;
-
 @6522_ok
-	lda		#1
+	clc
 	rts
 
 @6522_err
-	lda		#0
+	sec
 	rts
 
 ;------------------------------------------------------------------------------
@@ -349,7 +344,7 @@ Check6522ISR
 
 Test6522
 ; Pre: has6522
-; Post: return to top-level: Z=0(OK), Z=1(NG)... NB opposite to TestX's below!
+; Post: C=0(OK), C=1(NG)
 ; Uses: zpTmp1 (so don't use in sub-funcs)
 
 	sei
@@ -384,8 +379,8 @@ Test6522
 			beq		@done
 			inc		testNum
 @jmpTest	jsr		$0000
-			beq		@nextTest
-			bne		@error
+			bcc		@nextTest
+			bcs		@error
 
 @done	jsr		WaitT1OneShotUnderflow	; clear & disable any T1 ints
 		jsr		WaitT2OneShotUnderflow	; clear & disable any T2 ints
@@ -401,14 +396,14 @@ Test6522
 	lda		#0
 	sta		MBBaseL
 
-	lda		#1
+	clc		; C=0(OK)
 	rts
 
 @error
 Test6522Error
 ; Pre: zpTmp2 = expected value
 ;	A = actual value
-; Post: Z=1(NG)
+; Post: C=1(NG)
 
 	sta		errorActual
 	lda		zpTmp2
@@ -417,7 +412,7 @@ Test6522Error
 	lda		#0
 	sta		MBBaseL
 
-	lda		#0
+	sec		; C=1(NG)
 	rts
 
 ;
@@ -426,30 +421,31 @@ testTblIdx
 	!byte	0
 
 testTbl
-	!word	T6522_0
-	!word	T6522_1
-	!word	T6522_2
-	!word	T6522_3
-	!word	T6522_4
-	!word	T6522_5
-	!word	T6522_6
-	!word	T6522_7
-	!word	T6522_8
-	!word	T6522_9
-	!word	T6522_A
-	!word	T6522_B
-	!word	T6522_C
-	!word	T6522_D
-	!word	T6522_E
-	!word	T6522_F
-	!word	T6522_10
+	; MBBaseL = $00 and $80
+	!word	T6522_0		; 11
+	!word	T6522_1		; 12
+	!word	T6522_2		; 13
+	!word	T6522_3		; 14
+	!word	T6522_4		; 15
+	!word	T6522_5		; 16
+	!word	T6522_6		; 17
+	!word	T6522_7		; 18
+	!word	T6522_8		; 19
+	!word	T6522_9		; 1A
+	!word	T6522_A		; 1B
+	!word	T6522_B		; 1C
+	!word	T6522_C		; 1D
+	!word	T6522_D		; 1E
+	!word	T6522_E		; 1F
+	!word	T6522_F		; 20
+	!word	T6522_10	; 21
 	!word	0
 
 ;--------------------------------------
 
 T6522_0
 ; Pre:
-; Post: Z=1(OK), Z=0(NG)
+; Post: C=0(OK), C=1(NG)
 ;
 ; Test#0 (AppleWin-GH#765)
 ; . Enable T1 & T2 IRQs, but don't write to T1C_h
@@ -459,6 +455,9 @@ T6522_0
 
 	jsr		resetSubTest			; subTest #0
 	jsr		incTotalTests
+
+	lda		#0
+	sta		zpTmp2					; expected ($00)
 
 	jsr		WaitT1OneShotUnderflow	; Post: SEI
 
@@ -473,12 +472,10 @@ T6522_0
 -		lda		(MBBase),y			; wait $00nn
 		bne		-
 
-	sta		zpTmp2					; expected ($00)
-
 	ldy		#SY6522_IFR
 	lda		(MBBase),y
 	and		#IxR_TIMER1|IxR_TIMER2	; Poll Timer1&2 IRQ flag
-	bne		+
+	bne		@error
 
 	jsr		incSubTestNum			; subTest #1
 
@@ -489,14 +486,19 @@ T6522_0
 	ldy		#SY6522_IFR
 	lda		(MBBase),y
 	and		#IxR_TIMER1|IxR_TIMER2	; Poll Timer1&2 IRQ flag
+	bne		@error
 
-+	rts								; Z=1(OK), Z=0(NG)
+	clc
+	!byte $24						; bit zp... ie. skip the 'sec' opcode
+@error
+	sec
+	rts								; C=0(OK), C=1(NG)
 
 ;--------------------------------------
 
 T6522_1
 ; Pre:
-; Post: Z=1(OK), Z=0(NG)
+; Post: C=0(OK), C=1(NG)
 ;
 ; Test#1
 ; . Setup T1C=0x0202 and ACR=free-running
@@ -547,8 +549,7 @@ T6522_1
 	sta		zpTmp2					; expected
 	and		isrIFR					; T1 int from free-running mode
 	bne		+
-		ldx		#1
-		bne		++					; subTest #0 (failed)
+		beq		@error				; subTest #0 (failed)
 +	lda		#0
 	sta		isrIFR
 
@@ -564,17 +565,25 @@ T6522_1
 
 	jsr		WaitT1Underflow
 
+	lda		#0
+	sta		zpTmp2					; expected
 	ldy		#SY6522_IFR
 	lda		(MBBase),y
 	and		#IxR_TIMER1|IxR_TIMER2	; Poll Timer1&2 IRQ flag (expect none set)
+	bne		@error
 
-++	rts								; Z=1(OK), Z=0(NG)
+	clc
+	!byte $24						; bit zp... ie. skip the 'sec' opcode
+
+@error
+	sec
+	rts								; C=0(OK), C=1(NG)
 
 ;--------------------------------------
 
 T6522_2
 ; Pre:
-; Post: Z=1(OK), Z=0(NG)
+; Post: C=0(OK), C=1(NG)
 
 	; Test#2 (AppleWin-GH#567)
 	; . Setup T1C=0x0202 and ACR=free-running
@@ -674,12 +683,12 @@ T6522_2
 	and		isrIFR
 	beq		+
 
-	lda		#0
-	rts								; Z=1(OK)
+	clc
+	rts								; C=0(OK)
 
 +	; error
-	lda		#1
-	rts								; Z=0(NG)
+	sec
+	rts								; C=1(NG)
 
 ;--------------------------------------
 
@@ -693,7 +702,7 @@ T6522_4
 +
 ; Pre: zpTmp2 = SY6522_TIMER1L_COUNTER or SY6522_TIMER2L_COUNTER
 ;	MBBaseL = $00 or $80
-; Post: Z=1(OK), Z=0(NG)
+; Post: C=0(OK), C=1(NG)
 ;
 ; Test#3,#4
 ; . Test all the insn's that can write to T1C_h & T2C_h (excluding RMW: DEC,INC,ASL,LSR,ROL,ROR & 65C02: TRB,TSB)
@@ -786,7 +795,7 @@ T6522_4
 +
 !cpu 6502
 
-	lda		#0						; Z=1(OK)
+	clc								; C=0(OK)
 	rts
 
 	;
@@ -806,7 +815,7 @@ T6522_4
 	lda		#$F1
 	sta		zpTmp2					; expected
 	txa								; actual
-	ldx		#1						; Z=0(NG)
+	sec								; C=1(NG)
 	rts
 
 ;--------------------------------------
@@ -821,7 +830,7 @@ T6522_6
 +
 ; Pre: zpTmp2 = SY6522_TIMER1L_COUNTER or SY6522_TIMER2L_COUNTER
 ;	MBBaseL = $00 or $80
-; Post: Z=1(OK), Z=0(NG)
+; Post: C=0(OK), C=1(NG)
 ;
 ; Test#5,#6
 ; . Test all the insn's that can read from T1C_l & T2C_l (excluding RMW: DEC,INC,ASL,LSR,ROL,ROR & 65C02: TRB,TSB)
@@ -1077,7 +1086,7 @@ T6522_6
 		jsr		@nextOpcode
 		bcc		@loop
 
-+	lda		#0						; Z=1(OK)
++	clc								; C=0(OK)
 	rts
 
 	;
@@ -1090,7 +1099,7 @@ T6522_6
 	lda		#$FC
 	sta		zpTmp2					; expected
 	txa								; actual
-	ldx		#1						; Z=0(NG)
+	sec								; C=1(NG)
 	rts
 
 	;
@@ -1190,7 +1199,7 @@ T6522_8
 +
 ; Pre: zpTmp2 = SY6522_TIMER1L_COUNTER or SY6522_TIMER2L_COUNTER
 ;	MBBaseL = $00 or $80
-; Post: Z=1(OK), Z=0(NG)
+; Post: C=0(OK), C=1(NG)
 ;
 ; Test#7,8 (AppleWin-GH#833)
 ; . Test reading T1|2C_h when T1|2C_l underflows
@@ -1221,21 +1230,21 @@ T6522_8
 		dex
 		bpl		-
 
-	lda		#0						; Z=1(OK)
+	clc								; C=0(OK)
 	rts
 
 +	tax
 	lda		#$00
 	sta		zpTmp2					; expected
 	txa								; actual
-	ldx		#1						; Z=0(NG)
+	sec								; C=1(NG)
 	rts
 
 ;------------------------------------------------------------------------------
 
 T6522_9
 ; Pre: MBBaseL = $00 or $80
-; Post: Z=1(OK), Z=0(NG)
+; Post: C=0(OK), C=1(NG)
 ;
 ; Test#9 (AppleWin-GH#833)
 ; . Test T1C in free-running mode (on underflow) gets reloaded with T1L
@@ -1312,17 +1321,19 @@ T6522_9
 	cmp		#$FF					; there is no latch, so continues decrementing
 	bne		@error
 
-	; Z=1(OK), so fall through...
+	clc								; C=0(OK)
+	rts
 
 @error	; Pre: A=actual, X=expected
 	stx		zpTmp2					; expected
-	rts								; Z=1(OK), Z=0(NG)
+	sec								; C=1(NG)
+	rts
 
 ;------------------------------------------------------------------------------
 
 T6522_A
 ; Pre: MBBaseL = $00 or $80
-; Post: Z=1(OK), Z=0(NG)
+; Post: C=0(OK), C=1(NG)
 ;
 ; Test#A
 ; . Check T1's bounds on underflow
@@ -1371,22 +1382,23 @@ T6522_A
 		dec		zpTmp2
 		bpl		-
 
-	lda		#0
+	jsr		WaitT1OneShotUnderflow
+	clc
+	rts
 
 @error	; Pre: A=actual, X=expected
 	stx		zpTmp2					; expected
-	php
 	pha
 	jsr		WaitT1OneShotUnderflow	; don't leave T1L set to a very small value (else 6522 detection will fail next time!)
 	pla
-	plp
-	rts								; Z=1(OK), Z=0(NG)
+	sec
+	rts								; C=0(OK), C=1(NG)
 
 ;------------------------------------------------------------------------------
 
 T6522_B
 ; Pre: MBBaseL = $00 or $80
-; Post: Z=1(OK), Z=0(NG)
+; Post: C=0(OK), C=1(NG)
 ;
 ; Test#B (AppleWin-GH#652)
 ; . Check T1's bounds on $ffff underflow, with big gaps between 6522 accesses
@@ -1446,22 +1458,25 @@ T6522_B
 	lda		(MBBase),y
 	ldx		#$00					; expected
 	cmp		#$00
-;	bne		@error
+	bne		@error
+
+	jsr		WaitT1OneShotUnderflow
+	clc
+	rts								; C=0(OK)
 
 @error	; Pre: A=actual, X=expected
 	stx		zpTmp2					; expected
-	php
 	pha
 	jsr		WaitT1OneShotUnderflow	; don't leave T1L set to a very small value (else 6522 detection will fail next time!)
 	pla
-	plp
-	rts								; Z=1(OK), Z=0(NG)
+	sec
+	rts								; C=1(NG)
 
 ;------------------------------------------------------------------------------
 
 T6522_C
 ; Pre: MBBaseL = $00 or $80
-; Post: Z=1(OK), Z=0(NG)
+; Post: C=0(OK), C=1(NG)
 ;
 ; Test#C
 ; . Check MB detection by reading T1C_l either side of the underflow
@@ -1473,6 +1488,7 @@ T6522_C
 
 	; #0: Start with a sanity check for the mainline case (no underflow)
 	jsr		WaitT1OneShotUnderflow	; T1C = T1L = $0101
+	sec
 	ldy		#SY6522_TIMER1L_COUNTER
 	lda		(MBBase),y
 	sbc		(MBBase),y
@@ -1529,22 +1545,23 @@ T6522_C
 	cmp		#$04
 	bne		@error
 
+	clc
 @rts
-	rts								; Z=1(OK)
+	rts								; C=0(OK)
 
 @error	; Pre: A=actual, X=expected
 	stx		zpTmp2					; expected
 	pha
 	jsr		WaitT1OneShotUnderflow	; don't leave T1L set to a very small value (else 6522 detection will fail next time!)
 	pla
-	ldx		#1
-	rts								; Z=0(NG)
+	sec
+	rts								; C=1(NG)
 
 ;------------------------------------------------------------------------------
 
 T6522_D
 ; Pre: MBBaseL = $00 or $80
-; Post: Z=1(OK), Z=0(NG)
+; Post: C=0(OK), C=1(NG)
 ;
 ; Test#D
 ; . Check reading T2C_l either side of the underflow
@@ -1555,6 +1572,7 @@ T6522_D
 
 	; #0: Start with a sanity check for the mainline case (no underflow)
 	jsr		WaitT2OneShotUnderflow	; T2C =$0101
+	sec
 	ldy		#SY6522_TIMER2L_COUNTER
 	lda		(MBBase),y
 	sbc		(MBBase),y
@@ -1611,18 +1629,20 @@ T6522_D
 	cmp		#$05
 	bne		@error
 
+	clc
 @rts
-	rts								; Z=1(OK)
+	rts								; C=0(OK)
 
 @error	; Pre: A=actual, X=expected
 	stx		zpTmp2					; expected
-	rts								; Z=0(NG)
+	sec
+	rts								; C=1(NG)
 
 ;------------------------------------------------------------------------------
 
 T6522_E
 ; Pre: MBBaseL = $00 or $80
-; Post: Z=1(OK), Z=0(NG)
+; Post: C=0(OK), C=1(NG)
 ;
 ; Test#E
 ; . Test 6522 period is N+2 cycles
@@ -1687,7 +1707,7 @@ T6522_E
 	;
 
 	jsr		WaitT1OneShotUnderflow
-	lda		#0
+	clc
 	rts
 
 @error	; Pre: A=actual, X=expected
@@ -1695,14 +1715,14 @@ T6522_E
 	pha
 	jsr		WaitT1OneShotUnderflow
 	pla
-	ldx		#1						; Z=0(NG)
+	sec								; C=1(NG)
 	rts
 
 ;------------------------------------------------------------------------------
 
 T6522_F
 ; Pre: MBBaseL = $00 or $80
-; Post: Z=1(OK), Z=0(NG)
+; Post: C=0(OK), C=1(NG)
 ;
 ; Test#F
 ; . Test 6522 period is N+2 cycles
@@ -1710,7 +1730,7 @@ T6522_F
 ;
 
 	; TODO: Placeholder - just return OK
-	lda		#0
+	clc
 	rts
 
 !if 0{	; tested & works on real h/w
@@ -1754,7 +1774,7 @@ T6522_F
 	beq		@error
 
 	jsr		WaitT1OneShotUnderflow
-	lda		#0						; Z=1(OK)
+	clc								; C=0(OK)
 	rts
 
 @error	; Pre: A=actual, X=expected
@@ -1762,7 +1782,7 @@ T6522_F
 	pha
 	jsr		WaitT1OneShotUnderflow
 	pla
-	ldx		#1						; Z=0(NG)
+	sec								; C=1(NG)
 	rts
 }
 
@@ -1771,7 +1791,7 @@ T6522_F
 T6522_10
 ; Pre: MBBaseL = $00
 ;	has6522
-; Post: Z=1(OK), Z=0(NG)
+; Post: C=0(OK), C=1(NG)
 ;
 ; Test#F
 ; . Setup counters on all the 6522's T1+T2
@@ -1785,7 +1805,7 @@ T6522_10
 
 	lda		MBBaseL					; must be $00 for ISR (and because this test uses both 6522s)
 	beq		+
-		lda		#0
+		clc
 		rts
 +
 
@@ -1919,7 +1939,7 @@ T6522_10
 	sta		IRQH
 
 	jsr		@cleanup
-	lda		#0						; Z=1(OK)
+	clc								; C=0(OK)
 	rts
 
 @error0
@@ -1931,7 +1951,7 @@ T6522_10
 	stx		zpTmp2					; expected
 	jsr		@cleanup
 	pla
-	ldx		#1						; Z=0(NG)
+	sec								; C=1(NG)
 	rts
 
 	;
@@ -2177,7 +2197,7 @@ RESET_T1L_h = $02
 Setup6522ForReset
 ; Pre: X=slot#
 ;	has6522
-; Post: return to top-level: Z=0(OK), Z=1(NG)... NB opposite to TestX's above!
+; Post: C=0(OK), C=1(NG)
 ;	NG: zpTmp2 = expected value; A = actual value
 ;
 ; Notes:
@@ -2237,16 +2257,15 @@ Setup6522ForReset
 	cmp		#IER_SET|IxR_TIMER1|IxR_TIMER2
 	bne		@error
 
-	lda		#1
-	rts								; Z=0(OK)
+	clc
+	rts								; C=0(OK)
 
 @error	; Pre: A=actual, X=expected
 	stx		zpTmp2					; expected
 	pha
 	jsr		WaitT1OneShotUnderflow	; don't leave T1L set to a very small value (else 6522 detection will fail next time!)
 	pla
-	jmp		Test6522Error
-
+	jmp		Test6522Error			; C=1(NG)
 
 ;------------------------------------------------------------------------------
 
@@ -2258,7 +2277,7 @@ Skip6522ForReset
 
 Test6522AfterReset
 ; Pre: has6522
-; Post: Z=1(OK), Z=0(NG)
+; Post: C=0(OK), C=1(NG)
 ;	NG: zpTmp2 = expected value; A = actual value
 ;
 
@@ -2336,7 +2355,7 @@ Test6522AfterReset
 	plp
 	bne		+
 
-	lda		#1
-	rts								; Z=0(OK)
+	clc
+	rts								; C=0(OK)
 
-+	jmp		Test6522Error
++	jmp		Test6522Error			; C=1(NG)
