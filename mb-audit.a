@@ -44,6 +44,9 @@
 
 ZP_BASE = $f0
 
+MBBase2 = $f6		; alias with SSI263Base
+MBBase2L = MBBase2
+MBBase2H = MBBase2+1
 SSI263Base = $f6
 SSI263BaseL = SSI263Base
 SSI263BaseH = SSI263Base+1
@@ -61,8 +64,8 @@ String = $fc		; alias with zpTmp2 & zpTmp1
 StringL = String
 StringH = String+1
 MBBase = $fe		; Mockingboard base
-MBBaseL	= MBBase
-MBBaseH	= MBBase+1
+MBBaseL = MBBase
+MBBaseH = MBBase+1
 
 ;------------------------------------------------------------------------------
 
@@ -168,6 +171,13 @@ entrypoint
 			;
 +		dec		slotUnderTest
 		bne		@nextSlot
+
+	lda		numMockingboards
+	cmp		#2
+	bcc		+						; (branch if A < 2)
+		jsr		Test6522MultiCard
+		bcs		@error
++
 
 	lda		#<msg_OK
 	ldx		#>msg_OK

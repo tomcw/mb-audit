@@ -16,7 +16,7 @@ DetectAY8913
 	lda		isPhasorCard
 	beq		+
 		lda		#%00001111
-		sta		hasAY8913			; can't test them, so just assume they are all working
+		sta		hasAY8913		; can't test them, so just assume they are all working
 		rts
 +
 
@@ -72,6 +72,10 @@ DetectAY8913
 	rts
 
 ;------------------------------------------------------------------------------
+
+; TODO:
+; . Set AY reg without setting INACTIVE state (AppleWin-GH#320)
+; . Write AY reg outside of the 10us spec (AppleWin-GH#742)
 
 TestAY8913
 ; Pre: hasAY8913 (Phasor: will be 0)

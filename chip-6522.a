@@ -337,9 +337,9 @@ Check6522ISR
 ;	. [T6522_4, T6522_6] 6502|65C02 addr modes access of 6522 T2C
 ;	. [T6522_8, T6522_9, T6522_D] oneshot underflow, then T1L -> T1C
 ;	. [T6522_E] 6522 period is N+2 cycles
-;   [Test6522AfterReset] 6522 IRQ pending, CTRL+RESET should clear it
 ;	[Test_F] Both 6522s: test T1 & T2 (from chips A&B) all running at the same time
-;	2 cards: Both 6522s: test T1 & T2 (from chips A&B) all running at the same time
+;	[Test6522MultiCard] 2 cards: Both 6522s: test T1 & T2 (from chips A&B) all running at the same time
+;	[Test6522AfterReset] 6522 IRQ pending, CTRL+RESET should clear it
 ;
 
 Test6522
@@ -1793,13 +1793,13 @@ T6522_10
 ;	has6522
 ; Post: C=0(OK), C=1(NG)
 ;
-; Test#F
+; Test#10
 ; . Setup counters on all the 6522's T1+T2
 ;	6522-A T1 is free-running
 ;	6522-A T2 is one-shot
 ;	6522-B T1 is free-running
 ;	6522-B T2 is one-shot
-; . NB Test_E_ISR handles ints in any order, and simultaneously too.
+; . NB T6522_MultiCard_ISR handles ints in any order, and simultaneously too.
 ; . ISR disables the T1/T2 int so it only generates an IRQ once.
 ;
 
@@ -1811,6 +1811,16 @@ T6522_10
 
 	jsr		resetSubTest			; subTest #0
 	jsr		incTotalTests
+
+	sei
+
+	lda		#<T6522_MultiCard_ISR
+	sta		IRQL
+	lda		#>T6522_MultiCard_ISR
+	sta		IRQH
+
+	lda		#0
+	sta		MBBase2H				; ISR: not MB card#2
 
 	ldx		#-1						; timerConfig index
 
@@ -1829,20 +1839,20 @@ T6522_10
 		sta		(MBBase),y
 
 		inx
-		lda		timerConfig,x
+		lda		@timerConfig,x
 		ldy		#SY6522_A_BASE+SY6522_TIMER1L_COUNTER
 		sta		(MBBase),y
 		inx
-		lda		timerConfig,x
+		lda		@timerConfig,x
 		ldy		#SY6522_A_BASE+SY6522_TIMER1H_COUNTER
 		sta		(MBBase),y
 
 		inx
-		lda		timerConfig,x
+		lda		@timerConfig,x
 		ldy		#SY6522_A_BASE+SY6522_TIMER2L_COUNTER
 		sta		(MBBase),y
 		inx
-		lda		timerConfig,x
+		lda		@timerConfig,x
 		ldy		#SY6522_A_BASE+SY6522_TIMER2H_COUNTER
 		sta		(MBBase),y						; T2=$0010 (eg)
 
@@ -1865,20 +1875,20 @@ T6522_10
 		sta		(MBBase),y
 
 		inx
-		lda		timerConfig,x
+		lda		@timerConfig,x
 		ldy		#SY6522_B_BASE+SY6522_TIMER1L_COUNTER
 		sta		(MBBase),y
 		inx
-		lda		timerConfig,x
+		lda		@timerConfig,x
 		ldy		#SY6522_B_BASE+SY6522_TIMER1H_COUNTER
 		sta		(MBBase),y
 
 		inx
-		lda		timerConfig,x
+		lda		@timerConfig,x
 		ldy		#SY6522_B_BASE+SY6522_TIMER2L_COUNTER
 		sta		(MBBase),y
 		inx
-		lda		timerConfig,x
+		lda		@timerConfig,x
 		ldy		#SY6522_B_BASE+SY6522_TIMER2H_COUNTER
 		sta		(MBBase),y
 
@@ -1892,12 +1902,7 @@ T6522_10
 		ora		intsRemaining
 		sta		intsRemaining
 
-@test	stx		timerConfigIdx
-
-		lda		#<T6522_10_ISR
-		sta		IRQL
-		lda		#>T6522_10_ISR
-		sta		IRQH
+@test	stx		@timerConfigIdx
 
 		ldx		#0					; timeout_l
 		stx		zpTmp3				; timeout_h
@@ -1918,11 +1923,13 @@ T6522_10
 			; timeout:
 			beq		@error			; A=X=0
 
-+		ldx		timerConfigIdx
++		lda		@timerConfigIdx
+		ora		#$07				; round-up: each block of timerConfig values is 8 bytes
+		tax
 		inx
-		lda		timerConfig,x
+		lda		@timerConfig,x
 		inx
-		and		timerConfig,x
+		and		@timerConfig,x
 		cmp		#$ff
 		beq		+
 
@@ -1967,9 +1974,318 @@ T6522_10
 	jsr		WaitT1OneShotUnderflow
 	jmp		WaitT2OneShotUnderflow
 
+;
+
+@timerConfigIdx
+	!byte	0
+
+@timerConfig
+	; subTest #0
+	!word	$0707
+	!word	$0505
+	!word	$0303
+	!word	$0101
+	;
+	; subTest #1
+	!word	$0101
+	!word	$0101
+	!word	$0101
+	!word	$0101
+	;
+	; subTest #2
+	!word	$0000
+	!word	$0011					; T2: $11 cycles to set IER.T2
+	!word	$0000
+	!word	$0011					; T2: $11 cycles to set IER.T2
+	;
+!if 0{
+	; subTest #3
+	; [*1] See above, where write to IFR (clear T2 IRQ) and T2 underflow occur on same cycle - the clear T2 IRQ wins
+	!word	$0000
+	!word	$0010					; T2: $10 cycles to set IER.T2 - no good on real h/w
+	!word	$0000
+	!word	$0010					; T2: $10 cycles to set IER.T2 - no good on real h/w
+}
+	;
+	!word	$ffff					; done
+
 ;------------------------------------------------------------------------------
 
-T6522_10_ISR
+Test6522MultiCard
+; Pre:
+; Post: C=0(OK), C=1(NG)
+;
+; . Setup counters on both cards & all the 6522's T1+T2
+;	Card1/2: 6522-A T1 is free-running
+;	Card1/2: 6522-A T2 is one-shot
+;	Card1/2: 6522-B T1 is free-running
+;	Card1/2: 6522-B T2 is one-shot
+; . NB Test_10_ISR handles ints in any order, and simultaneously too.
+; . ISR disables the T1/T2 int so it only generates an IRQ once.
+;
+
+	lda		#COMPONENT_6522+2	; test component $12
+	sta		testComponentNum
+	lda		#$00
+	sta		testNum				; test #00
+
+	;
+
+	ldx		#7
+@findCard1
+		lda		slotInfo,x
+		bne		+
+		dex
+		bne		@findCard1
+
++	sta		has6522
+	txa
+	ora		#$c0
+	sta		MBBaseH
+	lda		#0
+	sta		MBBaseL
+
+	dex
+@findCard2
+		lda		slotInfo,x
+		bne		+
+		dex
+		bne		@findCard2
+
++	sta		zpTmp1					; has6522 for card #2
+	txa
+	ora		#$c0
+	sta		MBBase2H
+	lda		#0
+	sta		MBBase2L
+
+	;
+
+	jsr		resetSubTest			; subTest #0
+	jsr		incTotalTests
+
+	sei
+
+	lda		#<T6522_MultiCard_ISR
+	sta		IRQL
+	lda		#>T6522_MultiCard_ISR
+	sta		IRQH
+
+	ldx		#-1						; timerConfig index
+
+@loop	sei
+
+		lda		has6522
+		pha
+		lda		MBBaseH
+		pha
+
+		lda		#0
+		sta		intsRemaining
+
+		lda		#%00000011
+		sta		zpTmp2				; mask (also used by ISR, but OK since we have SEI)
+
+@6522_A		lda		has6522
+			and		#1
+			beq		@6522_B
+
+			lda		#ACR_FREERUNNING
+			ldy		#SY6522_A_BASE+SY6522_ACR
+			sta		(MBBase),y
+
+			inx
+			lda		@timerConfig,x
+			ldy		#SY6522_A_BASE+SY6522_TIMER1L_COUNTER
+			sta		(MBBase),y
+			inx
+			lda		@timerConfig,x
+			ldy		#SY6522_A_BASE+SY6522_TIMER1H_COUNTER
+			sta		(MBBase),y
+
+			inx
+			lda		@timerConfig,x
+			ldy		#SY6522_A_BASE+SY6522_TIMER2L_COUNTER
+			sta		(MBBase),y
+			inx
+			lda		@timerConfig,x
+			ldy		#SY6522_A_BASE+SY6522_TIMER2H_COUNTER
+			sta		(MBBase),y
+
+			lda		#IER_SET|IxR_TIMER1|IxR_TIMER2
+			ldy		#SY6522_A_BASE+SY6522_IER
+			sta		(MBBase),y						; Enable T1 & T2 IRQs
+			ldy		#SY6522_A_BASE+SY6522_IFR
+			sta		(MBBase),y						; Clear any T1 & T2 IRQs && T2C underflow occur on same cycle! [*1]
+
+			lda		zpTmp2
+			ora		intsRemaining
+			sta		intsRemaining
+
+@6522_B		asl		zpTmp2
+			asl		zpTmp2
+
+			lda		has6522
+			and		#2
+			beq		@nextCard
+
+			lda		#ACR_FREERUNNING
+			ldy		#SY6522_B_BASE+SY6522_ACR
+			sta		(MBBase),y
+
+			inx
+			lda		@timerConfig,x
+			ldy		#SY6522_B_BASE+SY6522_TIMER1L_COUNTER
+			sta		(MBBase),y
+			inx
+			lda		@timerConfig,x
+			ldy		#SY6522_B_BASE+SY6522_TIMER1H_COUNTER
+			sta		(MBBase),y
+
+			inx
+			lda		@timerConfig,x
+			ldy		#SY6522_B_BASE+SY6522_TIMER2L_COUNTER
+			sta		(MBBase),y
+			inx
+			lda		@timerConfig,x
+			ldy		#SY6522_B_BASE+SY6522_TIMER2H_COUNTER
+			sta		(MBBase),y
+
+			lda		#IER_SET|IxR_TIMER1|IxR_TIMER2
+			ldy		#SY6522_B_BASE+SY6522_IER
+			sta		(MBBase),y						; Enable T1 & T2 IRQs
+			ldy		#SY6522_B_BASE+SY6522_IFR
+			sta		(MBBase),y						; Clear any T1 & T2 IRQs
+
+			lda		zpTmp2
+			ora		intsRemaining
+			sta		intsRemaining
+
+@nextCard	lda		zpTmp1
+			sta		has6522
+			lda		MBBase2H
+			sta		MBBaseH
+
+			asl		zpTmp2
+			asl		zpTmp2
+			beq		+
+			jmp		@6522_A
+
++		pla
+		sta		MBBaseH
+		pla
+		sta		has6522
+
+@test	stx		@timerConfigIdx
+
+		ldx		#0					; timeout_l
+		stx		zpTmp3				; timeout_h
+		stx		isrError+0
+		stx		isrError+1
+
+		cli
+
+-		lda		intsRemaining
+			beq		+
+			lda		isrError+0
+			bne		@error0
+			;
+			dex
+			bne		-
+			dec		zpTmp3
+			bne		-
+			; timeout:
+			beq		@error			; A=X=0
+
++		lda		@timerConfigIdx
+		ora		#$0f				; round-up: each block of timerConfig values is 16 bytes
+		tax
+		inx
+		lda		@timerConfig,x
+		inx
+		and		@timerConfig,x
+		cmp		#$ff
+		beq		+
+
+		jsr		incSubTestNum		; subTest #1,2,3
+		dex
+		dex
+		jmp		@loop
+
++	sei
+
+	lda		#<Test6522ISR
+	sta		IRQL
+	lda		#>Test6522ISR
+	sta		IRQH
+
+	jsr		@cleanup
+	clc								; C=0(OK)
+	rts
+
+@error0
+	ldx		isrError+1
+
+@error	; Pre: A=actual, X=expected
+	sei
+	pha
+	stx		zpTmp2					; expected
+	jsr		@cleanup
+	pla
+	sec								; C=1(NG)
+	rts
+
+	;
+
+@cleanup
+; Post:	MBBaseL = SY6522_A_BASE
+	lda		#SY6522_B_BASE
+	sta		MBBaseL
+	jsr		WaitT1OneShotUnderflow
+	jsr		WaitT2OneShotUnderflow
+	lda		#SY6522_A_BASE
+	sta		MBBaseL
+	jsr		WaitT1OneShotUnderflow
+	jmp		WaitT2OneShotUnderflow
+
+;
+
+@timerConfigIdx
+	!byte	0
+
+@timerConfig
+	; subTest #0
+	!word	$0F0F,$0D0D				; Card#1+6522A: T1,T2
+	!word	$0B0B,$0909				;        6522B: T1,T2
+	!word	$0707,$0505				; Card#2+6522A: T1,T2
+	!word	$0303,$0101				;        6522B: T1,T2
+	;
+	; subTest #1
+	!word	$0101,$0101
+	!word	$0101,$0101
+	!word	$0101,$0101
+	!word	$0101,$0101
+	;
+	; subTest #2
+	!word	$0000,$0011
+	!word	$0000,$0011				; T1,T2: $11 cycles to set IER.T1/T2
+	!word	$0000,$0011
+	!word	$0000,$0011				; T1,T2: $11 cycles to set IER.T1/T2
+	;
+!if 0{
+	; subTest #3 (untested on real h/w)
+	; [*1] See above, where write to IFR (clear T2 IRQ) and T2 underflow occur on same cycle - the clear T2 IRQ wins
+	!word	$0000,$0010
+	!word	$0000,$0010				; T1,T2: $10 cycles to set IER.T1/T2
+	!word	$0000,$0010
+	!word	$0000,$0010				; T1,T2: $10 cycles to set IER.T1/T2
+}
+	;
+	!word	$ffff					; done
+
+;------------------------------------------------------------------------------
+
+T6522_MultiCard_ISR
 ; Pre:
 ;	6502 has pushed P
 ;	Apple ROM has stored A to $45 (not Apple //e ROM!)
@@ -2010,11 +2326,11 @@ T6522_10_ISR
 @chipB
 	ldy		#SY6522_B_BASE+SY6522_IFR
 	lda		(MBBase),y
-	beq		@done
+	beq		@card2
 		and		#!(IER_SET)&0xff
 		iny							; Y = SY6522_IER
 		and		(MBBase),y			; is this interrupt enabled?
-		beq		@done				; NB. not an error - may've been disabled on a prior call to the ISR
+		beq		@card2				; NB. not an error - may've been disabled on a prior call to the ISR
 		;
 		sta		(MBBase),y			; disable this interrupt (+ stops the IRQ to the 6502)
 		dey							; Y = SY6522_IFR
@@ -2024,6 +2340,46 @@ T6522_10_ISR
 		lsr		; --XX ----
 		lsr		; ---X X---
 		lsr		; ---- XX--
+		jsr		@checkInts
+
+	;
+
+@card2
+	lda		MBBase2H
+	beq		@done					; card #2 not being used for the current test
+
+;@card2_chipA
+	ldy		#SY6522_A_BASE+SY6522_IFR
+	lda		(MBBase2),y
+	beq		@card2_chipB
+		and		#!(IER_SET)&0xff
+		iny							; Y = SY6522_IER
+		and		(MBBase2),y			; is this interrupt enabled?
+		beq		@card2_chipB		; NB. not an error - may've been disabled on a prior call to the ISR
+		;
+		sta		(MBBase2),y			; disable this interrupt (+ stops the IRQ to the 6502)
+		dey							; Y = SY6522_IFR
+		sta		(MBBase2),y			; clear this interrupt
+
+				; -XX- ----
+		lsr		; --XX ----
+		jsr		@checkInts
+
+@card2_chipB
+	ldy		#SY6522_B_BASE+SY6522_IFR
+	lda		(MBBase2),y
+	beq		@done
+		and		#!(IER_SET)&0xff
+		iny							; Y = SY6522_IER
+		and		(MBBase2),y			; is this interrupt enabled?
+		beq		@done				; NB. not an error - may've been disabled on a prior call to the ISR
+		;
+		sta		(MBBase2),y			; disable this interrupt (+ stops the IRQ to the 6502)
+		dey							; Y = SY6522_IFR
+		sta		(MBBase2),y			; clear this interrupt
+
+				; -XX- ----
+		asl		; XX-- ----
 		jsr		@checkInts
 
 @done
@@ -2060,35 +2416,6 @@ T6522_10_ISR
 
 intsRemaining
 	!byte	0
-
-timerConfigIdx
-	!byte	0
-
-timerConfig
-	;       T_l,T-h
-	!byte	$07,$07					; subTest #0
-	!byte	$05,$05
-	!byte	$03,$03
-	!byte	$01,$01
-	;
-	!byte	$01,$01					; subTest #1 (or #2 if only 1x6522 on card)
-	!byte	$01,$01
-	!byte	$01,$01
-	!byte	$01,$01
-	;
-	!byte	$00,$00					; subTest #2 (or #4 if only 1x6522 on card)
-	!byte	$11,$00					; T2: $11 cycles to set IER.T2
-	!byte	$00,$00
-	!byte	$11,$00					; T2: $11 cycles to set IER.T2
-!if 0{
-	; [*1] See above, where write to IFR (clear T2 IRQ) and T2 underflow occur on same cycle - the clear T2 IRQ wins
-	!byte	$00,$00					; subTest #3 (or #6 if only 1x6522 on card)
-	!byte	$10,$00					; T2: $10 cycles to set IER.T2 - no good on real h/w
-	!byte	$00,$00
-	!byte	$10,$00					; T2: $10 cycles to set IER.T2 - no good on real h/w
-}
-	;
-	!byte	$ff,$ff					; done
 
 ;------------------------------------------------------------------------------
 
