@@ -1,21 +1,17 @@
 ;license:MIT
-;(c) 2021 by TomCh
+;(c) 2021 by Tom Charlesworth
 ;
 ; SSI263 related
 ;
 
 ;------------------------------------------------------------------------------
 
-DetectSSI263A
+DetectSSI263
 ; Pre: zpTmp1 = 6522 bitmap in b1:0
 ; Post:
 
 	; SSI263 is only on MB-C & Phasor, both of which have 2x 6522's
 	; - Speech using 6522 PCR w/o IRQ (based on Willy Byte's SSI263 detection code)
-
-	lda		zpTmp1
-	and		#2						; SSI263 is connected to 2nd 6522
-	beq		+
 
 	lda		#SSI_A_BASE
 	sta		SSI263BaseL
@@ -25,71 +21,47 @@ DetectSSI263A
 	lda		#SY6522_B_BASE
 	sta		MBBaseL
 
-	lda		#IER_CLR|IxR_SSI263
-	ldy		#SY6522_IER
-	sta		(MBBase),y				; disable CA1(Speech) IRQ
-
-	jsr		KickSSI263
-
-	lda		#$FF
-	jsr		WAIT					; delay for 0x28882 (166018) cycles / ~163ms
-
-	ldy		#SY6522_IFR
-	lda		#IxR_SSI263				; check CA1(Speech) IRQ
-	and		(MBBase),y
-	beq		+
-	sta		(MBBase),y				; clear CA1(Speech) IRQ
-
-		jsr		DisableSSI263
-		inc		hasSSI263
-
-+	lda		#0
-	sta		MBBaseL
-	rts
-
-;------------------------------------------------------------------------------
-
-DetectSSI263B
-; Pre: zpTmp1 = 6522 bitmap in b1:0
-; Post:
-
-	; SSI263 is only on MB-C & Phasor, both of which have 2x 6522's
-	; - Speech using 6522 PCR w/o IRQ (based on Willy Byte's SSI263 detection code)
+	lda		#1
+	sta		zpTmp2					; mask
 
 	lda		zpTmp1
-	and		#1						; SSI263_B is connected to 1st 6522
-	beq		+
+	and		#2						; SSI263A is connected to 2nd 6522
+	beq		@nextSSI263
 
-	lda		#SSI_B_BASE
-	sta		SSI263BaseL
-	lda		MBBaseH
-	sta		SSI263BaseH
+@loop	lda		#IER_CLR|IxR_SSI263
+		ldy		#SY6522_IER
+		sta		(MBBase),y				; disable CA1(Speech) IRQ
 
-	lda		#SY6522_A_BASE
-	sta		MBBaseL
+		jsr		KickSSI263
 
-	lda		#IER_CLR|IxR_SSI263
-	ldy		#SY6522_IER
-	sta		(MBBase),y				; disable CA1(Speech) IRQ
+		lda		#$FF
+		jsr		WAIT					; delay for 0x28882 (166018) cycles / ~163ms
 
-	jsr		KickSSI263
+		ldy		#SY6522_IFR
+		lda		#IxR_SSI263				; check CA1(Speech) IRQ
+		and		(MBBase),y
+		beq		@nextSSI263
+		sta		(MBBase),y				; clear CA1(Speech) IRQ
 
-	lda		#$FF
-	jsr		WAIT					; delay for 0x28882 (166018) cycles / ~163ms
+			jsr		DisableSSI263
+			lda		zpTmp2
+			ora		hasSSI263
+			sta		hasSSI263
 
-	ldy		#SY6522_IFR
-	lda		#IxR_SSI263				; check CA1(Speech) IRQ
-	and		(MBBase),y
-	beq		+
-	sta		(MBBase),y				; clear CA1(Speech) IRQ
+@nextSSI263
+		lda		MBBaseL
+		beq		+
+		lda		#SSI_B_BASE
+		sta		SSI263BaseL
+		lda		#SY6522_A_BASE
+		sta		MBBaseL
+		asl		zpTmp2					; mask<<1
 
-		jsr		DisableSSI263
-		inc		hasSSI263
-		inc		hasSSI263
+		lda		zpTmp1
+		and		#1						; SSI263B is connected to 1st 6522
+		bne		@loop
 
-+	lda		#0
-	sta		MBBaseL
-	rts
++	rts
 
 ;------------------------------------------------------------------------------
 

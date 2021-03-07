@@ -1,5 +1,5 @@
 ;license:MIT
-;(c) 2021 by TomCh
+;(c) 2021 by Tom Charlesworth
 ;
 ; mb-audit:
 ; . Verify real h/w is operating correctly, eg. inter-component (addr/data line, IRQ)
@@ -369,8 +369,7 @@ DetectSubunits
 
 	;
 
-	jsr		DetectSSI263A			; pre: zpTmp1
-	jsr		DetectSSI263B			; pre: zpTmp1
+	jsr		DetectSSI263			; pre: zpTmp1
 	jsr		DetectSC01				; pre: zpTmp1
 	jmp		DetectAY8913			; pre: zpTmp1
 
