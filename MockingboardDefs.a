@@ -105,6 +105,8 @@ CONTROL_MASK = $80
 CONTROL_H = CONTROL_MASK
 CONTROL_L = 0
 
+REQ_NEW_DATA = 1<<7	; D7 (inverted state of A/!R). Phasor mode only, when reading any register
+
 ; Phasor mode
 PH_MOCKINGBOARD = 8
 PH_PHASOR = $D
