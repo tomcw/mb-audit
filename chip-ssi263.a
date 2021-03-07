@@ -114,10 +114,18 @@ KickSSI263_no_PCR
 
 ;------------------------------------------------------------------------------
 
+PlaySSI263_no_PCR
+
+	ldy		#1
+	bne		+
+
 PlaySSI263
 ; Pre: X:A = phoneme data
 ;	MB mode    : MBBaseL = SY6522_A_BASE    / SY6522_B_BASE
 ;	Phasor mode: MBBaseL = SY6522_A_PH_BASE / SY6522_B_BASE
+
+	ldy		#0
++	sty		zpTmp2
 
 	sta		SpeechDataL
 	stx		SpeechDataH
@@ -128,7 +136,12 @@ PlaySSI263
 	lda		#0
 	sta		irqT1IntCount
 
-	jsr		KickSSI263
+	lda		zpTmp2
+	bne		@noPCR1
+		jsr		KickSSI263
+		jmp		+
+@noPCR1	jsr		KickSSI263_no_PCR
++
 
 	lda		#$ff					; T1C = T1L = $FFFF
 	ldy		#SY6522_TIMER1L_COUNTER
@@ -140,8 +153,12 @@ PlaySSI263
 	ldy		#SY6522_ACR
 	sta		(MBBase),y				; Free-running timer
 
-	lda		#IER_SET|IxR_TIMER1|IxR_SSI263
-	ldy		#SY6522_IER
+	lda		zpTmp2
+	bne		@noPCR2
+		lda		#IER_SET|IxR_TIMER1|IxR_SSI263
+		bne		+
+@noPCR2	lda		#IER_SET|IxR_TIMER1
++	ldy		#SY6522_IER
 	sta		(MBBase),y				; Enable Timer1 IRQ & CA1(Speech) IRQ
 
 	cli
@@ -209,6 +226,10 @@ TestSSI263
 
 		inc		testNum				; test #03, ??
 		jsr		T263_3
+		bcs		@error
+
+		inc		testNum				; test #04, ??
+		jsr		T263_4
 		bcs		@error
 
 @nextSSI263
@@ -661,6 +682,139 @@ T263_3
 
 @error		; pre: A=actual
 	ldx		#0						; X=expected
+	stx		zpTmp2					; expected
+	sec								; C=1(NG)
+
+@exit
+	sei
+	php
+	pha
+	lda		zpTmp3
+	sta		MBBaseL					; restore
+	lda		#PH_MOCKINGBOARD
+	jsr		SetPhasorMode
+	jsr		WaitT1OneShotUnderflow
+	pla
+	plp
+	rts
+
+;------------------------------------------------------------------------------
+
+T263_4
+; Pre:
+; Post: C=0(OK), C=1(NG)
+;
+; Test#4
+; . Test phoneme playback using direct IRQ (MB & Phasor)
+; NB. Mockingboard must fail
+
+	sei
+
+	lda		MBBaseL
+	sta		zpTmp3					; keep a copy & restore at end
+
+	lda		#$00					; Peripheral for PA port Control: CA2 = input (so don't PD/RST to SSI263)
+									; CA1 = input (as before), so for MB mode (Test#2) then IFR.b1 will be set when phoneme completes
+	ldy		#SY6522_PCR
+	sta		(MBBase),y
+
+	lda		#IER_CLR|IxR_SSI263
+	ldy		#SY6522_IER
+	sta		(MBBase),y				; Disable CA1(Speech) IRQ
+	ldy		#SY6522_IFR
+	sta		(MBBase),y				; Clear any CA1(Speech) IRQ
+
+	;
+
+	jsr		resetSubTest			; subTest #0
+	jsr		incTotalTests
+
+	lda		#<NullPhrase
+	ldx		#>NullPhrase
+	jsr		PlaySSI263_no_PCR
+
+	ldx		#1
+-		lda		doingSpeech
+		beq		@error
+		lda		irqT1IntCount
+		cmp		#4					; timeout = ~256ms (expected for Mockingboard)
+		bcc		-					; loop if < 4
++
+
+	sei
+
+	jsr		incSubTestNum			; subTest #1
+
+	; IFR=IxR_SSI263 during the timeout (as CA1=input) - verified on real Phasor h/w
+	ldy		#SY6522_IFR
+	lda		#IxR_SSI263
+	tax								; expected
+	and		(MBBase),y				; Check CA1(Speech) IRQ
+	beq		@error
+	sta		(MBBase),y				; Clear the CA1(Speech) IRQ
+
+	; SSI263 is still asserting A/!R interrupt: switching to Phasor mode will cause a 6502 IRQ! (On CLI opcode)
+	; NB. the 'jsr DisableSSI263' (in the ISR) doesn't de-assert the A/!R signal.
+	; So use the 6522's CA1/CA2 handshake to de-assert...
+
+	lda		#$0C
+	ldy		#SY6522_PCR
+	sta		(MBBase),y
+
+	jsr		KickSSI263
+
+	lda		#$FF
+	jsr		WAIT					; delay for 0x28882 (166018) cycles / ~163ms
+
+	jsr		incSubTestNum			; subTest #2
+
+	ldy		#SY6522_IFR
+	lda		#IxR_SSI263
+	tax								; expected
+	and		(MBBase),y				; Check CA1(Speech) IRQ
+	beq		@error
+	sta		(MBBase),y				; Clear the CA1(Speech) IRQ
+
+	jsr		DisableSSI263
+
+	;
+
+	jsr		incSubTestNum			; subTest #3
+
+	lda		isPhasorCard
+	beq		@done
+
+	lda		#PH_PHASOR
+	jsr		SetPhasorMode
+
+	lda		MBBaseL
+	cmp		#SY6522_A_BASE
+	bne		+
+		lda		#SY6522_A_PH_BASE
+		sta		MBBaseL
+
+	lda		#<NullPhrase
+	ldx		#>NullPhrase
+	jsr		PlaySSI263_no_PCR
+
+-		lda		doingSpeech
+		beq		+
+		lda		irqT1IntCount
+		cmp		#4					; timeout = ~256ms
+		bcc		-					; loop if < 4
+		bcs		@error0
++
+
+@done
+	clc								; C=0(OK)
+	bcc		@exit
+
+;
+
+@error0		; pre: A=actual
+	ldx		#0
+
+@error		; pre: A=actual, X=expected
 	stx		zpTmp2					; expected
 	sec								; C=1(NG)
 
