@@ -106,7 +106,7 @@ KickSSI263_no_PCR
 	ldy		#SSI_DURPHON
 	sta		(SSI263Base),y
 
-	lda		#CONTROL_L					; H->L sets SSI263 operation mode = DR1:DR0, ie. IRQ active
+	lda		#CONTROL_L				; H->L sets SSI263 operation mode = DR1:DR0, ie. IRQ active
 	ldy		#SSI_CTTRAMP
 	sta		(SSI263Base),y
 
@@ -116,6 +116,8 @@ KickSSI263_no_PCR
 
 PlaySSI263
 ; Pre: X:A = phoneme data
+;	MB mode    : MBBaseL = SY6522_A_BASE    / SY6522_B_BASE
+;	Phasor mode: MBBaseL = SY6522_A_PH_BASE / SY6522_B_BASE
 
 	sta		SpeechDataL
 	stx		SpeechDataH
@@ -203,6 +205,10 @@ TestSSI263
 
 		inc		testNum				; test #02, ??
 		jsr		T263_2
+		bcs		@error
+
+		inc		testNum				; test #03, ??
+		jsr		T263_3
 		bcs		@error
 
 @nextSSI263
@@ -579,7 +585,7 @@ T263_2
 
 +			; pre: A=actual, X=expected
 	stx		zpTmp2					; expected
-	sec
+	sec								; C=1(NG)
 
 @exit
 	php
@@ -588,7 +594,88 @@ T263_2
 	jsr		SetPhasorMode
 	pla
 	plp
-	rts								; C=1(NG)
+	rts
+
+;------------------------------------------------------------------------------
+
+T263_3
+; Pre:
+; Post: C=0(OK), C=1(NG)
+;
+; Test#3
+; . Test phoneme playback using 6522 PCR (MB & Phasor)
+
+	sei
+
+	lda		MBBaseL
+	sta		zpTmp3					; keep a copy & restore at end
+
+	jsr		resetSubTest			; subTest #0
+	jsr		incTotalTests
+
+	lda		#<NullPhrase
+	ldx		#>NullPhrase
+	jsr		PlaySSI263
+
+-		lda		doingSpeech
+		beq		+
+		lda		irqT1IntCount
+		cmp		#4					; timeout = ~256ms
+		bcc		-					; loop if < 4
+		bcs		@error
++
+
+	sei
+
+	jsr		incSubTestNum			; subTest #1
+
+	lda		isPhasorCard
+	beq		@done
+
+	lda		#PH_PHASOR
+	jsr		SetPhasorMode
+
+	lda		MBBaseL
+	cmp		#SY6522_A_BASE
+	bne		+
+		lda		#SY6522_A_PH_BASE
+		sta		MBBaseL
+
+	lda		#<NullPhrase
+	ldx		#>NullPhrase
+	jsr		PlaySSI263
+
+-		lda		doingSpeech
+		beq		+
+		lda		irqT1IntCount
+		cmp		#4					; timeout = ~256ms
+		bcc		-					; loop if < 4
+		bcs		@error
++
+
+@done
+	clc								; C=0(OK)
+	bcc		@exit
+
+;
+
+@error		; pre: A=actual
+	ldx		#0						; X=expected
+	stx		zpTmp2					; expected
+	sec								; C=1(NG)
+
+@exit
+	sei
+	php
+	pha
+	lda		zpTmp3
+	sta		MBBaseL					; restore
+	lda		#PH_MOCKINGBOARD
+	jsr		SetPhasorMode
+	jsr		WaitT1OneShotUnderflow
+	pla
+	plp
+	rts
 
 ;------------------------------------------------------------------------------
 
@@ -710,4 +797,5 @@ ClassicAdv
 	!byte $68,$52,$B8,$7B,$E6
 	!byte $72,$52,$B8,$7B,$E6
 	!byte $5C,$52,$B8,$7B,$E6
+NullPhrase
 	!byte 0,0,0,0,0
