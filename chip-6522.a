@@ -2005,8 +2005,16 @@ T6522_10
 	!word	$0100+$1C
 	!word	$0100+$00
 	;
-!if 0{
 	; subTest #4
+	; Once written, adjacent timers will have values differing by 1 cycle, eg. N,N+1,N+2,N+3
+	; . with the current above test code, the first underflow will occur on a 4-cycle opcode (lda abs16), so all counters will underflow
+	!word	$0100+$62+$1C+0
+	!word	$0100+$62+$00+1
+	!word	$0100+$1C+2
+	!word	$0100+$00+3
+	;
+!if 0{
+	; subTest #5
 	; [*1] See above, where write to IFR (clear T2 IRQ) and T2 underflow occur on same cycle - the clear T2 IRQ wins
 	!word	$0000
 	!word	$0010					; T2: $10 cycles to set IER.T2 - no good on real h/w
