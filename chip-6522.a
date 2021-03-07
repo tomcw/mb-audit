@@ -1998,8 +1998,15 @@ T6522_10
 	!word	$0000
 	!word	$0011					; T2: $11 cycles to set IER.T2
 	;
-!if 0{
 	; subTest #3
+	; Once written, all 4 timers will be in sync with the same values, so IRQ will occur on the same cycle for all 4 timers
+	!word	$0100+$62+$1C
+	!word	$0100+$62+$00
+	!word	$0100+$1C
+	!word	$0100+$00
+	;
+!if 0{
+	; subTest #4
 	; [*1] See above, where write to IFR (clear T2 IRQ) and T2 underflow occur on same cycle - the clear T2 IRQ wins
 	!word	$0000
 	!word	$0010					; T2: $10 cycles to set IER.T2 - no good on real h/w
