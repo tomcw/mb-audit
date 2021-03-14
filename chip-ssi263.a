@@ -212,23 +212,23 @@ TestSSI263
 	sta		zpTmp1
 	bcc		@nextSSI263
 
-@loop	inc		testNum				; test #00, ??
+@loop	inc		testNum				; test #00, 05
 		jsr		T263_0
 		bcs		@error
 
-		inc		testNum				; test #01, ??
+		inc		testNum				; test #01, 06
 		jsr		T263_1
 		bcs		@error
 
-		inc		testNum				; test #02, ??
+		inc		testNum				; test #02, 07
 		jsr		T263_2
 		bcs		@error
 
-		inc		testNum				; test #03, ??
+		inc		testNum				; test #03, 08
 		jsr		T263_3
 		bcs		@error
 
-		inc		testNum				; test #04, ??
+		inc		testNum				; test #04, 09
 		jsr		T263_4
 		bcs		@error
 
@@ -310,23 +310,30 @@ T263_0
 		bne		-
 
 	lda		doingSpeech
-	beq		@done
+	bne		@error
 
+	clc								; C=0(OK)
+	bcc		@done
+
+@error
+	; Error: phrase not complete
 -		lda		doingSpeech
 		bne		-
+	sta		zpTmp2					; expected
+	sec								; C=1(NG)
 
 @done
 	sei
+	php
 
 	lda		#IER_CLR|IxR_TIMER1|IxR_SSI263
 	ldy		#SY6522_IER
 	sta		(MBBase),y				; Disable Timer1 IRQ & CA1(Speech) IRQ
 
-	jsr		CalcPhraseDuration
+	jsr		CalcPhraseDuration		; Real MB: 0x19005D (AppleWin: 0x1900CF)
 
-	; TODO: check total duration is within tolerance
-
-	clc
+	lda		#1						; actual
+	plp
 	rts
 
 ;------------------------------------------------------------------------------
@@ -537,6 +544,8 @@ T263_2
 	lda		#$FF
 	jsr		WAIT					; delay for 0x28882 (166018) cycles / ~163ms
 
+	; TODO AppleWin:SSI263-new: (Phasor card) once got error 41:07:00 (expected=80, actual=00) - was Stepping, which appears to be the cause
+
 	ldy		#SSI_DURPHON
 	lda		(SSI263Base),y
 	and		#REQ_NEW_DATA			; D7
@@ -631,6 +640,10 @@ T263_3
 	lda		MBBaseL
 	sta		zpTmp3					; keep a copy & restore at end
 
+	;
+	; First test Mockingboard (or Phasor in Mockingboard mode)
+	;
+
 	jsr		resetSubTest			; subTest #0
 	jsr		incTotalTests
 
@@ -652,6 +665,10 @@ T263_3
 
 	lda		isPhasorCard
 	beq		@done
+
+	;
+	; Now test Phasor in native Phasor mode
+	;
 
 	lda		#PH_PHASOR
 	jsr		SetPhasorMode
@@ -725,6 +742,8 @@ T263_4
 	sta		(MBBase),y				; Clear any CA1(Speech) IRQ
 
 	;
+	; First test Mockingboard (or Phasor in Mockingboard mode)
+	;
 
 	jsr		resetSubTest			; subTest #0
 	jsr		incTotalTests
@@ -757,16 +776,14 @@ T263_4
 	; NB. the 'jsr DisableSSI263' (in the ISR) doesn't de-assert the A/!R signal.
 	; So use the 6522's CA1/CA2 handshake to de-assert...
 
-	lda		#$0C
-	ldy		#SY6522_PCR
-	sta		(MBBase),y
-
 	jsr		KickSSI263
 
 	lda		#$FF
 	jsr		WAIT					; delay for 0x28882 (166018) cycles / ~163ms
 
 	jsr		incSubTestNum			; subTest #2
+
+	; TODO AppleWin:SSI263-new: (Phasor card) once got error 41:09:02 (expected=02, actual=00) - Stepping?
 
 	ldy		#SY6522_IFR
 	lda		#IxR_SSI263
@@ -783,6 +800,10 @@ T263_4
 
 	lda		isPhasorCard
 	beq		@done
+
+	;
+	; Now test Phasor in native Phasor mode
+	;
 
 	lda		#PH_PHASOR
 	jsr		SetPhasorMode
@@ -890,7 +911,7 @@ TestSSI263ISR
 	; last phoneme complete, so finalise with PAUSE phoneme + disable IRQ
 	sta		doingSpeech				; =0
 	jsr		DisableSSI263
-	jmp		@exit					; NB. don't go via code to SpeechData+=SSI_NUM_REGS
+	jmp		@exit					; NB. don't go via code to set SpeechData+=SSI_NUM_REGS
 
 +
 	ldy		#SSI_FILFREQ			; start with reg4
@@ -902,7 +923,7 @@ TestSSI263ISR
 	; NB. don't reset T1C to $ffff - just let it continue to count down
 	; So total speech phrase will be more accurate, but individual phonemes won't be. Maybe use T2 for each phoneme?
 
-++	lda		SpeechDataL
+	lda		SpeechDataL
 	clc
 	adc		#SSI_NUM_REGS
 	sta		SpeechDataL
