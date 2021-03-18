@@ -1820,7 +1820,7 @@ T6522_10
 	sta		IRQH
 
 	lda		#0
-	sta		MBBase2H				; ISR: not MB card#2
+	sta		MBBase2H				; In ISR: not using MB card#2
 
 	ldx		#-1						; timerConfig index
 

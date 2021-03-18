@@ -44,6 +44,9 @@
 
 ZP_BASE = $f0
 
+MBTimer = $f4
+MBTimerL = MBTimer
+MBTimerH = MBTimer+1
 MBBase2 = $f6		; alias with SSI263Base
 MBBase2L = MBBase2
 MBBase2H = MBBase2+1

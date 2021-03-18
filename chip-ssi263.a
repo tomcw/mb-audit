@@ -145,21 +145,24 @@ PlaySSI263
 
 	lda		#$ff					; T1C = T1L = $FFFF
 	ldy		#SY6522_TIMER1L_COUNTER
-	sta		(MBBase),y
+	sta		(MBTimer),y
 	iny								; SY6522_TIMER1H_COUNTER
-	sta		(MBBase),y				; (and clears IFR.b6)
+	sta		(MBTimer),y				; (and clears IFR.b6)
 
 	lda		#ACR_FREERUNNING
 	ldy		#SY6522_ACR
-	sta		(MBBase),y				; Free-running timer
+	sta		(MBTimer),y				; Free-running timer
+
+	lda		#IER_SET|IxR_TIMER1
+	ldy		#SY6522_IER
+	sta		(MBTimer),y				; Enable Timer1 IRQ
 
 	lda		zpTmp2
 	bne		@noPCR2
-		lda		#IER_SET|IxR_TIMER1|IxR_SSI263
-		bne		+
-@noPCR2	lda		#IER_SET|IxR_TIMER1
-+	ldy		#SY6522_IER
-	sta		(MBBase),y				; Enable Timer1 IRQ & CA1(Speech) IRQ
+		lda		#IER_SET|IxR_SSI263
+		;ldy	#SY6522_IER
+		sta		(MBBase),y			; Enable CA1(Speech) IRQ
+@noPCR2
 
 	cli
 
@@ -175,7 +178,7 @@ TestSSI263
 	lda		has6522
 	and		#1
 	beq		+
-		lda		#IER_CLR|IxR_TIMER1|IxR_TIMER2
+		lda		#IER_CLR|IxR_TIMER1|IxR_TIMER2|IxR_SSI263
 		ldy		#SY6522_A_BASE+SY6522_IER	; disable IRQ
 		sta		(MBBase),y
 		ldy		#SY6522_A_BASE+SY6522_IFR	; clear IRQ flag
@@ -183,7 +186,7 @@ TestSSI263
 +	lda		has6522
 	and		#2
 	beq		+
-		lda		#IER_CLR|IxR_TIMER1|IxR_TIMER2
+		lda		#IER_CLR|IxR_TIMER1|IxR_TIMER2|IxR_SSI263
 		ldy		#SY6522_B_BASE+SY6522_IER	; disable IRQ
 		sta		(MBBase),y
 		ldy		#SY6522_B_BASE+SY6522_IFR	; clear IRQ flag
@@ -195,17 +198,19 @@ TestSSI263
 	lda		#>TestSSI263ISR
 	sta		IRQH
 
-	lda		#COMPONENT_SSI263+1	; test component $41
+	lda		#COMPONENT_SSI263+1		; test component $41
 	sta		testComponentNum
 	lda		#$ff
-	sta		testNum				; test #00
+	sta		testNum					; test #00
 
 	lda		#SSI_A_BASE
 	sta		SSI263BaseL
 	lda		MBBaseH
+	sta		MBTimerH
 	sta		SSI263BaseH
 	lda		#SY6522_B_BASE
 	sta		MBBaseL
+	sta		MBTimerL				; NB. MBTimer is used for TIMER1, and so doesn't change for SSI263A/SSI263B
 
 	lda		hasSSI263
 	lsr
@@ -326,9 +331,11 @@ T263_0
 	sei
 	php
 
-	lda		#IER_CLR|IxR_TIMER1|IxR_SSI263
 	ldy		#SY6522_IER
-	sta		(MBBase),y				; Disable Timer1 IRQ & CA1(Speech) IRQ
+	lda		#IER_CLR|IxR_SSI263
+	sta		(MBBase),y				; Disable CA1(Speech) IRQ
+	lda		#IER_CLR|IxR_TIMER1
+	sta		(MBTimer),y				; Disable Timer1 IRQ
 
 	jsr		CalcPhraseDuration		; Real MB: 0x19005D (AppleWin: 0x1900CF)
 
@@ -633,7 +640,7 @@ T263_3
 ; Post: C=0(OK), C=1(NG)
 ;
 ; Test#3
-; . Test phoneme playback using 6522 PCR (MB & Phasor)
+; . Test phoneme playback using 6522 PCR IRQ (MB & Phasor)
 
 	sei
 
@@ -646,6 +653,8 @@ T263_3
 
 	jsr		resetSubTest			; subTest #0
 	jsr		incTotalTests
+
+	; TODO AppleWin:SSI263-new: (Phasor card) once got error 41:03:00 (expected=00, actual=04) - was stepping
 
 	lda		#<NullPhrase
 	ldx		#>NullPhrase
@@ -710,7 +719,11 @@ T263_3
 	sta		MBBaseL					; restore
 	lda		#PH_MOCKINGBOARD
 	jsr		SetPhasorMode
-	jsr		WaitT1OneShotUnderflow
+
+	lda		#IER_CLR|IxR_TIMER1
+	ldy		#SY6522_IER
+	sta		(MBTimer),y				; Disable Timer1 IRQ
+
 	pla
 	plp
 	rts
@@ -847,7 +860,11 @@ T263_4
 	sta		MBBaseL					; restore
 	lda		#PH_MOCKINGBOARD
 	jsr		SetPhasorMode
-	jsr		WaitT1OneShotUnderflow
+
+	lda		#IER_CLR|IxR_TIMER1
+	ldy		#SY6522_IER
+	sta		(MBTimer),y				; Disable Timer1 IRQ
+
 	pla
 	plp
 	rts
@@ -859,6 +876,18 @@ TestSSI263ISR
 ;	6502 has pushed P
 ;	Apple ROM has stored A to $45 (not Apple //e ROM!)
 ;	MBBaseL = $00 or $80
+;	MBTimer (may / may not equal MBBase)
+;	SpeechData
+;	SSI263Base
+; Post:
+;	irqT1IntCount, irqT1H, irqT1H2, irqT1L
+;	isrFlag=1 (on SSI263 IRQ)
+;	SpeechData (incremented)
+;
+; NB. Need separate MBBase (for PCR) and MBTimer (for T1) because:
+; If we were using SSI263B / 6522A with 6522A.TIMER1 active, then:
+;  a) write to SSI263.reg4 will set T1C_L (so on next latch reload, it'll be $ffxx, not $ffff)
+;  b) false-read from SSI263.reg4 (6502-only) will clear any pending T1 IRQ
 ;
 
 	txa
@@ -869,30 +898,30 @@ TestSSI263ISR
 	;------
 
 	ldy		#SY6522_TIMER1H_COUNTER
-	lda		(MBBase),y
+	lda		(MBTimer),y
 	sta		irqT1H
 
 	; NB. read IFR.b6 between the 2 reads of T1H, so that irqT1IntCount is consistent with T1H vs T1H2
 	; Eg. IFR.b6 could become 1 between reading T1H & T1H2
 	ldy		#SY6522_IFR
-	lda		(MBBase),y
-	tax								; keep a copy of IFR, as reading T1L clears IFR.b6
-
-	ldy		#SY6522_TIMER1L_COUNTER
-	lda		(MBBase),y				; (reading T1C_l clears IFR.b6)
-	sta		irqT1L
-	ldy		#SY6522_TIMER1H_COUNTER
-	lda		(MBBase),y
-	sta		irqT1H2
-
-	txa
+	lda		(MBTimer),y
 	and		#IxR_TIMER1
 	beq		+
-		inc		irqT1IntCount		; Timer1 IRQ
-		jmp		@exit
 
-+	ldy		#SY6522_IFR
-	txa
+	ldy		#SY6522_TIMER1L_COUNTER
+	lda		(MBTimer),y				; (reading T1C_l clears IFR.b6)
+	sta		irqT1L
+	ldy		#SY6522_TIMER1H_COUNTER
+	lda		(MBTimer),y
+	sta		irqT1H2
+
+	inc		irqT1IntCount			; Timer1 IRQ
+	jmp		@exit
+
+	;
+
++	;ldy	#SY6522_IFR
+	lda		#IxR_SSI263
 	sta		(MBBase),y				; clear all remaining IRQs (ie. Speech)
 
 	lda		#1
@@ -913,8 +942,7 @@ TestSSI263ISR
 	jsr		DisableSSI263
 	jmp		@exit					; NB. don't go via code to set SpeechData+=SSI_NUM_REGS
 
-+
-	ldy		#SSI_FILFREQ			; start with reg4
++	ldy		#SSI_FILFREQ			; start with reg4
 -		lda		(SpeechData),y
 		sta		(SSI263Base),y
 		dey
