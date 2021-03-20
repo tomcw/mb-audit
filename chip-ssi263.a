@@ -337,7 +337,7 @@ T263_0
 	lda		#IER_CLR|IxR_TIMER1
 	sta		(MBTimer),y				; Disable Timer1 IRQ
 
-	jsr		CalcPhraseDuration		; Real MB: 0x19005D (AppleWin: 0x1900CF)
+	jsr		CalcPhraseDuration		; Real MB: 0x132BDD,0x132E59,0x133073 (AppleWin: 0x18D3D8,0x192332/running; ~0x14EFFF,0x14F247/stepping)
 
 	lda		#1						; actual
 	plp
@@ -901,12 +901,14 @@ TestSSI263ISR
 	lda		(MBTimer),y
 	sta		irqT1H
 
-	; NB. read IFR.b6 between the 2 reads of T1H, so that irqT1IntCount is consistent with T1H vs T1H2
-	; Eg. IFR.b6 could become 1 between reading T1H & T1H2
+	; Read IFR.T1 before reading T1C_l (which clears IFR.T1)
+	; NB. read IFR.T1 between the 2 reads of T1H, so that irqT1IntCount is consistent with T1H vs T1H2
+	; Eg. IFR.T1 could become 1 between reading T1H & T1H2
+
 	ldy		#SY6522_IFR
 	lda		(MBTimer),y
 	and		#IxR_TIMER1
-	beq		+
+	tax								; save IFR.T1
 
 	ldy		#SY6522_TIMER1L_COUNTER
 	lda		(MBTimer),y				; (reading T1C_l clears IFR.b6)
@@ -915,12 +917,15 @@ TestSSI263ISR
 	lda		(MBTimer),y
 	sta		irqT1H2
 
+	txa								; test IFR.T1
+	beq		+
+
 	inc		irqT1IntCount			; Timer1 IRQ
 	jmp		@exit
 
 	;
 
-+	;ldy	#SY6522_IFR
++	ldy		#SY6522_IFR
 	lda		#IxR_SSI263
 	sta		(MBBase),y				; clear all remaining IRQs (ie. Speech)
 
@@ -937,9 +942,12 @@ TestSSI263ISR
 	tay
 	bne		+
 
-	; last phoneme complete, so finalise with PAUSE phoneme + disable IRQ
+	; last phoneme complete, so finalise with PAUSE phoneme + disable SSI263 IRQ + disable 6522 T1 IRQ
 	sta		doingSpeech				; =0
 	jsr		DisableSSI263
+	lda		#IER_CLR|IxR_TIMER1
+	ldy		#SY6522_IER
+	sta		(MBTimer),y				; Disable Timer1 IRQ
 	jmp		@exit					; NB. don't go via code to set SpeechData+=SSI_NUM_REGS
 
 +	ldy		#SSI_FILFREQ			; start with reg4
