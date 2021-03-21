@@ -927,7 +927,8 @@ TestSSI263ISR
 
 +	ldy		#SY6522_IFR
 	lda		#IxR_SSI263
-	sta		(MBBase),y				; clear all remaining IRQs (ie. Speech)
+	sta		(MBBase),y				; clear all remaining IRQs (ie. Speech - but for Phasor only if in Mockingboard mode)
+									; NB. Phasor in native Phasor mode: IRQ cleared by write to DURPHON (reg0)
 
 	lda		#1
 	sta		isrFlag

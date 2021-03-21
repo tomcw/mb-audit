@@ -516,25 +516,25 @@ DisplayCardUpdate
 
 	lda		hasSC01
 	beq		@noSC01
-		lda		hasSSI263
+		lda		hasSSI263		; bitmap (so %01 or %10 means 1x SSI263)
 		bne		++
 			lda		#$80+'V'	; SC01
 			bne		@outSP
-++		cmp		#1
-		bne		+++
-			lda		#$80+'H'	; SC01 && 1x SSI263
+++		cmp		#3
+		beq		+++
+			lda		#$80+'H'	; SC01 && 1x SSI263 (in either socket)
 			bne		@outSP
 +++		lda		#$80+'3'		; SC01 && 2x SSI263
 @outSP	sta		$580+$20,x
 	jmp		@done
 
 @noSC01
-	lda		hasSSI263
+	lda		hasSSI263			; bitmap (so %01 or %10 means 1x SSI263)
 	beq		@done
 
-	cmp		#1
-	bne		+
-		lda		#$80+'S'		; 1x SSI263
+	cmp		#3
+	beq		+
+		lda		#$80+'S'		; 1x SSI263 (in either socket)
 		bne		++
 +		lda		#$80+'2'		; 2x SSI263
 ++		sta		$580+$20,x
