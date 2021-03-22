@@ -385,7 +385,7 @@ T263_1
 	jsr		incTotalTests
 
 	lda		#2
-	sta		zpTmp2
+	sta		zpTmp2					; addr mode to test
 @loop
 		; Timer1 IRQ
 
@@ -410,7 +410,7 @@ T263_1
 
 		lda		zpTmp2
 		bne		+
-		lda		is65C02
+		lda		is65C02				; NB. 65816 behaves like 6502 for sta (zp),y
 		beq		+
 
 			; sta (zp),y && 65C02
@@ -450,7 +450,7 @@ T263_1
 
 		lda		zpTmp2
 		bne		+
-		lda		is65C02
+		lda		is65C02				; NB. 65816 behaves like 6502 for sta (zp),y
 		beq		+
 
 			; sta (zp),y && 65C02
@@ -514,7 +514,7 @@ T263_1
 	rts
 
 @addr8y
-	sta		(SSI263Base),y			; false-read only for 6502 (not 65C02)
+	sta		(SSI263Base),y			; false-read only for 6502/65816 (not 65C02)
 	rts
 
 ;------------------------------------------------------------------------------
