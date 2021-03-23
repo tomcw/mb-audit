@@ -779,18 +779,18 @@ T6522_4
 
 !cpu 65c02
 	lda		is65C02or65816
-	beq		+
+	beq		+						; NB. no need to 'inc subTest' for the 6502 path, since the 65C02 sub-tests are the final ones
 
 		lda		#$00
 		sta		(zpTmpPtr)
-		jsr		@readT1C			; subTest #7 - FIXME: subTest won't inc for 6502
+		jsr		@readT1C			; subTest #7
 
 @6		stz		CARD_BASE+SY6522_TIMER1H_COUNTER
-		jsr		@readT1C			; subTest #8 - FIXME: subTest won't inc for 6502
+		jsr		@readT1C			; subTest #8
 
 		ldx		zpTmp2				; x=SY6522_TIMER1|2H_COUNTER
 @7		stz		CARD_BASE,x
-		jsr		@readT1C			; subTest #9 - FIXME: subTest won't inc for 6502
+		jsr		@readT1C			; subTest #9
 
 +
 !cpu 6502
@@ -893,8 +893,12 @@ T6522_6
 
 !cpu 65c02
 	lda		is65C02or65816
-	beq		+
-		jsr		@setT1C_5cy			; subTest #1 - FIXME: subTest won't inc for 6502
+	bne		@65c02a
+
+		jsr		incSubTestBy1		; 6502: keep subTest# in sync
+		beq		+
+
+@65c02a	jsr		@setT1C_5cy			; subTest #1
 		lda		#$FF
 		ldx		zpTmp2				; x=SY6522_TIMER1|2L_COUNTER
 @2		bit		CARD_BASE,x
@@ -988,8 +992,12 @@ T6522_6
 
 !cpu 65c02
 	lda		is65C02or65816
-	beq		+
-		jsr		@setT1C_2cy			; subTest #$24 - FIXME: subTest won't inc for 6502
+	bne		@65c02b
+
+		jsr		incSubTestBy1		; 6502: keep subTest# in sync
+		beq		+
+
+@65c02b	jsr		@setT1C_2cy			; subTest #$24
 		lda		#$FB
 		cmp		(zpTmpPtr)
 		bne		@readErrCMP
@@ -1011,10 +1019,11 @@ T6522_6
 	; 0D,  2D,  4D,  6D,  (8D),  AD,  CD,  ED	= ORA,     AND,     ... SBC
 	; 1D,  3D,  5D,  7D,  (9D),  BD,  DD,  FD	= ORA,X,   AND,X,   ... SBC,X
 	; 19,  39,  59,  79,  (99),  B9,  D9,  F9	= ORA,Y,   AND,Y,   ... SBC,Y
-	; 01,  21,  41,  61,  (81),  A1,  C1,  E1	= ORA(,X), AND(,X), ... SBC(,X)
 	; 11,  31,  51,  71,  (91),  B1,  D1,  F1	= ORA(),Y, AND(),Y, ... SBC(),Y
 	; 12,  32,  52,  72,  (92),  B2,  D2,  F2	= ORA(),   AND(),   ... SBC()		- 65C02/65816
+	; 01,  21,  41,  61,  (81),  A1,  C1,  E1	= ORA(,X), AND(,X), ... SBC(,X)
 
+	; need to be in ascending cycle-duration order, so that the 'dec @X+1'
 	lda		#$0D	; ora abs
 	sta		@A
 	lda		#$1D	; ora abs,x
@@ -1056,20 +1065,25 @@ T6522_6
 		cmp		#$F1				; opcode == 'sbc (zp),y' ?
 		bne		+
 			dec		@X+1			; only for sbc opcodes
+			dec		@X+1
 +		jsr		@setT1C_3cy
 		ldy		zpTmp2				; y=SY6522_TIMER1|2L_COUNTER
 @D		ora		(MBBase),y
 		cmp		#$FB
-		bne		@readErrA
+		bne		@readErrA_FB
 
 !cpu 65c02
 		lda		is65C02or65816
-		beq		+
-			; NB. Don't dec @X+1, since ora (zp) & ora (zp),y are both 5 cycles
-			jsr		@setT1C			; subTest #$34, ... - FIXME: subTest won't inc for 6502
+		bne		@65c02c
+
+			jsr		incSubTestBy1	; 6502: keep subTest# in sync
+			beq		+
+
+@65c02c		; NB. Don't dec @X+1, since 'sbc (zp),y' & 'sbc (zp)' are both 5 cycles
+			jsr		@setT1C			; subTest #$34, ...
 @E			ora		(zpTmpPtr)
 			cmp		#$FB
-			bne		@readErrA
+			bne		@readErrA_FB
 +
 !cpu 6502
 
@@ -1077,16 +1091,17 @@ T6522_6
 		cmp		#$E1				; opcode == 'sbc (zp,x)' ?
 		bne		+
 			dec		@X+1			; only for sbc opcodes
-		jsr		@setT1C_2cy			; subTest #$35, ...
+			dec		@X+1
++		jsr		@setT1C_2cy			; subTest #$35, ...
 		ldx		#0
 @F		ora		(zpTmpPtr,x)
 		cmp		#$FA
-		bne		@readErrA
+		bne		@readErrA_FA
 
 		jsr		@nextOpcode
 		bcc		@loop
 
-+	clc								; C=0(OK)
+	clc								; C=0(OK)
 	rts
 
 	;
@@ -1097,10 +1112,19 @@ T6522_6
 	tax
 @readErrX
 	lda		#$FC
-	sta		zpTmp2					; expected
+-	sta		zpTmp2					; expected
 	txa								; actual
 	sec								; C=1(NG)
 	rts
+
+@readErrA_FB
+	tax
+	lda		#$FB
+	bne		-
+@readErrA_FA
+	tax
+	lda		#$FA
+	bne		-
 
 	;
 
@@ -1133,10 +1157,10 @@ T6522_6
 	ldy		zpTmp2						; y=SY6522_TIMER1|2L_COUNTER
 	sta		(MBBase),y
 	iny									; y=SY6522_TIMER1|2H_COUNTER
-	sta		(MBBase),y					; For @setT1C: post: T1C = $0509
-@X	lda		#0							;              post: T1C = $0507
-	clc		; clc for adc/sbc-opcodes	;              post: T1C = $0505
-	rts									;              post: T1C = $04FF (as RTS is 6cy)
+	sta		(MBBase),y					; For @setT1C: post: T1C = $0909
+@X	lda		#0							;              post: T1C = $0907
+	clc		; clc for adc/sbc-opcodes	;              post: T1C = $0905
+	rts									;              post: T1C = $08FF (as RTS is 6cy)
 
 	;
 
@@ -1162,23 +1186,23 @@ T6522_6
 	adc		#$20
 	sta		@E
 	lda		@F
-	adc		#$20
+	adc		#$20				; last is (zp,x)
 	sta		@F
 	bcs		++					; overflowed... so done
 
-	cmp		#$92				; skip the sta-opcodes
+	cmp		#$81				; skip the STA-opcodes
 	beq		-
-	cmp		#$D2				; skip the cmp-opcodes
+	cmp		#$C1				; skip the CMP-opcodes
 	beq		-
 
-	cmp		#$32
+	cmp		#$21				; and (zp,x) ?
 	bne		+
-		lda		#$FF			; for and-opcodes: "lda #$FF"
+		lda		#$FF			; for AND-opcodes: "lda #$FF"
 		sta		@X+1
 
-+	cmp		#$F2
++	cmp		#$E1				; sbc (zp,x) ?
 	bne		+
-		lda		#$F9			; for sbc-opcodes: "lda #$F9", where $FC = $1F9 - $FC + (C-1)
+		lda		#$F9			; for SBC-opcodes: "lda #$F9", where $FC = $1F9 - $FC + (C-1)
 		sta		@X+1
 
 +	lda		subTestNum

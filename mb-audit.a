@@ -416,6 +416,14 @@ resetSubTest
 
 ;------------------------------------------------------------------------------
 
+incSubTestBy1				; NB. Don't inc totalTests
+; Post: Z=1
+	inc		subTestNum
+	lda		#0
+	rts
+
+;
+
 incSubTestNum
 
 	inc		subTestNum
