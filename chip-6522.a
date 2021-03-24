@@ -357,7 +357,7 @@ Test6522
 	lda		#COMPONENT_6522+1	; test component $11
 	sta		testComponentNum
 	lda		#$ff
-	sta		testNum				; test #00
+	sta		testNum				; test #$00
 
 	lda		has6522
 	lsr
@@ -389,6 +389,9 @@ Test6522
 		lda		MBBaseL
 		eor		#$80
 		sta		MBBaseL
+
+		lda		#$1f
+		sta		testNum			; test #$20
 
 		lsr		zpTmp1
 		bcs		@loop
@@ -422,23 +425,24 @@ testTblIdx
 
 testTbl
 	; MBBaseL = $00 and $80
-	!word	T6522_0		; 11
-	!word	T6522_1		; 12
-	!word	T6522_2		; 13
-	!word	T6522_3		; 14
-	!word	T6522_4		; 15
-	!word	T6522_5		; 16
-	!word	T6522_6		; 17
-	!word	T6522_7		; 18
-	!word	T6522_8		; 19
-	!word	T6522_9		; 1A
-	!word	T6522_A		; 1B
-	!word	T6522_B		; 1C
-	!word	T6522_C		; 1D
-	!word	T6522_D		; 1E
-	!word	T6522_E		; 1F
-	!word	T6522_F		; 20
-	!word	T6522_10	; 21
+	!word	T6522_0		; 20
+	!word	T6522_1		; 21
+	!word	T6522_2		; 22
+	!word	T6522_3		; 23
+	!word	T6522_4		; 24
+	!word	T6522_5		; 25
+	!word	T6522_6		; 26
+	!word	T6522_7		; 27
+	!word	T6522_8		; 28
+	!word	T6522_9		; 29
+	!word	T6522_A		; 2A
+	!word	T6522_B		; 2B
+	!word	T6522_C		; 2C
+	!word	T6522_D		; 2D
+	!word	T6522_E		; 2E
+	!word	T6522_F		; 2F
+	!word	T6522_10	; 30
+	!word	T6522_11	; 31
 	!word	0
 
 ;--------------------------------------
@@ -1818,6 +1822,47 @@ T6522_10
 ; Post: C=0(OK), C=1(NG)
 ;
 ; Test#10
+; . test accessing 6522 at $10 (ie. not $00) - avoid $20, $40 (and combinations) as this is the SSI263
+; . test accessing 6522 at $90 (ie. not $80)
+;
+
+	lda		MBBaseL					; must be $00 for Check6522Datalines (and because this test uses both 6522s)
+	beq		+
+		clc
+		rts
++
+
+	jsr		resetSubTest			; subTest #0
+	jsr		incTotalTests
+
+	lda		zpTmp1
+	pha								; save (as used by parent)
+
+	lda		MBBaseL
+	pha								; save
+	clc
+	adc		#$10
+	sta		MBBaseL
+
+	lda		has6522
+	sta		zpTmp1
+	jsr		Check6522Datalines		; Post: C
+
+	pla
+	sta		MBBaseL
+	pla
+	sta		zpTmp1
+
+	rts
+
+;------------------------------------------------------------------------------
+
+T6522_11
+; Pre: MBBaseL = $00
+;	has6522
+; Post: C=0(OK), C=1(NG)
+;
+; Test#11
 ; . Setup counters on all the 6522's T1+T2
 ;	6522-A T1 is free-running
 ;	6522-A T2 is one-shot
