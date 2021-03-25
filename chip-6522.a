@@ -78,16 +78,6 @@ DetectMegaAudioCard
 ; Pre:
 ; Post: isMegaAudioCard
 
-	; Use direct IRQ vector to accurately read A
-	lda		$c083
-	lda		$c083						; r/w RAM
-	lda		#<Check6522ISR
-	sta		$fffe
-	cmp		$fffe
-	bne		@done						; no LC
-	lda		#>Check6522ISR
-	sta		$ffff
-
 	lda		#0
 	sta		isrCopyA
 	sta		isrIFR_A
@@ -102,23 +92,25 @@ DetectMegaAudioCard
 	ldy		#SY6522_IER
 	sta		(MBBase),y
 
-	lda		#2+1-2						; cli(2) + 1st cycle of lda "-2" cycles 6522 adjust (as IRQ is delayed by 2 cycles)
+	lda		#$06
 	ldy		#SY6522_TIMER1L_COUNTER
 	sta		(MBBase),y
 	lda		#$00
 	ldy		#SY6522_TIMER1H_COUNTER
 	sta		(MBBase),y					; (and clears IFR.T1)
 
-	cli							; (2)
-	lda		#2					; (2)	; real 6522 - IRQ occurs on 1st cycle... so IRQ occurs after this opcode
-										; FPGA 6522 - IRQ occurs on 2nd cycle... so IRQ deferred until after next opcode
-	lda		#1
-
-	lda		$c082						; read ROM; no write
+										;   T1C
+										; $0006
+	lda		#2					; 2cy	; $0004
+	ldx		#1					; 2cy	; $0002
+	cli							; 2cy	; $0000
+	sta		zpTmp2				; 3cy	; $ffff
+										; $0002	: real 6522 - IRQ occurs on 2nd cycle... so IRQ occurs after this 'sta zp'
+										; $0001	: FPGA 6522 - IRQ occurs on 3rd cycle... so IRQ deferred until after next 'stx zp'
+	stx		zpTmp2
 
 	lda		isrCopyA
-	cmp		#1
-	bne		@done
+	and		#1
 	sta		isMegaAudioCard
 
 @done
@@ -348,7 +340,8 @@ Check6522ISR
 ;	Apple ROM has stored A to $45 (not Apple //e ROM!)
 ;
 
-	sta		isrCopyA	; only valid when vectored directly from $fffe (ie. when there's a LC)
+	lda		zpTmp2
+	sta		isrCopyA
 
 	txa
 	pha

@@ -354,7 +354,7 @@ DetectSubunits
 
 	lda		zpTmp1
 	and		#1
-	beq		+++
+	beq		@donePhasor
 
 	lda		#$55
 	ldy		#SY6522_DDRB
@@ -382,9 +382,14 @@ DetectSubunits
 ++	lda		#PH_MOCKINGBOARD
 	jsr		SetPhasorMode
 
-	jsr		DetectMegaAudioCard
+@donePhasor
 
-+++
+	lda		zpTmp1
+	and		#3
+	cmp		#3
+	bne		+
+	jsr		DetectMegaAudioCard
++
 
 	;
 
