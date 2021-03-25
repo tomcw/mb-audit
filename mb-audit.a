@@ -341,6 +341,7 @@ DetectSubunits
 ; Pre: zpTmp1 = slotInfo[slot]
 
 	lda		#0
+	sta		isMegaAudioCard
 	sta		isPhasorCard			; assume Mockingboard
 	sta		hasSSI263				; ... no SSI263's
 	sta		hasSC01					; ... no SC01
@@ -380,6 +381,8 @@ DetectSubunits
 +		inc		isPhasorCard
 ++	lda		#PH_MOCKINGBOARD
 	jsr		SetPhasorMode
+
+	jsr		DetectMegaAudioCard
 
 +++
 
@@ -728,6 +731,7 @@ testNum			!byte 0
 subTestNum		!byte 0
 totalTests		!byte 0,0
 
+isMegaAudioCard	!byte 0
 isPhasorCard	!byte 0
 phasorMode:		!byte PH_MOCKINGBOARD
 
@@ -742,6 +746,7 @@ isrIFR_B		!byte 0
 isrIFR			!byte 0
 isrFlag			!byte 0
 isrError		!byte 0,0
+isrCopyA		!byte 0
 
 saveZPTextVars	!fill (BAS2H-CH)+1,0
 

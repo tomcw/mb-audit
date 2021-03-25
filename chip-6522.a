@@ -74,6 +74,58 @@ SF_GetTimerL				; Based on Skyfox's detection code (but uses T2 instead of T1)
 
 ;------------------------------------------------------------------------------
 
+DetectMegaAudioCard
+; Pre:
+; Post: isMegaAudioCard
+
+	; Use direct IRQ vector to accurately read A
+	lda		$c083
+	lda		$c083						; r/w RAM
+	lda		#<Check6522ISR
+	sta		$fffe
+	cmp		$fffe
+	bne		@done						; no LC
+	lda		#>Check6522ISR
+	sta		$ffff
+
+	lda		#0
+	sta		isrCopyA
+	sta		isrIFR_A
+
+	jsr		WaitT1OneShotUnderflow		; T1C=$0101 (minus a few cycles)
+
+	lda		#ACR_ONESHOT
+	ldy		#SY6522_ACR
+	sta		(MBBase),y
+
+	lda		#IER_SET|IxR_TIMER1
+	ldy		#SY6522_IER
+	sta		(MBBase),y
+
+	lda		#2+1-2						; cli(2) + 1st cycle of lda "-2" cycles 6522 adjust (as IRQ is delayed by 2 cycles)
+	ldy		#SY6522_TIMER1L_COUNTER
+	sta		(MBBase),y
+	lda		#$00
+	ldy		#SY6522_TIMER1H_COUNTER
+	sta		(MBBase),y					; (and clears IFR.T1)
+
+	cli							; (2)
+	lda		#2					; (2)	; real 6522 - IRQ occurs on 1st cycle... so IRQ occurs after this opcode
+										; FPGA 6522 - IRQ occurs on 2nd cycle... so IRQ deferred until after next opcode
+	lda		#1
+
+	lda		$c082						; read ROM; no write
+
+	lda		isrCopyA
+	cmp		#1
+	bne		@done
+	sta		isMegaAudioCard
+
+@done
+	rts
+
+;------------------------------------------------------------------------------
+
 Check6522
 ; Pre: X=slot#
 ; Post: C=0(OK), C=1(NG)
@@ -296,6 +348,8 @@ Check6522ISR
 ;	Apple ROM has stored A to $45 (not Apple //e ROM!)
 ;
 
+	sta		isrCopyA	; only valid when vectored directly from $fffe (ie. when there's a LC)
+
 	txa
 	pha
 	tya
@@ -331,13 +385,16 @@ Check6522ISR
 ;	. [T6522_7, T6522_9, T6522_A, T6522_C] oneshot|continuous underflow, then T1L -> T1C
 ;	. [T6522_B] T1L=$0000, can only read T1C values of $00 and $FF
 ;	. [T6522_A, T6522_E] 6522 period is N+2 cycles
-;	. 6522 -> IRQ cycle (detect a2heaven's MEGA Audio)
+;	. [T6522_F]  Alt test that 6522 period is N+2 cycles - currently disabled
 ;	T2:
 ;	. [T6522_2] oneshot x IRQ|poll
 ;	. [T6522_4, T6522_6] 6502|65C02 addr modes access of 6522 T2C
 ;	. [T6522_8, T6522_9, T6522_D] oneshot underflow, then T1L -> T1C
 ;	. [T6522_E] 6522 period is N+2 cycles
-;	[Test_F] Both 6522s: test T1 & T2 (from chips A&B) all running at the same time
+;	. [T6522_F]  Alt test that 6522 period is N+2 cycles - currently disabled
+;	[T6522_10] Test 6522s at $Cn10 and $Cn90
+;	[T6522_??] 6522 -> IRQ cycle (detect a2heaven's MEGA Audio)
+;	[T6522_11] Both 6522s: test T1 & T2 (from chips A&B) all running at the same time
 ;	[Test6522MultiCard] 2 cards: Both 6522s: test T1 & T2 (from chips A&B) all running at the same time
 ;	[Test6522AfterReset] 6522 IRQ pending, CTRL+RESET should clear it
 ;
