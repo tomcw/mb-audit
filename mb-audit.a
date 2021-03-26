@@ -464,9 +464,9 @@ Display
 ;           SP:    S2		;V(ortax)=SC01, S(SI263)=SSI263, H(ybrid)=V+S, 2=S+S, 3=V+S+S
 
 ;               1  2  3  4  5  6  7
-;          $00: V     1  S  C  P       ; V=6522(VIA), 1=Sound-I, S=Sound/Speech-I, C=MB-C(or Sound-II), P=Phasor
+;          $00: V     1  S  C  P       ; V=6522(VIA), 1=Sound-I, S=Sound/Speech-I, M=MegaAudio, M4C=MB4C, C=MB-C(or MB-A or Sound-II), P=Phasor
 ;          $80:    V     S  C  P
-;           SP:          V ABV B       ; A=SSI263(socket-A), B=SSI263(socket-B), V=Votrax/SC01
+;           SP:           VABV B       ; A=SSI263(socket-A), B=SSI263(socket-B), V=Votrax/SC01
 
 	lda		#$80+'$'
 	sta		$480+$0f
@@ -565,42 +565,59 @@ DisplayCardUpdate
 +	lda		hasAY8913
 	cmp		#3					; 6522/AY8913 at $00 && $80?
 	bcc		+					; (branch if A < 3)
-		lda		isPhasorCard
+		lda		#$80+' '
+		sta		zpTmp1			; x-1 pos: default: ' '
+		sta		zpTmp2			; x+1 pos: default: ' '
+		lda		isMegaAudioCard
+		beq		+
+			lda		#$80+'M'
+			bne		@out
++		lda		isMB4C
+		beq		+
+			lda		#$80+'M'	; 'M4C'
+			sta		zpTmp1
+			lda		#$80+'C'
+			sta		zpTmp2
+			lda		#$80+'4'
+			bne		@out
++		lda		isPhasorCard
 		beq		@isIIorC
 			lda		#$80+'P'
 			bne		@out
 @isIIorC	lda		#$80+'C'	; MB-C or MB-Sound II (has 2x 6522/AY8913, but no SC01 nor SSI263)
-@out:	sta		LINE1+SLOT1POS,x
+@out:
+		sta		LINE1+SLOT1POS,x
 		sta		LINE2+SLOT1POS,x
+		lda		zpTmp1
+		sta		LINE1+SLOT1POS-1,x
+		sta		LINE2+SLOT1POS-1,x
+		lda		zpTmp2
+		sta		LINE1+SLOT1POS+1,x
+		sta		LINE2+SLOT1POS+1,x
 
 	;
 +	; Add info about any speech chips
 	;
 
 	lda		hasSC01
-	beq		@noSC01
-		lda		hasSSI263		; bitmap (so %01 or %10 means 1x SSI263)
-		bne		++
-			lda		#$80+'V'	; SC01
-			bne		@outSP
-++		cmp		#3
-		beq		+++
-			lda		#$80+'H'	; SC01 && 1x SSI263 (in either socket)
-			bne		@outSP
-+++		lda		#$80+'3'		; SC01 && 2x SSI263
-@outSP	sta		LINE3+SLOT1POS,x
-	jmp		@done
+	beq		@SSI263
+		lda		#$80+'V'
+		sta		LINE3+SLOT1POS+1,x
 
-@noSC01
-	lda		hasSSI263			; bitmap (so %01 or %10 means 1x SSI263)
+@SSI263
+	lda		hasSSI263			; bitmap
 	beq		@done
-
-	cmp		#3
-	beq		+
-		lda		#$80+'S'		; 1x SSI263 (in either socket)
-		bne		++
-+		lda		#$80+'2'		; 2x SSI263
-++		sta		LINE3+SLOT1POS,x
+		lsr
+		bcc		+
+			pha
+			lda		#$80+'A'	; $Cn40
+			sta		LINE3+SLOT1POS-1,x
+			pla
++		lsr
+		bcc		+
+			lda		#$80+'B'	; $Cn20
+			sta		LINE3+SLOT1POS,x
++
 
 @done
 	rts
