@@ -38,7 +38,7 @@
 ;
 ; Unsupported:
 ; Mockingboard 4c (Ian Kim)	6522-A/AY8913			6522-A/AY8913		Same 6522 mapped to both $00 & $80
-;
+; Echo+						6522-A/AY8913			6522-A/AY8913 + TMS5220 (at DEVICE SELECT)	NB. Same 6522 mapped to both $00 & $80
 
 ;------------------------------------------------------------------------------
 
@@ -342,6 +342,7 @@ DetectSubunits
 
 	lda		#0
 	sta		isMegaAudioCard
+	sta		isMB4C
 	sta		isPhasorCard			; assume Mockingboard
 	sta		hasSSI263				; ... no SSI263's
 	sta		hasSC01					; ... no SC01
@@ -388,7 +389,17 @@ DetectSubunits
 	and		#3
 	cmp		#3
 	bne		+
-	jsr		DetectMegaAudioCard
+		jsr		DetectMegaAudioCard
+		jsr		DetectMB4C
+
+		lda		isMB4C
+		beq		+
+			; Indicate there's only a 6522 at $Cn00, otherwise some 6522 tests will fail
+			ldx		slotUnderTest
+			lda		#1
+			sta		slotInfo,x
+			sta		zpTmp1
+
 +
 
 	;
@@ -737,6 +748,7 @@ subTestNum		!byte 0
 totalTests		!byte 0,0
 
 isMegaAudioCard	!byte 0
+isMB4C			!byte 0		; MB4C or Echo+
 isPhasorCard	!byte 0
 phasorMode:		!byte PH_MOCKINGBOARD
 

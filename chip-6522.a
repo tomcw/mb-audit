@@ -118,6 +118,52 @@ DetectMegaAudioCard
 
 ;------------------------------------------------------------------------------
 
+DetectMB4C
+; Pre:
+; Post: isMB4C
+
+	; MB4C only has 1x 6522, but mapped to both $00 and $80
+	; . it'll use the 6522's b7 addr to determine which AY8913 to write to
+
+	ldy		#SY6522_A_BASE+SY6522_DDRB
+	lda		#$FF
+	sta		(MBBase),y
+	iny									; Y=SY6522_DDRA
+	sta		(MBBase),y
+
+	ldy		#SY6522_B_BASE+SY6522_DDRB
+	lda		#$69
+	sta		(MBBase),y
+	lda		#$96
+	iny									; Y=SY6522_DDRA
+	sta		(MBBase),y
+
+	ldy		#SY6522_A_BASE+SY6522_DDRB
+@loop	lda		#$69
+		cmp		(MBBase),y
+		bne		@notMB4C
+		lda		#$96
+		iny								; Y=SY6522_DDRA
+		cmp		(MBBase),y
+		bne		@notMB4C
+
+		cpy		#SY6522_B_BASE+SY6522_DDRA
+		beq		+
+		ldy		#SY6522_B_BASE+SY6522_DDRB
+		bne		@loop
+
++	lda		#1
+	bne		@done
+
+@notMB4C
+	lda		#0
+
+@done
+	sta		isMB4C
+	rts
+
+;------------------------------------------------------------------------------
+
 Check6522
 ; Pre: X=slot#
 ; Post: C=0(OK), C=1(NG)
