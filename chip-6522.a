@@ -113,7 +113,6 @@ DetectMegaAudioCard
 	and		#1
 	sta		isMegaAudioCard
 
-@done
 	rts
 
 ;------------------------------------------------------------------------------
