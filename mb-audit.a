@@ -457,6 +457,13 @@ incTotalTests
 
 ;------------------------------------------------------------------------------
 
+;LINE0=$400
+LINE1=$480
+LINE2=$500
+LINE3=$580
+LINE4=$600
+SLOT1POS = $13					; pos left of '1'
+
 Display
 ;              1234567
 ;          $00:  1 CP		;V=6522(VIA), 1=Sound-I, S=Sound/Speech, C=MB-C(or Sound-II), P=Phasor
@@ -469,29 +476,29 @@ Display
 ;           SP:           VABV B       ; A=SSI263(socket-A), B=SSI263(socket-B), V=Votrax/SC01
 
 	lda		#$80+'$'
-	sta		$480+$0f
-	sta		$500+$0f
+	sta		LINE2+$0f
+	sta		LINE3+$0f
 	lda		#$80+'0'
-	sta		$480+$10
-	sta		$480+$11
-	sta		$500+$11
+	sta		LINE2+$10
+	sta		LINE2+$11
+	sta		LINE3+$11
 	lda		#$80+'8'
-	sta		$500+$10
+	sta		LINE3+$10
 	lda		#$80+':'
-	sta		$480+$12
-	sta		$500+$12
-	sta		$580+$12
+	sta		LINE2+$12
+	sta		LINE3+$12
+	sta		LINE4+$12
 	lda		#$80+'S'
-	sta		$580+$10
+	sta		LINE4+$10
 	lda		#$80+'P'
-	sta		$580+$11
+	sta		LINE4+$11
 
 	ldx		#7*3-1
 	ldy		#7
 
 -		tya
 		ora		#$B0
-		sta		$400+$12,x		; '1  2  3  4  5  6  7'
+		sta		LINE1+$12,x		; '1  2  3  4  5  6  7'
 
 		lda		slotInfo,y
 		lsr
@@ -499,14 +506,14 @@ Display
 		lda		#$80+' '		; C-flag not affected
 		bcc		+
 		lda		#$80+'V'
-+		sta		$480+$12,x		; 'V' or ' '
++		sta		LINE2+$12,x		; 'V' or ' '
 
 		pla
 		lsr
 		lda		#$80+' '		; C-flag not affected
 		bcc		+
 		lda		#$80+'V'
-+		sta		$500+$12,x		; 'V' or ' '
++		sta		LINE3+$12,x		; 'V' or ' '
 
 		dex
 		dex
@@ -526,11 +533,6 @@ Display
 	rts
 
 ;--------------------------------------
-
-LINE1=$480
-LINE2=$500
-LINE3=$580
-SLOT1POS = $13					; pos left of '1'
 
 DisplayCardUpdate
 ; Pre: X=slot#
@@ -552,7 +554,7 @@ DisplayCardUpdate
 	cmp		#1					; 6522/AY8913 at $00?
 	bne		+
 		lda		#$80+'1'		; MB-Sound I (has a 6522/AY8913 at $00)
-		sta		LINE1+SLOT1POS,x
+		sta		LINE2+SLOT1POS,x
 
 +	lda		hasAY8913
 	cmp		#2					; 6522/AY8913 at $80?
@@ -560,7 +562,7 @@ DisplayCardUpdate
 		lda		hasSC01
 		beq		+				; no SC01 - don't know what this is!
 		lda		#$80+'S'		; MB-Sound/Speech I has a 6522/SC01 at $00; and a 6522/AY8913 at $80
-		sta		LINE2+SLOT1POS,x
+		sta		LINE3+SLOT1POS,x
 
 +	lda		hasAY8913
 	cmp		#3					; 6522/AY8913 at $00 && $80?
@@ -586,14 +588,14 @@ DisplayCardUpdate
 			bne		@out
 @isIIorC	lda		#$80+'C'	; MB-C or MB-Sound II (has 2x 6522/AY8913, but no SC01 nor SSI263)
 @out:
-		sta		LINE1+SLOT1POS,x
 		sta		LINE2+SLOT1POS,x
+		sta		LINE3+SLOT1POS,x
 		lda		zpTmp1
-		sta		LINE1+SLOT1POS-1,x
 		sta		LINE2+SLOT1POS-1,x
+		sta		LINE3+SLOT1POS-1,x
 		lda		zpTmp2
-		sta		LINE1+SLOT1POS+1,x
 		sta		LINE2+SLOT1POS+1,x
+		sta		LINE3+SLOT1POS+1,x
 
 	;
 +	; Add info about any speech chips
@@ -602,7 +604,7 @@ DisplayCardUpdate
 	lda		hasSC01
 	beq		@SSI263
 		lda		#$80+'V'
-		sta		LINE3+SLOT1POS+1,x
+		sta		LINE4+SLOT1POS+1,x
 
 @SSI263
 	lda		hasSSI263			; bitmap
@@ -611,12 +613,12 @@ DisplayCardUpdate
 		bcc		+
 			pha
 			lda		#$80+'A'	; $Cn40
-			sta		LINE3+SLOT1POS-1,x
+			sta		LINE4+SLOT1POS-1,x
 			pla
 +		lsr
 		bcc		+
 			lda		#$80+'B'	; $Cn20
-			sta		LINE3+SLOT1POS,x
+			sta		LINE4+SLOT1POS,x
 +
 
 @done
@@ -820,7 +822,7 @@ errorActual		!byte 0
 hasBeenReset	!byte 0
 userlandSP		!byte 0
 
-msg_mbaudit	!text "mb-audit v0, 2021",0xd
+msg_mbaudit	!text "mb-audit v0.1, 2021",0xd
 msg_mbauditEnd !text 0
 
 msg_cpu6502Detected !text "6502 detected",0xd
