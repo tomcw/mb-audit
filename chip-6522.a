@@ -117,11 +117,11 @@ DetectMegaAudioCard
 
 ;------------------------------------------------------------------------------
 
-DetectMB4C
+DetectMB4CorEchoPlus
 ; Pre:
-; Post: isMB4C
+; Post: isMB4C, isEchoPlus
 
-	; MB4C only has 1x 6522, but mapped to both $00 and $80
+	; MB4C/Echo+ only has 1x 6522, but mapped to both $00 and $80
 	; . it'll use the 6522's b7 addr to determine which AY8913 to write to
 
 	ldy		#SY6522_A_BASE+SY6522_DDRB
@@ -140,25 +140,39 @@ DetectMB4C
 	ldy		#SY6522_A_BASE+SY6522_DDRB
 @loop	lda		#$69
 		cmp		(MBBase),y
-		bne		@notMB4C
+		bne		@notDetected
 		lda		#$96
 		iny								; Y=SY6522_DDRA
 		cmp		(MBBase),y
-		bne		@notMB4C
+		bne		@notDetected
 
 		cpy		#SY6522_B_BASE+SY6522_DDRA
 		beq		+
 		ldy		#SY6522_B_BASE+SY6522_DDRB
 		bne		@loop
 
-+	lda		#1
-	bne		@done
++	; MB4C is only in a //c, and Echo+ is never in a //c
+	lda		VERSION3
+	cmp		VERSION3_IIC
+	bne		@EchoPlus
 
-@notMB4C
+;@MB4C
+		lda		#1
+		ldx		#0
+		beq		@done
+
+@EchoPlus
+		lda		#0
+		ldx		#1
+		bne		@done
+
+@notDetected
 	lda		#0
+	tax
 
 @done
 	sta		isMB4C
+	stx		isEchoPlus
 	rts
 
 ;------------------------------------------------------------------------------
@@ -431,8 +445,8 @@ Check6522ISR
 ;	. [T6522_E] 6522 period is N+2 cycles
 ;	. [T6522_F]  Alt test that 6522 period is N+2 cycles - currently disabled
 ;	[T6522_10] Test 6522s at $Cn10 and $Cn90
-;	[T6522_??] 6522 -> IRQ cycle (detect a2heaven's MEGA Audio)
-;	[T6522_11] Both 6522s: test T1 & T2 (from chips A&B) all running at the same time
+;	[T6522_11] Test Phasor can switch to Echo+
+;	[T6522_12] Both 6522s: test T1 & T2 (from chips A&B) all running at the same time
 ;	[Test6522MultiCard] 2 cards: Both 6522s: test T1 & T2 (from chips A&B) all running at the same time
 ;	[Test6522AfterReset] 6522 IRQ pending, CTRL+RESET should clear it
 ;
@@ -538,6 +552,7 @@ testTbl
 	!word	T6522_F		; 2F
 	!word	T6522_10	; 30
 	!word	T6522_11	; 31
+	!word	T6522_12	; 32
 	!word	0
 
 ;--------------------------------------
@@ -1958,6 +1973,50 @@ T6522_11
 ; Post: C=0(OK), C=1(NG)
 ;
 ; Test#11
+; . For Phasor check the Echo+ mode
+;
+
+	lda		MBBaseL
+	bne		@out
+	lda		isPhasorCard
+	bne		+
+@out	clc
+		rts
++
+
+	lda		#PH_ECHOPLUS
+	jsr		SetPhasorMode
+
+	jsr		DetectMB4CorEchoPlus
+	lda		isMB4C
+	bne		@error				; can't happen (sanity check)
+	lda		isEchoPlus
+	beq		@error				; if no Echo+, then bug in an emulator's Phasor support
+
+	clc
+	bcc		+
+@error
+	sec
++	php
+
+	lda		#PH_MOCKINGBOARD
+	jsr		SetPhasorMode
+
+	lda		#0
+	sta		isMB4C
+	sta		isEchoPlus
+
+	plp
+	rts
+
+;------------------------------------------------------------------------------
+
+T6522_12
+; Pre: MBBaseL = $00
+;	has6522
+; Post: C=0(OK), C=1(NG)
+;
+; Test#12
 ; . Setup counters on all the 6522's T1+T2
 ;	6522-A T1 is free-running
 ;	6522-A T2 is one-shot

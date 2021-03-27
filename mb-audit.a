@@ -28,15 +28,13 @@
 ; Sound II					6522-A/AY8913			6522-B/AY8913
 ; MB-C
 ; . MB-C & clones			6522-A/AY8913			6522-B/AY8913 +[1|2x SSI263]
-; . MB-C (AppleWin)			MB-C +SC01				MB-C +SSI263
+; . MB-C (AppleWin)			MB-C +SC01				MB-C +[1|2x SSI263]
 ; . MEGA Audio (a2heaven)	MB-C					MB-C				6522 & AY8913 implemented in FPGA, supports 2x MB-C's
 ; Phasor
 ; . MB-C					6522-A/AY8913			6522-B/AY8913 +[1|2x SSI263]
-; . Echo+					6522-A/AY8913			6522-B/AY8913
+; . Echo+					6522-A/AY8913			6522-A/AY8913		Same 6522 mapped to both $00 & $80
 ; . Phasor native			6522-A/AY8913x2			6522-B/AY8913x2 +[1|2x SSI263]
-; . Phasor (AppleWin)		Phasor +SC01			Phasor +SSI263
-;
-; Unsupported:
+; . Phasor (AppleWin)		Phasor +SC01			Phasor +[1|2x SSI263]
 ; Mockingboard 4c (Ian Kim)	6522-A/AY8913			6522-A/AY8913		Same 6522 mapped to both $00 & $80
 ; Echo+						6522-A/AY8913			6522-A/AY8913 + TMS5220 (at DEVICE SELECT)	NB. Same 6522 mapped to both $00 & $80
 
@@ -343,6 +341,7 @@ DetectSubunits
 	lda		#0
 	sta		isMegaAudioCard
 	sta		isMB4C
+	sta		isEchoPlus
 	sta		isPhasorCard			; assume Mockingboard
 	sta		hasSSI263				; ... no SSI263's
 	sta		hasSC01					; ... no SC01
@@ -354,8 +353,9 @@ DetectSubunits
 	; Determine if this is a Mockingboard or Phasor card
 
 	lda		zpTmp1
-	and		#1
-	beq		@donePhasor
+	and		#3
+	cmp		#3
+	bne		@donePhasor
 
 	lda		#$55
 	ldy		#SY6522_DDRB
@@ -390,9 +390,10 @@ DetectSubunits
 	cmp		#3
 	bne		+
 		jsr		DetectMegaAudioCard
-		jsr		DetectMB4C
+		jsr		DetectMB4CorEchoPlus
 
 		lda		isMB4C
+		ora		isEchoPlus
 		beq		+
 			; Indicate there's only a 6522 at $Cn00, otherwise some 6522 tests will fail
 			ldx		slotUnderTest
@@ -465,13 +466,8 @@ LINE4=$600
 SLOT1POS = $13					; pos left of '1'
 
 Display
-;              1234567
-;          $00:  1 CP		;V=6522(VIA), 1=Sound-I, S=Sound/Speech, C=MB-C(or Sound-II), P=Phasor
-;          $80:   VCP
-;           SP:    S2		;V(ortax)=SC01, S(SI263)=SSI263, H(ybrid)=V+S, 2=S+S, 3=V+S+S
-
 ;               1  2  3  4  5  6  7
-;          $00: V     1  S  C  P       ; V=6522(VIA), 1=Sound-I, S=Sound/Speech-I, M=MegaAudio, M4C=MB4C, C=MB-C(or MB-A or Sound-II), P=Phasor
+;          $00: V     1  S  C  P       ; V=6522(VIA), 1=Sound-I, S=Sound/Speech-I, M=MegaAudio, M4C=MB4C, E=Echo+, C=MB-C(or MB-A or Sound-II), P=Phasor
 ;          $80:    V     S  C  P
 ;           SP:           VABV B       ; A=SSI263(socket-A), B=SSI263(socket-B), V=Votrax/SC01
 
@@ -566,7 +562,7 @@ DisplayCardUpdate
 
 +	lda		hasAY8913
 	cmp		#3					; 6522/AY8913 at $00 && $80?
-	bcc		+					; (branch if A < 3)
+	bcc		@speech				; (branch if A < 3)
 		lda		#$80+' '
 		sta		zpTmp1			; x-1 pos: default: ' '
 		sta		zpTmp2			; x+1 pos: default: ' '
@@ -581,6 +577,10 @@ DisplayCardUpdate
 			lda		#$80+'C'
 			sta		zpTmp2
 			lda		#$80+'4'
+			bne		@out
++		lda		isEchoPlus
+		beq		+
+			lda		#$80+'E'
 			bne		@out
 +		lda		isPhasorCard
 		beq		@isIIorC
@@ -598,9 +598,10 @@ DisplayCardUpdate
 		sta		LINE3+SLOT1POS+1,x
 
 	;
-+	; Add info about any speech chips
+	; Add info about any speech chips
 	;
 
+@speech
 	lda		hasSC01
 	beq		@SSI263
 		lda		#$80+'V'
@@ -790,9 +791,10 @@ subTestNum		!byte 0
 totalTests		!byte 0,0
 
 isMegaAudioCard	!byte 0
-isMB4C			!byte 0		; MB4C or Echo+
+isMB4C			!byte 0
+isEchoPlus		!byte 0
 isPhasorCard	!byte 0
-phasorMode:		!byte PH_MOCKINGBOARD
+phasorMode		!byte PH_MOCKINGBOARD
 
 has6522			!byte 0
 hasLowerCase	!byte 0

@@ -53,9 +53,14 @@ VERSION_IIP = $EA	; II+ / Autostart Monitor
 VERSION_IIJP = $C9	; II J-Plus
 VERSION_IIE_OR_HIGHER = $06	; IIe(both variants), IIc(all variants)
 
+VERSION3_IIC = $00	; differentiate between IIe & IIc
+
 PRNTYX = $F940
 PRNTX = $F944
 VERSION = $FBB3		; Signature Byte
+VERSION2 = $FB1E
+VERSION3 = $FBC0
+VERSION4 = $FBBF
 HOME = $FC58
 WAIT = $FCA8
 COUT = $FDED
