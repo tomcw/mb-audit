@@ -20,6 +20,14 @@ DetectAY8913
 		rts
 +
 
+	lda		isMB4C
+	ora		isEchoPlus
+	beq		+
+		lda		#%00000011
+		sta		hasAY8913		; can't test them, so just assume they are all working
+		rts
++
+
 	lda		#SY6522_A_BASE
 	sta		zpTmp3
 	lda		#1					; hasAY8913 mask
@@ -93,17 +101,39 @@ TestAY8913
 	lda		isPhasorCard
 	beq		+
 
-	; Phasor
+		; Phasor
+		lda		#4
+		sta		testNum			; test #04
+		lda		#PH_ECHOPLUS
+		jsr		SetPhasorMode
+		jsr		TestAYEchoPlus
+		php
+		pha
+		lda		#PH_MOCKINGBOARD
+		jsr		SetPhasorMode
+		pla
+		plp
+		bcs		@error
 
-	lda		#4
-	sta		testNum				; test #04
-	jsr		TestAYPhasor		; only do this test once, since it covers both SY6522's
-	beq		@ok
-	bne		@error
+		inc		testNum			; test #05
+		jsr		TestAYPhasor	; only do this test once, since it covers both SY6522's
+		bcc		@ok
+		bcs		@error
 
-	; Mockingboard
++	lda		isMB4C
+	ora		isEchoPlus
+	beq		+
 
-+	lda		hasAY8913
+		; MB4C / Echo+
+		lda		#6
+		sta		testNum			; test #06
+		jsr		TestAYEchoPlus
+		bcc		@ok
+		bcs		@error
+
++	; Mockingboard
+
+	lda		hasAY8913
 	sta		zpTmp1
 
 -		lsr		zpTmp1
@@ -231,16 +261,81 @@ TestAYAddrlines
 
 ;--------------------------------------
 
-TestAYPhasor
-; Pre:
+TestAYEchoPlus
+; Pre: isEcho==1 or isMB4C==1
 ; Post: C=0(OK), C=1(NG)
 ;	zpTmp2 = expected, A = actual
 
-	lda		isPhasorCard
+	; Test for 2 AYs
+	; . Write to each AY's reg#0 with values: $11,$33
+	; . then read back (all should be $FF)
+	; NB. *Assume* that Echo+/MB4C don't support PortA input - so can't read the AY8913 regs
+
+	jsr		resetSubTest
+	jsr		incTotalTests
+
+	;
+
+	lda		#SY6522_A_BASE
+	sta		zpTmp3
+
+	jsr		Init6522ForAY
+
+	lda		#AY_AFINE
+	ldx		#$11
+	jsr		AY_WriteRegValue
+
+	;
+
+	lda		#SY6522_B_BASE
+	sta		zpTmp3
+
+	jsr		Init6522ForAY
+
+	lda		#AY_AFINE
+	ldx		#$33
+	jsr		AY_WriteRegValue
+
+	;
+
+	ldy		#SY6522_A_BASE+SY6522_ORA
+
+	ldx		#AY_AFINE
+	jsr		AY_ReadRegValue
+	ldx		#$FF				; $11
+	cmp		#$FF
 	bne		+
-		clc
-		rts						; C=0(OK)
-+
+
+	;
+
+	ldy		#SY6522_B_BASE+SY6522_ORA
+
+	ldx		#AY_AFINE
+	jsr		AY_ReadRegValue
+	ldx		#$FF				; $33
+
++	stx		zpTmp2				; expected
+	sta		zpTmp1				; actual
+
+++	jsr		Init6522ForAY		; Reset 6522's 2x AYs
+
+	lda		zpTmp1
+	cmp		zpTmp2
+	bne		@error
+
+	clc
+	rts							; C=0(OK)
+
+@error
+	sec
+	rts							; C=1(NG)
+
+;--------------------------------------
+
+TestAYPhasor
+; Pre: isPhasorCard==1
+; Post: C=0(OK), C=1(NG)
+;	zpTmp2 = expected, A = actual
 
 	; Test for 4 AYs (Phasor only)
 	; . Write to each AY's reg#0 with values: $11,$22,$33,$44
