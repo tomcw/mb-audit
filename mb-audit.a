@@ -29,6 +29,7 @@
 ; MB-C
 ; . MB-C & clones			6522-A/AY8913			6522-B/AY8913 +[1|2x SSI263]
 ; . MB-C (AppleWin)			MB-C +SC01				MB-C +[1|2x SSI263]
+; . MB-C (MAME)				MB-C +SC01				MB-C
 ; . MEGA Audio (a2heaven)	MB-C					MB-C				6522 & AY8913 implemented in FPGA, supports 2x MB-C's
 ; Phasor
 ; . MB-C					6522-A/AY8913			6522-B/AY8913 +[1|2x SSI263]
@@ -545,6 +546,12 @@ DisplayCardUpdate
 	sec							; sec to do the +1
 	adc		zpTmp1
 	tax
+
+	lda		hasAY8913
+	bne		+					; No AYs found? (eg. AYs erroneously reading back as $FF)
+		lda		#$80+'?'
+		sta		LINE2+SLOT1POS+1,x	; 'V?'
+		sta		LINE3+SLOT1POS+1,x	; 'V?'
 
 +	lda		hasAY8913
 	cmp		#1					; 6522/AY8913 at $00?
