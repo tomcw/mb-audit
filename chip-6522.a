@@ -1984,6 +1984,9 @@ T6522_11
 		rts
 +
 
+	jsr		resetSubTest			; subTest #0
+	jsr		incTotalTests
+
 	lda		#PH_ECHOPLUS
 	jsr		SetPhasorMode
 
