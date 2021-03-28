@@ -468,8 +468,8 @@ SLOT1POS = $13					; pos left of '1'
 
 Display
 ;               1  2  3  4  5  6  7
-;          $00: V     1  S  C  P       ; V=6522(VIA), 1=Sound-I, S=Sound/Speech-I, M=MegaAudio, M4C=MB4C, E=Echo+, C=MB-C(or MB-A or Sound-II), P=Phasor
-;          $80:    V     S  C  P
+;          $00: ?     1  S  C  P       ; ?=6522(VIA), 1=Sound-I, S=Sound/Speech-I, M=MegaAudio, M4C=MB4C, E=Echo+, C=MB-C(or MB-A or Sound-II), P=Phasor
+;          $80:    ?     S  C  P
 ;           SP:           VABV B       ; A=SSI263(socket-A), B=SSI263(socket-B), V=Votrax/SC01
 
 	lda		#$80+'$'
@@ -502,14 +502,14 @@ Display
 		pha
 		lda		#$80+' '		; C-flag not affected
 		bcc		+
-		lda		#$80+'V'
+		lda		#$80+'?'
 +		sta		LINE2+$12,x		; 'V' or ' '
 
 		pla
 		lsr
 		lda		#$80+' '		; C-flag not affected
 		bcc		+
-		lda		#$80+'V'
+		lda		#$80+'?'
 +		sta		LINE3+$12,x		; 'V' or ' '
 
 		dex
@@ -547,11 +547,17 @@ DisplayCardUpdate
 	adc		zpTmp1
 	tax
 
-	lda		hasAY8913
-	bne		+					; No AYs found? (eg. AYs erroneously reading back as $FF)
-		lda		#$80+'?'
-		sta		LINE2+SLOT1POS+1,x	; 'V?'
-		sta		LINE3+SLOT1POS+1,x	; 'V?'
+	lda		hasAY8913			; No AYs found? (eg. AYs erroneously reading back as $FF)
+	bne		+
+		txa
+		pha
+		jsr		PrintSlotNum
+		lda		#<msg_WarningNoAYs
+		ldx		#>msg_WarningNoAYs
+		jsr		Print
+		pla
+		tax
+		; keep going, as may have detected some speech...
 
 +	lda		hasAY8913
 	cmp		#1					; 6522/AY8913 at $00?
@@ -843,6 +849,9 @@ msg_cpu65816DetectedEnd !text 0
 
 msg_NoMB !text "No Mockingboard detected!",0xd
 msg_NoMBEnd !text 0
+
+msg_WarningNoAYs	!text "Warning: unknown card (no AYs)",0xd
+msg_WarningNoAYsEnd	!text 0
 
 msg_Slot !text "Slot #"	; 0
 msg_SlotEnd !text 0
