@@ -940,7 +940,7 @@ TestSSI263ISR
 -		ora		(SpeechData),y
 		dey
 		bpl		-
-	tay
+	tay								; tst a
 	bne		+
 
 	; last phoneme complete, so finalise with PAUSE phoneme + disable SSI263 IRQ + disable 6522 T1 IRQ

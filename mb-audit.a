@@ -26,6 +26,7 @@
 ; Sound I					6522-A/AY8913			n/a
 ; Sound/Speech I			6522-A/SC01				6522-B/AY8913
 ; Sound II					6522-A/AY8913			6522-B/AY8913
+; Speech I					6522-A/SC01
 ; MB-C
 ; . MB-C & clones			6522-A/AY8913			6522-B/AY8913 +[1|2x SSI263]
 ; . MB-C (AppleWin)			MB-C +SC01				MB-C +[1|2x SSI263]
@@ -179,6 +180,8 @@ entrypoint
 			jsr		TestAY8913
 			bcs		@error
 			jsr		TestSSI263
+			bcs		@error
+			jsr		TestSC01
 			bcc		++
 @error			jsr		PrintTestFailedErrBytes
 				jmp		exit
@@ -468,7 +471,7 @@ SLOT1POS = $13					; pos left of '1'
 
 Display
 ;               1  2  3  4  5  6  7
-;          $00: ?     1  S  C  P       ; ?=6522(VIA), 1=Sound-I, S=Sound/Speech-I, M=MegaAudio, M4C=MB4C, E=Echo+, C=MB-C(or MB-A or Sound-II), P=Phasor
+;          $00: ?     1  S  C  P       ; ?=6522(VIA), 1=Sound-I(or Speech-I), S=Sound/Speech-I, M=MegaAudio, M4C=MB4C, E=Echo+, C=MB-C(or MB-A or Sound-II), P=Phasor
 ;          $80:    ?     S  C  P
 ;           SP:           VABV B       ; A=SSI263(socket-A), B=SSI263(socket-B), V=Votrax/SC01
 
@@ -562,7 +565,7 @@ DisplayCardUpdate
 +	lda		hasAY8913
 	cmp		#1					; 6522/AY8913 at $00?
 	bne		+
-		lda		#$80+'1'		; MB-Sound I (has a 6522/AY8913 at $00)
+		lda		#$80+'1'		; MB-Sound I (has a 6522/AY8913 at $00) or MB-Speech I (has a 6522/SC01) at $00
 		sta		LINE2+SLOT1POS,x
 
 +	lda		hasAY8913
