@@ -116,6 +116,9 @@ TestSC01
 	and		#1
 	beq		@ok
 
+	lda		hasSC01
+	beq		@ok
+
 	lda		#IER_CLR|IxR_TIMER1|IxR_TIMER2|IxR_VOTRAX
 	ldy		#SY6522_IER	; disable IRQ
 	sta		(MBBase),y
@@ -314,7 +317,7 @@ TestSC01ISR
 doingSpeechSC01		!byte 0
 
 TheSpyStrikesBack
-; PenguinSoft's "The Spy Strikes Back"
+; Penguin Software's "The Spy Strikes Back"
 	!byte $03
 	!byte $38
 	!byte $32
@@ -342,7 +345,7 @@ NullPhraseSC01
 
 !if 0 {
 Ouch
-; PenguinSoft's "The Spy Strikes Back" - "Ouch!"
+; Penguin Software's "The Spy Strikes Back" - "Ouch!"
 	!byte $03
 	!byte $13
 	!byte $37
