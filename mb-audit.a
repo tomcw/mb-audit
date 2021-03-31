@@ -197,6 +197,11 @@ entrypoint
 		bcs		@error
 +
 
+	jsr		TestReset
+	bcs		@error
+
+	;
+
 	lda		#<msg_OK
 	ldx		#>msg_OK
 	jsr		Print
@@ -207,47 +212,6 @@ entrypoint
 	jsr		COUT
 	lda		#$80+$0d
 	jsr		COUT
-
-	;
-
-TestReset
-	lda		#7
-	sta		slotUnderTest
-nextSlot
-		ldx		slotUnderTest
-		lda		slotInfo,x
-		beq		+
-			sta		has6522
-			jsr		Setup6522ForReset
-			bcs		error
-			jsr		PrintSlotNum
-			lda		#<msg_PressReset
-			ldx		#>msg_PressReset
-			jsr		Print
-			tsx
-			jsr		SetupResetVector	; NB. do this after Print, as we save the text screen vars
-			lda		#0
-			sta		hasBeenReset
-TestResetLoop
--				lda		hasBeenReset
-				bne		++
-				lda		KBD
-				bpl		-
-				bit		KBDSTRB
-				cmp		#$80+27
-				bne		-
-			jsr		Skip6522ForReset
-			jmp		+
-++			jsr		Test6522AfterReset
-			bcc		+
-error			jsr		PrintTestFailedErrBytes
-				jmp		exit
-+		dec		slotUnderTest
-		bne		nextSlot
-
-	lda		#<msg_ResetOK
-	ldx		#>msg_ResetOK
-	jsr		Print
 
 	;
 
@@ -275,6 +239,52 @@ exit
 
 ;------------------------------------------------------------------------------
 
+TestReset
+; Post: C=0(OK), C=1(NG)
+
+	lda		#7
+	sta		slotUnderTest
+nextSlot
+		ldx		slotUnderTest
+		lda		slotInfo,x
+		beq		+
+			sta		has6522
+			jsr		Setup6522ForReset
+			bcs		++
+			jsr		PrintSlotNum
+			lda		#<msg_PressReset
+			ldx		#>msg_PressReset
+			jsr		Print
+			tsx
+			jsr		SetupResetVector	; NB. do this after Print, as we save the text screen vars
+			lda		#0
+			sta		hasBeenReset
+TestResetLoop
+-				lda		hasBeenReset
+				bne		@test
+				lda		KBD
+				bpl		-
+				bit		KBDSTRB
+				cmp		#$80+27
+				bne		-
+			jsr		Skip6522ForReset
+			jmp		+
+
+@test		jsr		Test6522AfterReset
+			bcs		++
+
++		dec		slotUnderTest
+		bne		nextSlot
+
+	lda		#<msg_ResetOK
+	ldx		#>msg_ResetOK
+	jsr		Print
+
+@ok	clc
+++	rts
+
+;
+
 ResetVector
 
 	lda		#1
@@ -292,7 +302,7 @@ ResetVector
 
 	jmp		TestResetLoop
 
-	;
+;
 
 SetupResetVector
 ; Pre: X=SP
