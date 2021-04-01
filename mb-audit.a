@@ -195,6 +195,9 @@ entrypoint
 	bcc		+						; (branch if A < 2)
 		jsr		Test6522MultiCard
 		bcs		@error
+		lda		#<msg_MultiCardOK
+		ldx		#>msg_MultiCardOK
+		jsr		Print
 +
 
 	jsr		TestReset
@@ -897,3 +900,6 @@ msg_PressResetEnd !text 0
 
 msg_ResetOK !text "Reset tests passed",0xd
 msg_ResetOKEnd !text 0
+
+msg_MultiCardOK !text "Multi-card tests passed",0xd
+msg_MultiCardOKEnd !text 0

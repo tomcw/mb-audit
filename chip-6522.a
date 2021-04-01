@@ -195,6 +195,7 @@ Check6522
 	sta		testComponentNum
 	lda		#0
 	sta		testNum						; test #00
+	sta		subTestNum					; (not used for these tests, so just set to $00)
 	jsr		Check6522Datalines
 	bcc		+
 	rts

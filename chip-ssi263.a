@@ -551,7 +551,7 @@ T263_2
 	lda		#$FF
 	jsr		WAIT					; delay for 0x28882 (166018) cycles / ~163ms
 
-	; TODO AppleWin:SSI263-new: (Phasor card) once got error 41:07:00 (expected=80, actual=00) - was Stepping, which appears to be the cause
+	; TODO AppleWin:SSI263-new: (Phasor card) once got error 41:02:00 (expected=80, actual=00) - was Stepping, which appears to be the cause
 
 	ldy		#SSI_DURPHON
 	lda		(SSI263Base),y
@@ -594,7 +594,7 @@ T263_2
 
 	ldy		#SSI_DURPHON			; Check D7==1
 	lda		(SSI263Base),y
-	and		#1<<7
+	and		#REQ_NEW_DATA
 	beq		@errorNot80
 
 	jsr		incSubTestNum			; subTest #4
@@ -796,7 +796,7 @@ T263_4
 
 	jsr		incSubTestNum			; subTest #2
 
-	; TODO AppleWin:SSI263-new: (Phasor card) once got error 41:09:02 (expected=02, actual=00) - Stepping?
+	; TODO AppleWin:SSI263-new: (Phasor card) once got error 41:04:02 (expected=02, actual=00) - Stepping?
 
 	ldy		#SY6522_IFR
 	lda		#IxR_SSI263
