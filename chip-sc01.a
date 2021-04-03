@@ -44,7 +44,7 @@ DisableSC01
 
 	; https://github.com/a2-4am/4cade:
 	; . turn off cb2 pulse mode to disable false writes to sc01 (to fix random MB noise)
-	lda		#$D0
+	lda		#$00
 	ldy		#SY6522_PCR
 	sta		(MBBase),y
 
@@ -67,7 +67,7 @@ KickSC01
 	sta		(MBBase),y
 
 	ldy		#SY6522_ORB
-	lda		#$03					; PAUSE0
+	lda		#$3F					; STOP (47ms on average)
 	sta		(MBBase),y
 
 	rts
@@ -204,7 +204,7 @@ TSC01_0
 	lda		#IER_CLR|IxR_TIMER1|IxR_VOTRAX
 	sta		(MBBase),y				; Disable Timer1 & SC01/Votrax IRQ
 
-	jsr		CalcPhraseDuration		; Real MB: <TODO> (MAME: 0x16229C; AppleWin: 0x250229,0x250C9B/running; 0x260B7B/stepping)
+	jsr		CalcPhraseDuration		; Real MB: <TODO> (MAME 0.230: 0x15E0BE; AppleWin: 0x250229,0x250C9B/running; 0x260B7B/stepping)
 
 	lda		#1						; actual
 	plp
@@ -318,6 +318,7 @@ doingSpeechSC01		!byte 0
 
 TheSpyStrikesBack
 ; Penguin Software's "The Spy Strikes Back"
+; NB. For MAME 0.230 inflection (b7:6) changes the pitch, but the overall phrase duration remains constant at 0x15E0BE cycles
 	!byte $03
 	!byte $38
 	!byte $32
