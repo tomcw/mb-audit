@@ -114,10 +114,10 @@ TestSC01
 
 	lda		has6522
 	and		#1
-	beq		@ok
+	beq		@done
 
 	lda		hasSC01
-	beq		@ok
+	beq		@done
 
 	lda		#IER_CLR|IxR_TIMER1|IxR_TIMER2|IxR_VOTRAX
 	ldy		#SY6522_IER	; disable IRQ
@@ -146,7 +146,8 @@ TestSC01
 	jsr		TSC01_0
 	bcs		@error
 
-@ok	clc
+@done
+	clc
 	rts
 
 @error
@@ -201,8 +202,10 @@ TSC01_0
 	php
 
 	ldy		#SY6522_IER
-	lda		#IER_CLR|IxR_TIMER1|IxR_VOTRAX
-	sta		(MBBase),y				; Disable Timer1 & SC01/Votrax IRQ
+	lda		#IER_CLR|IxR_VOTRAX
+	sta		(MBBase),y				; Disable SC01/Votrax IRQ
+	lda		#IER_CLR|IxR_TIMER1
+	sta		(MBTimer),y				; Disable Timer1 IRQ
 
 	jsr		CalcPhraseDuration		; Real MB: <TODO> (MAME 0.230: 0x15E0BE; AppleWin: 0x250229,0x250C9B/running; 0x260B7B/stepping)
 
@@ -221,7 +224,7 @@ TestSC01ISR
 ;	SpeechData
 ; Post:
 ;	irqT1IntCount, irqT1H, irqT1H2, irqT1L
-;	isrFlag=1 (on SSI263 IRQ)
+;	isrFlag=1 (on SC01 IRQ)
 ;	SpeechData (incremented)
 ;
 
@@ -318,7 +321,7 @@ doingSpeechSC01		!byte 0
 
 TheSpyStrikesBack
 ; Penguin Software's "The Spy Strikes Back"
-; NB. For MAME 0.230 inflection (b7:6) changes the pitch, but the overall phrase duration remains constant at 0x15E0BE cycles
+; NB. For MAME 0.230 inflection (b7:6) changes the pitch, but the overall phrase duration remains constant at 0x15E0D0 cycles (model=applee)
 	!byte $03
 	!byte $38
 	!byte $32
@@ -347,6 +350,7 @@ NullPhraseSC01
 !if 0 {
 Ouch
 ; Penguin Software's "The Spy Strikes Back" - "Ouch!"
+; NB. For MAME 0.230 the overall phrase duration is 0x0679D4 cycles (model=applee)
 	!byte $03
 	!byte $13
 	!byte $37
