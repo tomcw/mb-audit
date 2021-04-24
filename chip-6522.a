@@ -352,6 +352,8 @@ Check6522Addrlines
 		ldy		#SY6522_IER				; %1110 (a3)
 		cmp		(MBBase),y				; NB. Reading IER always returns b7=1
 		bne		@6522_err
+		lda		#$7f
+		sta		(MBBase),y				; IER=0
 
 @next
 	lda		zpTmp1
