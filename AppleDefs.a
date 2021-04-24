@@ -16,6 +16,8 @@ SOFTEV_L = $3F2
 SOFTEV_H = $3F3
 PWREDUP  = $3F4
 
+NMI		= $3FB	; 3 bytes
+
 IRQL	= $3FE
 IRQH	= $3FF
 

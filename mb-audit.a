@@ -86,6 +86,14 @@ entrypoint
 		dex
 		bpl		-
 
+	ldx		#3
+-		lda		NMI,x
+		sta		saveNMI,x
+		dex
+		bpl		-
+	lda		#$40	; RTI opcode
+	sta		NMI
+
 	lda		IRQL
 	sta		saveIRQL
 	lda		IRQH
@@ -231,6 +239,12 @@ exit
 	sta		IRQL
 	lda		saveIRQH
 	sta		IRQH
+
+	ldx		#3
+-		lda		saveNMI,x
+		sta		NMI,x
+		dex
+		bpl		-
 
 	ldx		#($ff-ZP_BASE)
 -		lda		saveZP,x
@@ -838,10 +852,15 @@ isrFlag			!byte 0
 isrError		!byte 0,0
 isrCopyA		!byte 0
 
+isrNMIcount		!byte 0
+isrNMIcount_A	!byte 0
+isrNMIcount_B	!byte 0
+
 saveZPTextVars	!fill (BAS2H-CH)+1,0
 
 saveIRQL		!byte 0
 saveIRQH		!byte 0
+saveNMI			!byte 0,0,0
 
 saveRESETL		!byte 0
 saveRESETH		!byte 0

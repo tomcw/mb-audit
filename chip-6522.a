@@ -201,6 +201,11 @@ Check6522
 	rts
 
 +	inc		testNum						; test #01
+	jsr		Check6522Addrlines
+	bcc		+
+	rts
+
++	inc		testNum						; test #02
 	jmp		Check6522IRQ
 
 ;------------------
@@ -303,12 +308,82 @@ Check6522Datalines
 
 ;------------------
 
+Check6522Addrlines
+; Pre: zpTmp1 = slotInfo[slot]
+; Post: C=0(OK), C=1(NG)
+
+	lda		zpTmp1
+	and		#1
+	beq		@next
+
+@loop
+		; write
+		lda		#$AA
+		ldy		#SY6522_DDRA			; %0011 (a0)
+		sta		(MBBase),y
+		lda		#$55
+		ldy		#SY6522_DDRB			; %0010 (a1)
+		sta		(MBBase),y
+
+		lda		#$69
+		ldy		#SY6522_TIMER1H_LATCH	; %0111 (a2)
+		sta		(MBBase),y
+		lda		#$96
+		ldy		#SY6522_IER				; %1110 (a3)
+		sta		(MBBase),y				; NB. Writing IER with b7=1 will set the bits=1
+		eor		#$ff
+		sta		(MBBase),y				; NB. Writing IER with b7=0 will clear the bits=1
+
+		; read
+		lda		#$AA
+		ldy		#SY6522_DDRA			; %0011 (a0)
+		cmp		(MBBase),y
+		bne		@6522_err
+		lda		#$55
+		ldy		#SY6522_DDRB			; %0010 (a1)
+		cmp		(MBBase),y
+		bne		@6522_err
+
+		lda		#$69
+		ldy		#SY6522_TIMER1H_LATCH	; %0111 (a2)
+		cmp		(MBBase),y
+		bne		@6522_err
+		lda		#$96
+		ldy		#SY6522_IER				; %1110 (a3)
+		cmp		(MBBase),y				; NB. Reading IER always returns b7=1
+		bne		@6522_err
+
+@next
+	lda		zpTmp1
+	and		#2
+	beq		@6522_ok
+
+	lda		MBBaseL
+	bne		@6522_ok
+	lda		#SY6522_B_BASE
+	sta		MBBaseL
+	bne		@loop
+
+@6522_ok
+	lda		#0
+	sta		MBBaseL
+	clc
+	rts
+
+@6522_err
+	lda		#0
+	sta		MBBaseL
+	sec
+	rts
+
+;------------------
+
 Check6522IRQ
 ; Pre: zpTmp1 = slotInfo[slot]
 ; Post: C=0(OK), C=1(NG)
 
 	;
-	; Check interrupt line
+	; Check interrupt line(s)
 	;
 
 	sei
@@ -318,10 +393,15 @@ Check6522IRQ
 	lda		#>Check6522ISR
 	sta		IRQH
 
+	jsr		SetISR_NMI
+
 ;@6522_A_int
 	lda		zpTmp1
 	and		#1
 	beq		@6522_B_int
+
+	lda		#0
+	sta		isrNMIcount
 
 	lda		#1
 	ldy		#SY6522_A_BASE+SY6522_TIMER1L_COUNTER
@@ -337,8 +417,11 @@ Check6522IRQ
 	ldy		#SY6522_A_BASE+SY6522_IER
 	sta		(MBBase),y
 
-	lda		#$f							; wait 0x304 cycles
+	lda		#$f							; wait 0x304 cycles (and NMI may have occurred)
 	jsr		WAIT
+
+	lda		isrNMIcount
+	sta		isrNMIcount_A
 
 	ldy		#SY6522_A_BASE+SY6522_IFR
 	lda		#IxR_TIMER1
@@ -356,6 +439,9 @@ Check6522IRQ
 	and		#2
 	beq		@6522_ok
 
+	lda		#0
+	sta		isrNMIcount
+
 	lda		#1
 	ldy		#SY6522_B_BASE+SY6522_TIMER1L_COUNTER
 	sta		(MBBase),y
@@ -370,8 +456,11 @@ Check6522IRQ
 	ldy		#SY6522_B_BASE+SY6522_IER
 	sta		(MBBase),y
 
-	lda		#$f							; wait 0x304 cycles
+	lda		#$f							; wait 0x304 cycles (and NMI may have occurred)
 	jsr		WAIT
+
+	lda		isrNMIcount
+	sta		isrNMIcount_B
 
 	ldy		#SY6522_B_BASE+SY6522_IFR
 	lda		#IxR_TIMER1
@@ -428,6 +517,26 @@ Check6522ISR
 	tax
 
 	lda		$45		; for Apple II/II+
+	rti
+
+;------------------------------------------------------------------------------
+
+SetISR_NMI
+	lda		#$4C
+	sta		NMI+0
+	lda		#<Check6522ISR_NMI
+	sta		NMI+1
+	lda		#>Check6522ISR_NMI
+	sta		NMI+2
+	rts
+
+	;
+
+Check6522ISR_NMI
+; 6502's NMI is triggered on NMI(active low) falling edge (H->L).
+; Interrupt will be cleared by IRQ handler above.
+
+	inc		isrNMIcount
 	rti
 
 ;------------------------------------------------------------------------------
