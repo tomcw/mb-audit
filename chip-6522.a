@@ -556,9 +556,10 @@ Check6522ISR_NMI
 ;	. [T6522_8, T6522_9, T6522_D] oneshot underflow, then T1L -> T1C
 ;	. [T6522_E] 6522 period is N+2 cycles
 ;	. [T6522_F]  Alt test that 6522 period is N+2 cycles - currently disabled
-;	[T6522_10] Test 6522s at $Cn10 and $Cn90
-;	[T6522_11] Test Phasor can switch to Echo+
-;	[T6522_12] Both 6522s: test T1 & T2 (from chips A&B) all running at the same time
+;	[T6522_10] Test sub-opcode accuracy for reading IFR
+;	[T6522_11] Test 6522s at $Cn10 and $Cn90
+;	[T6522_12] Test Phasor can switch to Echo+
+;	[T6522_13] Both 6522s: test T1 & T2 (from chips A&B) all running at the same time
 ;	[Test6522MultiCard] 2 cards: Both 6522s: test T1 & T2 (from chips A&B) all running at the same time
 ;	[Test6522AfterReset] 6522 IRQ pending, CTRL+RESET should clear it
 ;
@@ -665,9 +666,10 @@ testTbl
 	!word	T6522_10	; 30
 	!word	T6522_11	; 31
 	!word	T6522_12	; 32
+	!word	T6522_13	; 33
 	!word	0
 
-;--------------------------------------
+;------------------------------------------------------------------------------
 
 T6522_0
 ; Pre:
@@ -715,12 +717,13 @@ T6522_0
 	bne		@error
 
 	clc
-	!byte $24						; bit zp... ie. skip the 'sec' opcode
+	rts
+
 @error
 	sec
 	rts								; C=0(OK), C=1(NG)
 
-;--------------------------------------
+;------------------------------------------------------------------------------
 
 T6522_1
 ; Pre:
@@ -799,25 +802,25 @@ T6522_1
 	bne		@error
 
 	clc
-	!byte $24						; bit zp... ie. skip the 'sec' opcode
+	rts
 
 @error
 	sec
 	rts								; C=0(OK), C=1(NG)
 
-;--------------------------------------
+;------------------------------------------------------------------------------
 
 T6522_2
 ; Pre:
 ; Post: C=0(OK), C=1(NG)
-
-	; Test#2 (AppleWin-GH#567)
-	; . Setup T1C=0x0202 and ACR=free-running
-	; . Disable T1 IRQ, enable T2 IRQ
-	; . CLI
-	; . Poll for T1 int
-	; . Enable T1 IRQ
-	; . Expect ISR to immediately set flag
+;
+; Test#2 (AppleWin-GH#567)
+; . Setup T1C=0x0202 and ACR=free-running
+; . Disable T1 IRQ, enable T2 IRQ
+; . CLI
+; . Poll for T1 int
+; . Enable T1 IRQ
+; . Expect ISR to immediately set flag
 
 	jsr		resetSubTest			; subTest #0
 	jsr		incTotalTests
@@ -916,7 +919,7 @@ T6522_2
 	sec
 	rts								; C=1(NG)
 
-;--------------------------------------
+;------------------------------------------------------------------------------
 
 T6522_3
 	lda		#SY6522_TIMER1H_COUNTER
@@ -1044,7 +1047,7 @@ T6522_4
 	sec								; C=1(NG)
 	rts
 
-;--------------------------------------
+;------------------------------------------------------------------------------
 
 T6522_5
 	lda		#SY6522_TIMER1L_COUNTER
@@ -1437,7 +1440,7 @@ T6522_6
 	clc
 ++	rts
 
-;--------------------------------------
+;------------------------------------------------------------------------------
 
 T6522_7
 	lda		#SY6522_TIMER1L_COUNTER
@@ -1976,7 +1979,7 @@ T6522_F
 ;
 ; Test#F
 ; . Test 6522 period is N+2 cycles
-;	alt version: just read IFR, not using IRQ - NG for emulators, since relies on sub-opcode accuracy for setting IFR
+;	alt version: just read IFR, not using IRQ - NG for emulators, since relies on sub-opcode accuracy for reading IFR
 ;
 
 	; TODO: Placeholder - just return OK
@@ -2039,11 +2042,94 @@ T6522_F
 ;------------------------------------------------------------------------------
 
 T6522_10
+; Pre:
+; Post: C=0(OK), C=1(NG)
+;
+; Test#10 (generalised from AppleWin-GH#496)
+; Test polling IFR.Timer1 (NB. with Interrupt Enable off, ie. IER.Timer1=0)
+; - relies on sub-opcode accuracy for reading IFR
+
+	jsr		resetSubTest
+
+	lda		#IER_CLR|IxR_TIMER1
+	ldy		#SY6522_IER
+	sta		(MBBase),y				; Disable Timer1 IRQ
+
+	cli								; IER.T1=0, so IRQ won't fire
+
+	lda		#ACR_ONESHOT
+	ldy		#SY6522_ACR
+	sta		(MBBase),y
+
+	lda		#0
+	ldy		#SY6522_TIMER1L_COUNTER
+	sta		(MBBase),y
+	lda		#1
+	iny								; y=SY6522_TIMER1H_COUNTER
+	sta		(MBBase),y				; clear IFR.T1 & start (countdown from 0x100)
+
+	ldx		#0
+	ldy		#SY6522_IFR
+@loop	lda		(MBBase),y			; For loop X=$12, for the 5 cycles of "lda (zp),y":
+									;  T1C=$0000, IFR.T1=0
+									;  T1C=$FFFF, IFR.T1=0
+									;  T1C=$0100, IFR.T1=1
+									;  T1C=$00FF, IFR.T1=1
+									;  T1C=$00FE, IFR.T1=1
+		and		#IxR_TIMER1
+		bne		@t1_set
+		inx
+		bne		@loop
+
+	lda		#3						; subTest #3
+	sta		subTestNum
+	bne		@error					; timeout
+
+@t1_set
+	ldy		#SY6522_TIMER1L_COUNTER
+	lda		(MBBase),y				; (reading T1C_l clears IFR.T1)
+	stx		zpTmp3
+	tax
+	iny								; y=SY6522_TIMER1H_COUNTER
+	lda		(MBBase),y				; subTest #0
+	beq		+
+		tax
+		lda		#0
+		beq		@error
++
+
+	jsr		incSubTestNum			; subTest #1
+	lda		#$12
+	cmp		zpTmp3
+	beq		+
+		ldx		zpTmp3
+		jmp		@error
++
+
+	jsr		incSubTestNum			; subTest #2
+	cpx		#$f2
+	beq		+
+		lda		#$f2
+		bne		@error
++
+
+	clc
+	rts
+
+@error	; Pre: A=expected, X=actual
+	sta		zpTmp2					; expected
+	txa								; actual
+	sec								; C=1(NG)
+	rts
+
+;------------------------------------------------------------------------------
+
+T6522_11
 ; Pre: MBBaseL = $00
 ;	has6522
 ; Post: C=0(OK), C=1(NG)
 ;
-; Test#10
+; Test#11
 ; . test accessing 6522 at $10 (ie. not $00) - avoid $20, $40 (and combinations) as this is the SSI263
 ; . test accessing 6522 at $90 (ie. not $80)
 ;
@@ -2079,12 +2165,12 @@ T6522_10
 
 ;------------------------------------------------------------------------------
 
-T6522_11
+T6522_12
 ; Pre: MBBaseL = $00
 ;	has6522
 ; Post: C=0(OK), C=1(NG)
 ;
-; Test#11
+; Test#12
 ; . For Phasor check the Echo+ mode
 ;
 
@@ -2126,12 +2212,12 @@ T6522_11
 
 ;------------------------------------------------------------------------------
 
-T6522_12
+T6522_13
 ; Pre: MBBaseL = $00
 ;	has6522
 ; Post: C=0(OK), C=1(NG)
 ;
-; Test#12
+; Test#13
 ; . Setup counters on all the 6522's T1+T2
 ;	6522-A T1 is free-running
 ;	6522-A T2 is one-shot
