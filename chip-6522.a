@@ -2003,7 +2003,7 @@ T6522_F
 	ldy		#SY6522_IER				; T1=$000C
 	sta		(MBBase),y				; T1=$0006 Enable T1 IRQ
 	dey								; T1=$0004 Y=IFR
-	lda		(MBBase),y				; T1=$0010 IFR read on 5th cycle (ie. T1=$FFFF), so just before IRQ
+	lda		(MBBase),y				; T1=$FFFF IFR read on 5th cycle, so just before IRQ asserted
 	ldx		#0
 	and		#IxR_TIMER1
 	bne		@error
@@ -2021,7 +2021,7 @@ T6522_F
 	ldy		#SY6522_IER				; T1=$000B
 	sta		(MBBase),y				; T1=$0005 Enable T1 IRQ
 	dey								; T1=$0003 Y=IFR
-	lda		(MBBase),y				; T1=$000F IFR read on 5th cycle (ie. T1=$0010), so just after IRQ
+	lda		(MBBase),y				; T1=$000F IFR read on 5th cycle, so just after IRQ asserted
 	ldx		#IxR_TIMER1
 	and		#IxR_TIMER1
 	beq		@error
@@ -2057,70 +2057,91 @@ T6522_10
 
 	cli								; IER.T1=0, so IRQ won't fire
 
+	lda		#<@data
+	sta		zpTmpPtrL
+	lda		#>@data
+	sta		zpTmpPtrH
+
 	lda		#ACR_ONESHOT
 	ldy		#SY6522_ACR
 	sta		(MBBase),y
 
-	lda		#0
-	ldy		#SY6522_TIMER1L_COUNTER
-	sta		(MBBase),y
-	lda		#1
-	iny								; y=SY6522_TIMER1H_COUNTER
-	sta		(MBBase),y				; clear IFR.T1 & start (countdown from 0x100)
+@t1_loop
+		ldy		#SY6522_TIMER1L_COUNTER
+		lda		(zpTmpPtr),y
+		sta		(MBBase),y
+		iny								; y=SY6522_TIMER1H_COUNTER
+		lda		(zpTmpPtr),y
+		sta		(MBBase),y				; clear IFR.T1 & start (countdown from 0x100)
 
-	ldx		#0
-	ldy		#SY6522_IFR
-@loop	lda		(MBBase),y			; For loop X=$12, for the 5 cycles of "lda (zp),y":
-									;  T1C=$0000, IFR.T1=0
-									;  T1C=$FFFF, IFR.T1=0
-									;  T1C=$0100, IFR.T1=1
-									;  T1C=$00FF, IFR.T1=1
-									;  T1C=$00FE, IFR.T1=1
-		and		#IxR_TIMER1
-		bne		@t1_set
-		inx
-		bne		@loop
+		ldx		#0
+		ldy		#SY6522_IFR
+@loop		lda		(MBBase),y			; For loop X=$12, for the 5 cycles of "lda (zp),y":
+										;  T1C=$0000, IFR.T1=0
+										;  T1C=$FFFF, IFR.T1=0
+										;  T1C=$0100, IFR.T1=1
+										;  T1C=$00FF, IFR.T1=1
+										;  T1C=$00FE, IFR.T1=1
+			and		#IxR_TIMER1
+			bne		@t1_set
+			inx
+			bne		@loop
 
-	lda		#3						; subTest #3
-	sta		subTestNum
-	bne		@error					; timeout
+		lda		#3						; subTest #3
+		sta		subTestNum
+		bne		@error					; timeout
 
 @t1_set
-	ldy		#SY6522_TIMER1L_COUNTER
-	lda		(MBBase),y				; (reading T1C_l clears IFR.T1)
-	stx		zpTmp3
-	tax
-	iny								; y=SY6522_TIMER1H_COUNTER
-	lda		(MBBase),y				; subTest #0
-	beq		+
-		tax
-		lda		#0
-		beq		@error
-+
+		ldy		#SY6522_TIMER1L_COUNTER
+		lda		(MBBase),y				; (reading T1C_l clears IFR.T1)
+		pha								; T1C_l
+		iny								; y=SY6522_TIMER1H_COUNTER
+		lda		(MBBase),y
+		pha								; T1C_h
 
-	jsr		incSubTestNum			; subTest #1
-	lda		#$12
-	cmp		zpTmp3
-	beq		+
-		ldx		zpTmp3
-		jmp		@error
-+
-
-	jsr		incSubTestNum			; subTest #2
-	cpx		#$f2
-	beq		+
-		lda		#$f2
+		ldy		#0						; subTest #0
+		txa
+		cmp		(zpTmpPtr),y			; x (loop count)
 		bne		@error
+
+		jsr		incSubTestNum			; subTest #1
+		iny
+		pla
+		cmp		(zpTmpPtr),y			; T1C_h
+		bne		@error
+
+		jsr		incSubTestNum			; subTest #2
+		iny
+		pla
+		cmp		(zpTmpPtr),y			; T1C_l
+		bne		@error
+
+		clc
+		lda		zpTmpPtrL
+		adc		#6
+		sta		zpTmpPtrL
+		bcc		+
+			inc		zpTmpPtrH
 +
+		ldy		#0
+		lda		(zpTmpPtr),y
+		bne		@t1_loop
 
 	clc
 	rts
 
-@error	; Pre: A=expected, X=actual
+@error	; Pre: A=actual, (zpTmpPtr),y=actual
+	tax
+	lda		(zpTmpPtr),y
 	sta		zpTmp2					; expected
 	txa								; actual
 	sec								; C=1(NG)
 	rts
+
+@data
+	; result-X, result-T1H, result-T1L, (pad), start-T1L, start-T1H
+	!byte	$12,$00,$f2, 0, $00,$01
+	!byte	0						; end
 
 ;------------------------------------------------------------------------------
 
@@ -2439,7 +2460,7 @@ T6522_13
 	;
 !if 0{
 	; subTest #5
-	; [*1] See above, where write to IFR (clear T2 IRQ) and T2 underflow occur on same cycle - the clear T2 IRQ wins
+	; [*1] See above, where write to IFR (clear T2 IRQ) and T2 underflow occur on same cycle - the "clear T2 IRQ" wins
 	!word	$0000
 	!word	$0010					; T2: $10 cycles to set IER.T2 - no good on real h/w
 	!word	$0000
@@ -2713,7 +2734,7 @@ Test6522MultiCard
 	;
 !if 0{
 	; subTest #3 (untested on real h/w)
-	; [*1] See above, where write to IFR (clear T2 IRQ) and T2 underflow occur on same cycle - the clear T2 IRQ wins
+	; [*1] See above, where write to IFR (clear T2 IRQ) and T2 underflow occur on same cycle - the "clear T2 IRQ" wins
 	!word	$0000,$0010
 	!word	$0000,$0010				; T1,T2: $10 cycles to set IER.T1/T2
 	!word	$0000,$0010
