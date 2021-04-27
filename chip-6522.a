@@ -2050,6 +2050,7 @@ T6522_10
 ; - relies on sub-opcode accuracy for reading IFR
 
 	jsr		resetSubTest
+	dec		subTestNum
 
 	lda		#IER_CLR|IxR_TIMER1
 	ldy		#SY6522_IER
@@ -2072,11 +2073,11 @@ T6522_10
 		sta		(MBBase),y
 		iny								; y=SY6522_TIMER1H_COUNTER
 		lda		(zpTmpPtr),y
-		sta		(MBBase),y				; clear IFR.T1 & start (countdown from 0x100)
+		sta		(MBBase),y				; clear IFR.T1 & start (eg. countdown from 0x100)
 
 		ldx		#0
 		ldy		#SY6522_IFR
-@loop		lda		(MBBase),y			; For loop X=$12, for the 5 cycles of "lda (zp),y":
+@loop		lda		(MBBase),y			; EG. For initial T1C=0x100; for loop X=$12, for the 5 cycles of "lda (zp),y":
 										;  T1C=$0000, IFR.T1=0
 										;  T1C=$FFFF, IFR.T1=0
 										;  T1C=$0100, IFR.T1=1
@@ -2087,32 +2088,33 @@ T6522_10
 			inx
 			bne		@loop
 
-		lda		#3						; subTest #3
+		lda		#$ff					; subTest #$ff
 		sta		subTestNum
 		bne		@error					; timeout
 
 @t1_set
 		ldy		#SY6522_TIMER1L_COUNTER
 		lda		(MBBase),y				; (reading T1C_l clears IFR.T1)
-		pha								; T1C_l
+		sta		zpTmp5					; T1C_l
 		iny								; y=SY6522_TIMER1H_COUNTER
 		lda		(MBBase),y
-		pha								; T1C_h
+		sta		zpTmp2					; T1C_h
 
-		ldy		#0						; subTest #0
+		jsr		incSubTestNum			; subTest #0,3,..
+		ldy		#0
 		txa
 		cmp		(zpTmpPtr),y			; x (loop count)
 		bne		@error
 
-		jsr		incSubTestNum			; subTest #1
+		jsr		incSubTestNum			; subTest #1,4,...
 		iny
-		pla
+		lda		zpTmp2
 		cmp		(zpTmpPtr),y			; T1C_h
 		bne		@error
 
-		jsr		incSubTestNum			; subTest #2
+		jsr		incSubTestNum			; subTest #2,5,...
 		iny
-		pla
+		lda		zpTmp5
 		cmp		(zpTmpPtr),y			; T1C_l
 		bne		@error
 
@@ -2140,7 +2142,22 @@ T6522_10
 
 @data
 	; result-X, result-T1H, result-T1L, (pad), start-T1L, start-T1H
-	!byte	$12,$00,$f2, 0, $00,$01
+	!byte	$13,$00,$ec, 0, $04,$01	; T1C=$0104
+	!byte	$12,$00,$f8, 0, $03,$01	; T1C=$0103
+	!byte	$12,$00,$f6, 0, $02,$01	; T1C=$0102
+	!byte	$12,$00,$f4, 0, $01,$01	; T1C=$0101
+	!byte	$12,$00,$f2, 0, $00,$01	; T1C=$0100
+	!byte	$12,$00,$f0, 0, $ff,$00	; T1C=$00FF
+	!byte	$12,$00,$ee, 0, $fe,$00	; T1C=$00FE
+	!byte	$12,$00,$ec, 0, $fd,$00	; T1C=$00FD
+	!byte	$12,$00,$ea, 0, $fc,$00	; T1C=$00FC
+	!byte	$12,$00,$e8, 0, $fb,$00	; T1C=$00FB
+	!byte	$12,$00,$e6, 0, $fa,$00	; T1C=$00FA
+	!byte	$12,$00,$e4, 0, $f9,$00	; T1C=$00F9
+	!byte	$12,$00,$e2, 0, $f8,$00	; T1C=$00F8
+	!byte	$12,$00,$e0, 0, $f7,$00	; T1C=$00F7
+	!byte	$12,$00,$de, 0, $f6,$00	; T1C=$00F6
+	!byte	$11,$00,$ea, 0, $f5,$00	; T1C=$00F5
 	!byte	0						; end
 
 ;------------------------------------------------------------------------------
