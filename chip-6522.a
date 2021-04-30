@@ -667,6 +667,7 @@ testTbl
 	!word	T6522_11	; 31
 	!word	T6522_12	; 32
 	!word	T6522_13	; 33
+	!word	T6522_14	; 34
 	!word	0
 
 ;------------------------------------------------------------------------------
@@ -2068,11 +2069,13 @@ T6522_10
 	sta		(MBBase),y
 
 @t1_loop
+		ldy		#0
+		lda		(zpTmpPtr),y
 		ldy		#SY6522_TIMER1L_COUNTER
-		lda		(zpTmpPtr),y
 		sta		(MBBase),y
-		iny								; y=SY6522_TIMER1H_COUNTER
+		ldy		#1
 		lda		(zpTmpPtr),y
+		ldy		#SY6522_TIMER1H_COUNTER
 		sta		(MBBase),y				; clear IFR.T1 & start (eg. countdown from 0x100)
 
 		ldx		#0
@@ -2101,31 +2104,34 @@ T6522_10
 		sta		zpTmp2					; T1C_h
 
 		jsr		incSubTestNum			; subTest #0,3,..
-		ldy		#0
+		ldy		#2
 		txa
 		cmp		(zpTmpPtr),y			; x (loop count)
 		bne		@error
 
 		jsr		incSubTestNum			; subTest #1,4,...
 		iny
-		lda		zpTmp2
-		cmp		(zpTmpPtr),y			; T1C_h
-		bne		@error
-
-		jsr		incSubTestNum			; subTest #2,5,...
-		iny
 		lda		zpTmp5
 		cmp		(zpTmpPtr),y			; T1C_l
 		bne		@error
 
+		jsr		incSubTestNum			; subTest #2,5,...
+		iny
+		lda		zpTmp2
+		cmp		(zpTmpPtr),y			; T1C_h
+		bne		@error
+
 		clc
 		lda		zpTmpPtrL
-		adc		#6
+		adc		#5
 		sta		zpTmpPtrL
 		bcc		+
 			inc		zpTmpPtrH
 +
 		ldy		#0
+		lda		(zpTmpPtr),y
+		bne		@t1_loop
+		iny
 		lda		(zpTmpPtr),y
 		bne		@t1_loop
 
@@ -2141,33 +2147,155 @@ T6522_10
 	rts
 
 @data
-	; result-X, result-T1H, result-T1L, (pad), start-T1L, start-T1H
-	!byte	$13,$00,$ec, 0, $04,$01	; T1C=$0104
-	!byte	$12,$00,$f8, 0, $03,$01	; T1C=$0103
-	!byte	$12,$00,$f6, 0, $02,$01	; T1C=$0102
-	!byte	$12,$00,$f4, 0, $01,$01	; T1C=$0101
-	!byte	$12,$00,$f2, 0, $00,$01	; T1C=$0100
-	!byte	$12,$00,$f0, 0, $ff,$00	; T1C=$00FF
-	!byte	$12,$00,$ee, 0, $fe,$00	; T1C=$00FE
-	!byte	$12,$00,$ec, 0, $fd,$00	; T1C=$00FD
-	!byte	$12,$00,$ea, 0, $fc,$00	; T1C=$00FC
-	!byte	$12,$00,$e8, 0, $fb,$00	; T1C=$00FB
-	!byte	$12,$00,$e6, 0, $fa,$00	; T1C=$00FA
-	!byte	$12,$00,$e4, 0, $f9,$00	; T1C=$00F9
-	!byte	$12,$00,$e2, 0, $f8,$00	; T1C=$00F8
-	!byte	$12,$00,$e0, 0, $f7,$00	; T1C=$00F7
-	!byte	$12,$00,$de, 0, $f6,$00	; T1C=$00F6
-	!byte	$11,$00,$ea, 0, $f5,$00	; T1C=$00F5
-	!byte	0						; end
+	; start-T1L, start-T1H, result-X; result-T1L, result-T1H
+	!byte	$04,$01, $13,$ec,$00	; T1C=$0104
+	!byte	$03,$01, $12,$f8,$00	; T1C=$0103
+	!byte	$02,$01, $12,$f6,$00	; T1C=$0102
+	!byte	$01,$01, $12,$f4,$00	; T1C=$0101
+	!byte	$00,$01, $12,$f2,$00	; T1C=$0100
+	!byte	$ff,$00, $12,$f0,$00	; T1C=$00FF
+	!byte	$fe,$00, $12,$ee,$00	; T1C=$00FE
+	!byte	$fd,$00, $12,$ec,$00	; T1C=$00FD
+	!byte	$fc,$00, $12,$ea,$00	; T1C=$00FC
+	!byte	$fb,$00, $12,$e8,$00	; T1C=$00FB
+	!byte	$fa,$00, $12,$e6,$00	; T1C=$00FA
+	!byte	$f9,$00, $12,$e4,$00	; T1C=$00F9
+	!byte	$f8,$00, $12,$e2,$00	; T1C=$00F8
+	!byte	$f7,$00, $12,$e0,$00	; T1C=$00F7
+	!byte	$f6,$00, $12,$de,$00	; T1C=$00F6
+	!byte	$f5,$00, $11,$ea,$00	; T1C=$00F5
+	!byte	0,0						; end
 
 ;------------------------------------------------------------------------------
 
 T6522_11
+; Pre:
+; Post: C=0(OK), C=1(NG)
+;
+; Test#11 (generalised from AppleWin-GH#496)
+; Test polling IFR.Timer2 (NB. with Interrupt Enable off, ie. IER.Timer2=0)
+; - relies on sub-opcode accuracy for reading IFR
+
+	jsr		resetSubTest
+	dec		subTestNum
+
+	lda		#IER_CLR|IxR_TIMER2
+	ldy		#SY6522_IER
+	sta		(MBBase),y				; Disable Timer1 IRQ
+
+	cli								; IER.T1=0, so IRQ won't fire
+
+	lda		#<@data
+	sta		zpTmpPtrL
+	lda		#>@data
+	sta		zpTmpPtrH
+
+@t2_loop
+		ldy		#0
+		lda		(zpTmpPtr),y
+		ldy		#SY6522_TIMER2L_COUNTER
+		sta		(MBBase),y
+		ldy		#1
+		lda		(zpTmpPtr),y
+		ldy		#SY6522_TIMER2H_COUNTER
+		sta		(MBBase),y				; clear IFR.T2 & start (eg. countdown from 0x100)
+
+		ldx		#0
+		ldy		#SY6522_IFR
+@loop		lda		(MBBase),y			; EG. For initial T2C=0x100; for loop X=$12, for the 5 cycles of "lda (zp),y":
+										;  T2C=$0000, IFR.T2=0
+										;  T2C=$FFFF, IFR.T2=1
+										;  T2C=$FFFE, IFR.T2=1
+										;  T2C=$FFFD, IFR.T2=1
+										;  T2C=$FFFC, IFR.T2=1
+			and		#IxR_TIMER2
+			bne		@t2_set
+			inx
+			bne		@loop
+
+		lda		#$ff					; subTest #$ff
+		sta		subTestNum
+		bne		@error					; timeout
+
+@t2_set
+		ldy		#SY6522_TIMER2L_COUNTER
+		lda		(MBBase),y				; (reading T2C_l clears IFR.T2)
+		sta		zpTmp5					; T2C_l
+		iny								; y=SY6522_TIMER2H_COUNTER
+		lda		(MBBase),y
+		sta		zpTmp2					; T2C_h
+
+		jsr		incSubTestNum			; subTest #0,3,..
+		ldy		#2
+		txa
+		cmp		(zpTmpPtr),y			; x (loop count)
+		bne		@error
+
+		jsr		incSubTestNum			; subTest #1,4,...
+		iny
+		lda		zpTmp5
+		cmp		(zpTmpPtr),y			; T2C_l
+		bne		@error
+
+		jsr		incSubTestNum			; subTest #2,5,...
+		iny
+		lda		zpTmp2
+		cmp		(zpTmpPtr),y			; T2C_h
+		bne		@error
+
+		clc
+		lda		zpTmpPtrL
+		adc		#5
+		sta		zpTmpPtrL
+		bcc		+
+			inc		zpTmpPtrH
++
+		ldy		#0
+		lda		(zpTmpPtr),y
+		bne		@t2_loop
+		iny
+		lda		(zpTmpPtr),y
+		bne		@t2_loop
+
+	clc
+	rts
+
+@error	; Pre: A=actual, (zpTmpPtr),y=actual
+	tax
+	lda		(zpTmpPtr),y
+	sta		zpTmp2					; expected
+	txa								; actual
+	sec								; C=1(NG)
+	rts
+
+@data
+	; start-T2L, start-T2H, result-X; result-T2L, result-T2H
+	!byte	$04,$01, $13,$e6,$ff	; T2C=$0104
+	!byte	$03,$01, $12,$f3,$ff	; T2C=$0103
+	!byte	$02,$01, $12,$f2,$ff	; T2C=$0102
+	!byte	$01,$01, $12,$f1,$ff	; T2C=$0101
+	!byte	$00,$01, $12,$f0,$ff	; T2C=$0100
+	!byte	$ff,$00, $12,$ef,$ff	; T2C=$00FF
+	!byte	$fe,$00, $12,$ee,$ff	; T2C=$00FE
+	!byte	$fd,$00, $12,$ed,$ff	; T2C=$00FD
+	!byte	$fc,$00, $12,$ec,$ff	; T2C=$00FC
+	!byte	$fb,$00, $12,$eb,$ff	; T2C=$00FB
+	!byte	$fa,$00, $12,$ea,$ff	; T2C=$00FA
+	!byte	$f9,$00, $12,$e9,$ff	; T2C=$00F9
+	!byte	$f8,$00, $12,$e8,$ff	; T2C=$00F8
+	!byte	$f7,$00, $12,$e7,$ff	; T2C=$00F7
+	!byte	$f6,$00, $12,$e6,$ff	; T2C=$00F6
+	!byte	$f5,$00, $11,$f3,$ff	; T2C=$00F5
+	!byte	0,0						; end
+
+;------------------------------------------------------------------------------
+
+T6522_12
 ; Pre: MBBaseL = $00
 ;	has6522
 ; Post: C=0(OK), C=1(NG)
 ;
-; Test#11
+; Test#12
 ; . test accessing 6522 at $10 (ie. not $00) - avoid $20, $40 (and combinations) as this is the SSI263
 ; . test accessing 6522 at $90 (ie. not $80)
 ;
@@ -2203,12 +2331,12 @@ T6522_11
 
 ;------------------------------------------------------------------------------
 
-T6522_12
+T6522_13
 ; Pre: MBBaseL = $00
 ;	has6522
 ; Post: C=0(OK), C=1(NG)
 ;
-; Test#12
+; Test#13
 ; . For Phasor check the Echo+ mode
 ;
 
@@ -2250,12 +2378,12 @@ T6522_12
 
 ;------------------------------------------------------------------------------
 
-T6522_13
+T6522_14
 ; Pre: MBBaseL = $00
 ;	has6522
 ; Post: C=0(OK), C=1(NG)
 ;
-; Test#13
+; Test#14
 ; . Setup counters on all the 6522's T1+T2
 ;	6522-A T1 is free-running
 ;	6522-A T2 is one-shot
