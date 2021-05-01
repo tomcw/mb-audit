@@ -555,11 +555,11 @@ Check6522ISR_NMI
 ;	. [T6522_4, T6522_6] 6502|65C02 addr modes access of 6522 T2C
 ;	. [T6522_8, T6522_9, T6522_D] oneshot underflow, then T1L -> T1C
 ;	. [T6522_E] 6522 period is N+2 cycles
-;	. [T6522_F]  Alt test that 6522 period is N+2 cycles - currently disabled
-;	[T6522_10] Test sub-opcode accuracy for reading IFR
-;	[T6522_11] Test 6522s at $Cn10 and $Cn90
-;	[T6522_12] Test Phasor can switch to Echo+
-;	[T6522_13] Both 6522s: test T1 & T2 (from chips A&B) all running at the same time
+;	. [T6522_F] Alt test that 6522 period is N+2 cycles
+;	[T6522_10, T6522_11] Test sub-opcode accuracy for reading IFR
+;	[T6522_12] Test 6522s at $Cn10 and $Cn90
+;	[T6522_13] Test Phasor can switch to Echo+
+;	[T6522_14] Both 6522s: test T1 & T2 (from chips A&B) all running at the same time
 ;	[Test6522MultiCard] 2 cards: Both 6522s: test T1 & T2 (from chips A&B) all running at the same time
 ;	[Test6522AfterReset] 6522 IRQ pending, CTRL+RESET should clear it
 ;
@@ -1983,11 +1983,6 @@ T6522_F
 ;	alt version: just read IFR, not using IRQ - NG for emulators, since relies on sub-opcode accuracy for reading IFR
 ;
 
-	; TODO: Placeholder - just return OK
-	clc
-	rts
-
-!if 0{	; tested & works on real h/w
 	jsr		resetSubTest			; subTest #0
 	jsr		incTotalTests
 
@@ -2038,7 +2033,6 @@ T6522_F
 	pla
 	sec								; C=1(NG)
 	rts
-}
 
 ;------------------------------------------------------------------------------
 
