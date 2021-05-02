@@ -88,7 +88,7 @@ entrypoint
 		dex
 		bpl		-
 
-	ldx		#3
+	ldx		#2
 -		lda		NMI,x
 		sta		saveNMI,x
 		dex
@@ -242,7 +242,7 @@ exit
 	lda		saveIRQH
 	sta		IRQH
 
-	ldx		#3
+	ldx		#2
 -		lda		saveNMI,x
 		sta		NMI,x
 		dex
