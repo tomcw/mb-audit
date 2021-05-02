@@ -9,7 +9,7 @@
 DetectAY8913
 ; Pre: zpTmp1 = 6522 bitmap in b1:0
 ;	hasAY8913 = 0
-;	isPhasorCard
+;	isPhasorCard, isMB4C, isEchoPlus
 ; Post:
 ;	hasAY8913 = %00,%01,%10,%11 (or %1111 for Phasor)
 
@@ -434,6 +434,223 @@ TestAYPhasor
 
 ;------------------------------------------------------------------------------
 
+TestAYTones
+; Pre: hasAY8913
+; Post:
+
+	; . Press 1-3 for AY0 channels A,B,C
+	; . Press 4-6 for AY1 channels A,B,C
+	; . ESC to quit
+
+	sei
+
+	lda		#<AYTonesISR
+	sta		IRQL
+	lda		#>AYTonesISR
+	sta		IRQH
+
+	; Init AY8913 regs
+
+	lda		#AY_DIS_A+AY_DIS_B+AY_DIS_C
+	sta		ayEna+0
+	sta		ayEna+1
+
+	lda		hasAY8913
+	and		#1
+	beq		+
+		lda		#SY6522_A_BASE
+		sta		zpTmp3
+		jsr		Init6522ForAY
+		jsr		@InitAYRegs
++
+
+	lda		hasAY8913
+	and		#2
+	beq		+
+		lda		#SY6522_B_BASE
+		sta		zpTmp3
+		jsr		Init6522ForAY
+		jsr		@InitAYRegs
++
+
+	lda		#$ff
+	ldy		#SY6522_TIMER1L_COUNTER
+	sta		(MBBase),y
+	ldy		#SY6522_TIMER1H_COUNTER
+	sta		(MBBase),y
+
+	lda		#ACR_FREERUNNING
+	ldy		#SY6522_ACR
+	sta		(MBBase),y
+
+	lda		#IER_SET|IxR_TIMER1
+	ldy		#SY6522_IER
+	sta		(MBBase),y
+
+	cli
+
+	;
+
+@loop	lda		KBD
+		bpl		@loop
+	bit		KBDSTRB
+	cmp		#$80+27
+	beq		@done
+
+	cmp		#$80+'1'
+	bcc		@loop					; <'1'
+	cmp		#$80+'7'
+	bcs		@loop					; >='7'
+
+	ldx		#0
+	eor		#$80+$30
+	cmp		#4
+	bcc		@ay_ena					; <'3'
+		sec
+		sbc		#3
+		inx
+
+@ay_ena
+	tay
+	lda		#1
+	dey
+	beq		@ay_ena_done
+	asl
+	dey
+	beq		@ay_ena_done
+	asl
+
+@ay_ena_done
+	eor		ayEna,x					; toggle
+	sta		ayEna,x
+	jmp 	@loop
+
+@done
+	jsr		WaitT1OneShotUnderflow	; clear & disable any T1 ints
+
+	lda		hasAY8913
+	and		#1
+	beq		+
+		ldy		#SY6522_A_BASE
+		jsr		SF_ChipReset
++
+	lda		hasAY8913
+	and		#2
+	beq		+
+		ldy		#SY6522_B_BASE
+		jsr		SF_ChipReset
++
+	clc
+	rts
+
+;
+
+@InitAYRegs	; Pre: Y = SY6522_ORA for chip A or B
+	sty		zpTmp1
+
+	lda		#<@ayregs_init
+	sta		zpTmpPtrL
+	lda		#>@ayregs_init
+	sta		zpTmpPtrH
+
+	lda		#0
+	sta		zpTmp2
+-		ldy		zpTmp2
+		lda		(zpTmpPtr),y
+		ldy		zpTmp1
+		jsr		SF_SelectReg
+		inc		zpTmp2
+
+		ldy		zpTmp2
+		lda		(zpTmpPtr),y
+		ldy		zpTmp1
+		jsr		SF_WriteReg
+		inc		zpTmp2
+
+		ldy		zpTmp2
+		cpy		#(AY_CVOL+1)*2
+		bne		-
+	rts
+
+;
+
+@ayregs_init
+	; reg#,value
+	!byte 7,$ff	; enable (1=disable)
+	!byte 0,0	; A tone_l
+	!byte 1,4	; A tone_h
+	!byte 2,0	; B tone_l
+	!byte 3,4	; B tone_h
+	!byte 4,0	; C tone_l
+	!byte 5,4	; C tone_h
+	!byte 6,0	; noise period
+	!byte 8,15	; A vol
+	!byte 9,15	; B vol
+	!byte 10,15	; C vol
+
+ayEna	; chip A,B
+	!byte $3f,$3f	; 1=dis, 0=ena
+
+;------------------------------------------------------------------------------
+
+AYTonesISR
+; Pre:
+;	6502 has pushed P
+;	Apple ROM has stored A to $45 (not Apple //e ROM!)
+;
+
+	txa
+	pha
+	tya
+	pha
+
+	;------
+
+	ldy		#SY6522_IFR
+	lda		(MBBase),y
+	sta		(MBBase),y				; clear IRQ
+
+	;------
+
+	ldy		#SY6522_ORA
+
+	lda		hasAY8913
+	and		#1
+	beq		@ay_b
+
+@ay_next	lda		#AY_ENABLE
+			jsr		SF_SelectReg
+			ldx		#0
+			cpy		#SY6522_ORA
+			beq		+
+				inx
++			lda		ayEna,x
+			jsr		SF_WriteReg
+
+@ay_b	lda		hasAY8913
+		and		#2
+		beq		@done
+
+		tya
+		eor		#$80
+		tay
+		cpy		#SY6522_ORA
+		bne		@ay_next
+
+@done
+
+	;------
+
+	pla
+	tay
+	pla
+	tax
+
+	lda		$45
+	rti
+
+;------------------------------------------------------------------------------
+
 Init6522ForAY
 ; Pre: phasorMode
 ;	zpTmp3 = SY6522_A_BASE or SY6522_A_PH_BASE or SY6522_B_BASE
@@ -518,8 +735,8 @@ AY_ReadReg
 
 SF_SelectReg
 ; Pre: Y = SY6522_ORA for chip A or B
-; Post: Y = SY6522_ORA for chip A or B
 ;	A = reg#
+; Post: Y = SY6522_ORA for chip A or B
 	sta		(MBBase),y
 	lda		#AY_LATCH
 	bne		+
@@ -527,8 +744,8 @@ SF_SelectReg
 SF_WriteReg
 ; Pre: Y = SY6522_ORA for chip A or B
 ;	6522.DDRA = $FF (Port-A direction = output)
-; Post: Y = SY6522_ORA for chip A or B
 ;	A = data
+; Post: Y = SY6522_ORA for chip A or B
 	sta		(MBBase),y
 	lda		#AY_WRITE
 	bne		+

@@ -213,6 +213,8 @@ entrypoint
 	jsr		TestReset
 	bcs		@error
 
+	jsr		TestAYTones
+
 	;
 
 	lda		#<msg_OK
