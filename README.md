@@ -39,7 +39,7 @@ mb-audit v0.1, 2021
 ```
 
 Then for each card found:
-- Do basic 6522 hardward checks (address line, data lines, and IRQ)
+- Do basic 6522 hardware checks (address line, data lines, and IRQ)
 - Detect connected sub-units: SSI263s, SC-01, AY-3-8913s
 - Determine if the card is a Phasor or MEGA Audio(*1) or MB4C(*1) or Echo+(*1)
   - (*1) Untested on real hardware
@@ -108,8 +108,10 @@ Where:
   - And in most cases it will test both Timer1 and Timer2.
 - Some tests of note:
   - test all the instructions that can _write_ to Timer1/2 (excluding read-modify-write instructions)
-  - test all the instructions that can _read_ to Timer1/2 (excluding read-modify-write instructions)
-  - test timers before/after underflow
+    - include 65C02 (but not 65816) instructions
+  - test all the instructions that can _read_ from Timer1/2 (excluding read-modify-write instructions)
+    - include 65C02 (but not 65816) instructions
+  - test reading timers just before/after underflow
   - test Timer1 with very small latch values (both one-shot & free-running modes)
   - test Timer1's period is N+2 cycles
   - test cycle-accurate (sub-instruction) reading of IFR at Timer1/2 underflow
@@ -123,7 +125,7 @@ AY-3-8913 tests
 - Try to write then read back the AY registers.
   - NB. Not all cards support reading the AY registers (eg. Phasor).
 - Test address line and data lines.
-- Test cards which have a single 6522, but 2 AY-3-8913s (eg. Echo+, MB4C).
+- Test cards which have a single 6522, but 2x AY-3-8913s (eg. Echo+, MB4C).
 - Manual tone tests:
   - Keys: 1,2,3 for AY-3-8913 (chip-A) at $Cn00
   - Keys: 4,5,6 for AY-3-8913 (chip-B) at $Cn80
