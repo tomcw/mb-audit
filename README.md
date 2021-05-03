@@ -23,6 +23,7 @@ Current test matrix for real hardware:
 
 # Operation
 
+Here's a high-level overview of what mb-audit does:
 - Detect CPU type: 6502, 65C02, 65816 for floating-bus & extra 65C02 instruction tests.
 - Detect Apple II model for lowercase support.
 - Scan slots 7..1 to detect any cards with a 6522 at $Cn00 and/or $Cn80
