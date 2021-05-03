@@ -21,7 +21,7 @@ Current test matrix for real hardware:
 - ReactiveMicro's Mockingboard-C, non-enhanced //e, 65C02, SSI263(socket-B) mb-audit v0.1
 - Applied Engineering's Phasor, non-enhanced //e, 65C02, SSI263(socket-A), mb-audit v0.1
 
-# Operation
+### Operation
 
 Here's a high-level overview of what mb-audit does:
 - Detect CPU type: 6502, 65C02, 65816 for floating-bus & extra 65C02 instruction tests.
@@ -101,7 +101,7 @@ Where:
   - EE = expected value
   - AA = actual value
 
-# Details on tests
+### Details on tests
 
 6522 tests
 - In general it will do the same test for 6522s at $Cn00 and $Cn80 (if the cards has 2x 6522s).
