@@ -988,5 +988,5 @@ msg_MultiCardOKEnd !text 0
 msg_ToneKeys !text "A:123, B:456"
 msg_ToneKeysEnd !text 0
 
-msg_ToneKeysPhasor !text ", A:QWE, B:RTY"
+msg_ToneKeysPhasor !text ", C:QWE, D:RTY"
 msg_ToneKeysPhasorEnd !text 0

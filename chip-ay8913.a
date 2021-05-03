@@ -454,6 +454,8 @@ TestAYTones
 	lda		#AY_DIS_A+AY_DIS_B+AY_DIS_C
 	sta		ayEna+0
 	sta		ayEna+1
+	sta		ayEna+2
+	sta		ayEna+3
 
 	lda		hasAY8913
 	and		#1
@@ -495,7 +497,16 @@ TestAYTones
 		bpl		@loop
 	bit		KBDSTRB
 	cmp		#$80+27
-	beq		@done
+	bne		+
+	jmp		@done
++
+
+	cmp		#$80+'A'
+	bcc		+						; <'A'
+	jmp		@letter
++
+
+	; Keys: 123456
 
 	cmp		#$80+'1'
 	bcc		@loop					; <'1'
@@ -505,25 +516,59 @@ TestAYTones
 	ldx		#0
 	eor		#$80+$30
 	cmp		#4
-	bcc		@ay_ena					; <'3'
+	bcc		@ayEnaPre				; < 4
 		sec
 		sbc		#3
 		inx
 
-@ay_ena
+@ayEnaPre	; Pre: A=1,2,3
 	tay
+	jmp		@ayEna
+
+	;
+
+@letter		; Keys: QWERTY
+
+	ldx		#2
+	ldy		#1
+	cmp		#$80+'Q'
+	beq		@ayEna
+	iny
+	cmp		#$80+'W'
+	beq		@ayEna
+	iny
+	cmp		#$80+'E'
+	beq		@ayEna
+
+	ldx		#3
+	ldy		#1
+	cmp		#$80+'R'
+	beq		@ayEna
+	iny
+	cmp		#$80+'T'
+	beq		@ayEna
+	iny
+	cmp		#$80+'Y'
+	beq		@ayEna
+	jmp		@loop					; invalid key
+
+	;
+
+@ayEna	; Pre: Y=1,2,3; X=index in ayEna[]
 	lda		#1
 	dey
-	beq		@ay_ena_done
+	beq		@ayEnaDone
 	asl
 	dey
-	beq		@ay_ena_done
+	beq		@ayEnaDone
 	asl
 
-@ay_ena_done
+@ayEnaDone
 	eor		ayEna,x					; toggle
 	sta		ayEna,x
 	jmp 	@loop
+
+	;
 
 @done
 	jsr		WaitT1OneShotUnderflow	; clear & disable any T1 ints
@@ -588,8 +633,9 @@ TestAYTones
 	!byte 9,15	; B vol
 	!byte 10,15	; C vol
 
-ayEna	; chip A,B
-	!byte $3f,$3f	; 1=dis, 0=ena
+ayEna
+	!byte $3f,$3f	; chip A,B (1=dis, 0=ena -- just like reg#7)
+	!byte $3f,$3f	; chip C,D (for Phasor)
 
 ;------------------------------------------------------------------------------
 
