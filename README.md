@@ -77,6 +77,29 @@ After all cards have been tested then:
 - For each card test 6522 after a RESET
 - For each card test all AY-3-8913's (this is a manual tone test)
 
+When a test fails, the display will indicate the failing test and reason:
+```
+mb-audit v0.1, 2021                     
+                    1  2  3  4  5  6  7 
+               $00: ?           C       
+               $80: ?           C       
+                SP:             B       
+65C02 detected                          
+Slot #5 :Mockingboard failed test: 6522 
+Test: 11:04:0A                          
+Expected:09 Actual:F1                   
+```
+
+Where:
+- `Test: CC:TT:nn`
+  - CC = Component (1x=6522, 2x=AY8913, 3x=SC01, 4x=SSI263)
+    - So CC=11 (in the example above) means 6522
+  - TT = Test number (see source code!)
+  - nn = Sub-test number (see source code!)
+- `Expected:EE Actual:AA`
+  - EE = expected value
+  - AA = actual value
+
 # Details on tests
 
 6522 tests
