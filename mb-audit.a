@@ -176,6 +176,7 @@ entrypoint
 		ldx		slotUnderTest
 		lda		slotInfo,x
 		beq		+
+			and		#3
 			sta		has6522
 			jsr		Check6522		; Basic 6522 checks
 			bcc		++
@@ -213,7 +214,7 @@ entrypoint
 	jsr		TestReset
 	bcs		@error
 
-	jsr		TestAYTones
+	jsr		TestTones
 
 	;
 
@@ -269,6 +270,7 @@ nextSlot
 		ldx		slotUnderTest
 		lda		slotInfo,x
 		beq		+
+			and		#3
 			sta		has6522
 			jsr		Setup6522ForReset
 			bcs		++
@@ -343,6 +345,52 @@ SetupResetVector
 	sta		SOFTEV_H
 	eor		#$A5
 	sta		PWREDUP
+	rts
+
+;------------------------------------------------------------------------------
+
+TestTones
+
+	lda		#7
+	sta		slotUnderTest
+@nextSlot
+		ldx		slotUnderTest
+		lda		slotInfo,x
+		beq		+
+
+			pha
+			and		#3
+			sta		has6522
+			pla
+			lsr
+			lsr
+			lsr
+			lsr
+			sta		hasAY8913
+			cmp		#$f
+			beq		++
+			lda		#0
+++			sta		isPhasorCard
+
+			jsr		PrintSlotNum
+			lda		#<msg_ToneKeys
+			ldx		#>msg_ToneKeys
+			jsr		Print
+
+			lda		isPhasorCard
+			beq		++
+			lda		#<msg_ToneKeysPhasor
+			ldx		#>msg_ToneKeysPhasor
+			jsr		Print
+
+++			lda		#$80+$0d
+			jsr		COUT
+
+			jsr		TestAYTones
+
++		dec		slotUnderTest
+		bne		@nextSlot
+
 	rts
 
 ;------------------------------------------------------------------------------
@@ -442,7 +490,17 @@ DetectSubunits
 
 	jsr		DetectSSI263			; pre: zpTmp1
 	jsr		DetectSC01				; pre: zpTmp1
-	jmp		DetectAY8913			; pre: zpTmp1
+	jsr		DetectAY8913			; pre: zpTmp1
+
+	lda		hasAY8913
+	asl
+	asl
+	asl
+	asl
+	ldx		slotUnderTest
+	ora		slotInfo,x
+	sta		slotInfo,x				; slotInfo[slot] |= (hasAY8913 << 4)
+	rts
 
 ;------------------------------------------------------------------------------
 
@@ -823,7 +881,7 @@ COMPONENT_SSI263	= $40
 !align 15, 0, 0		; align to 16 bytes (pad with 0's)
 
 saveZP			!fill ($100-ZP_BASE),0
-slotInfo		!fill 8,0	; slot[0..7] : bits: 1=6522/$80, 0=6522/$00
+slotInfo		!fill 8,0	; slot[0..7] : bits: b7..4=AYs, b1=6522/$80, b0=6522/$00
 numMockingboards	!byte 0
 
 is65C02			!byte 0
@@ -926,3 +984,9 @@ msg_ResetOKEnd !text 0
 
 msg_MultiCardOK !text "Multi-card tests passed",0xd
 msg_MultiCardOKEnd !text 0
+
+msg_ToneKeys !text "A:123, B:456"
+msg_ToneKeysEnd !text 0
+
+msg_ToneKeysPhasor !text ", A:QWE, B:RTY"
+msg_ToneKeysPhasorEnd !text 0
