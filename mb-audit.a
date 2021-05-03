@@ -353,10 +353,9 @@ TestTones
 
 	lda		#7
 	sta		slotUnderTest
-@nextSlot
-		ldx		slotUnderTest
+@loop	ldx		slotUnderTest
 		lda		slotInfo,x
-		beq		+
+		beq		@nextSlot
 
 			pha
 			and		#3
@@ -368,29 +367,60 @@ TestTones
 			lsr
 			sta		hasAY8913
 			cmp		#$f
-			beq		++
+			beq		+
 			lda		#0
-++			sta		isPhasorCard
++			sta		isPhasorCard
 
 			jsr		PrintSlotNum
 			lda		#<msg_ToneKeys
 			ldx		#>msg_ToneKeys
 			jsr		Print
 
+			; "A:123"
+			lda		hasAY8913
+			and		#1
+			beq		+
+				lda		#<msg_ToneKeysA123
+				ldx		#>msg_ToneKeysA123
+				jsr		Print
+
+				lda		hasAY8913
+				and		#%00001110		; any more AYs?
+				beq		@cr
+
+				lda		#$80+','
+				jsr		COUT
++
+
+			; "B:456"
+			lda		hasAY8913
+			and		#2
+			beq		+
+				lda		#<msg_ToneKeysB456
+				ldx		#>msg_ToneKeysB456
+				jsr		Print
+
+				lda		hasAY8913
+				and		#%00001100		; any more AYs?
+				beq		@cr
++
+
 			lda		isPhasorCard
-			beq		++
+			beq		@cr
 				lda		#<msg_ToneKeysPhasor
 				ldx		#>msg_ToneKeysPhasor
 				jsr		Print
-				jmp		+++				; NB. No CR, since exactly 40 chars
-++				lda		#$80+$0d
+				jmp		+				; NB. No CR, since exactly 40 chars
+
+@cr				lda		#$80+$0d
 				jsr		COUT
-+++
++
 
 			jsr		TestAYTones
 
-+		dec		slotUnderTest
-		bne		@nextSlot
+@nextSlot
+		dec		slotUnderTest
+		bne		@loop
 
 	rts
 
@@ -986,8 +1016,14 @@ msg_ResetOKEnd !text 0
 msg_MultiCardOK !text "Multi-card tests passed",0xd
 msg_MultiCardOKEnd !text 0
 
-msg_ToneKeys !text "Tone: A:123,B:456"
+msg_ToneKeys !text "Tone: "
 msg_ToneKeysEnd !text 0
+
+msg_ToneKeysA123 !text "A:123"
+msg_ToneKeysA123End !text 0
+
+msg_ToneKeysB456 !text "B:456"
+msg_ToneKeysB456End !text 0
 
 	;0123456789012345678901234567890123456789
 	;Slot #? :Tone: A:123,B:456,A2:QWE,B2:RTY
