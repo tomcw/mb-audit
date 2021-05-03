@@ -24,7 +24,7 @@ Current test matrix for real hardware:
 ### Operation
 
 Here's a high-level overview of what mb-audit does:
-- Detect CPU type: 6502, 65C02, 65816 for floating-bus & extra 65C02 instruction tests.
+- Detect CPU type: 6502, 65C02, 65816 for false-read & extra 65C02 instruction tests.
 - Detect Apple II model for lowercase support.
 - Scan slots 7..1 to detect any cards with a 6522 at $Cn00 and/or $Cn80
   - Detect 6522 using Timer2 as this is more robust than Timer1
@@ -39,7 +39,7 @@ mb-audit v0.1, 2021
 ```
 
 Then for each card found:
-- Do basic 6522 hardware checks (address line, data lines, and IRQ)
+- Do basic 6522 hardware checks (address lines, data lines, and IRQ)
 - Detect connected sub-units: SSI263s, SC-01, AY-3-8913s
 - Determine if the card is a Phasor or MEGA Audio(*1) or MB4C(*1) or Echo+(*1)
   - (*1) Untested on real hardware
@@ -101,7 +101,7 @@ Where:
   - EE = expected value
   - AA = actual value
 
-### Details on tests
+### Test Details
 
 6522 tests
 - In general it will do the same test for 6522s at $Cn00 and $Cn80 (if the cards has 2x 6522s).
@@ -124,7 +124,7 @@ Where:
 AY-3-8913 tests
 - Try to write then read back the AY registers.
   - NB. Not all cards support reading the AY registers (eg. Phasor).
-- Test address line and data lines.
+- Test address lines and data lines.
 - Test cards which have a single 6522, but 2x AY-3-8913s (eg. Echo+, MB4C).
 - Manual tone tests:
   - Keys: 1,2,3 for AY-3-8913 (chip-A) at $Cn00
@@ -144,3 +144,9 @@ SC-01 tests
 - Support a single SC-01, and also AppleWin's hybrid Mockingboard-C/Phasor cards with both SC-01 and 2x SSI263.
 - Play back and time the phrase "The Spy Strikes Back" (from Penguin Software's game of the same name).
   - A real Speech/Sound I card has a hardware potentiometer to control the playback rate. Potentially the test will fail if the rate is too low.
+
+### To Do
+- confirm mb-audit works with all the advertised real hardware
+- add more tests
+  - eg. 6522: write to IFR.T1/2 on same cycle as underflow, resulting in IFR.T1/2=0 in the ISR
+  - eg. Mockingboard: check INACTIVE state is emulated
