@@ -379,12 +379,13 @@ TestTones
 
 			lda		isPhasorCard
 			beq		++
-			lda		#<msg_ToneKeysPhasor
-			ldx		#>msg_ToneKeysPhasor
-			jsr		Print
-
-++			lda		#$80+$0d
-			jsr		COUT
+				lda		#<msg_ToneKeysPhasor
+				ldx		#>msg_ToneKeysPhasor
+				jsr		Print
+				jmp		+++				; NB. No CR, since exactly 40 chars
+++				lda		#$80+$0d
+				jsr		COUT
++++
 
 			jsr		TestAYTones
 
@@ -985,8 +986,10 @@ msg_ResetOKEnd !text 0
 msg_MultiCardOK !text "Multi-card tests passed",0xd
 msg_MultiCardOKEnd !text 0
 
-msg_ToneKeys !text "A1:123, B1:456"
+msg_ToneKeys !text "Tone: A:123,B:456"
 msg_ToneKeysEnd !text 0
 
-msg_ToneKeysPhasor !text ", A2:QWE, B2:RTY"
+	;0123456789012345678901234567890123456789
+	;Slot #? :Tone: A:123,B:456,A2:QWE,B2:RTY
+msg_ToneKeysPhasor !text ",A2:QWE,B2:RTY"
 msg_ToneKeysPhasorEnd !text 0

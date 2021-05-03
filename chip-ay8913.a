@@ -579,12 +579,12 @@ TestAYTones
 	;
 
 @done
-	jsr		WaitT1OneShotUnderflow	; clear & disable any T1 ints
+	sei
 
 	lda		hasAY8913
 	and		#1
 	beq		+
-		ldy		#SY6522_A_BASE
+		ldy		#SY6522_A_PH_BASE
 		jsr		SF_ChipReset		; NB. resets both AYs if in native Phasor mode
 +
 	lda		hasAY8913
@@ -598,6 +598,8 @@ TestAYTones
 		lda		#PH_MOCKINGBOARD
 		jsr		SetPhasorMode
 +
+
+	jsr		WaitT1OneShotUnderflow	; clear & disable any T1 ints
 
 	clc
 	rts
@@ -674,7 +676,7 @@ AYTonesISR
 
 	ldy		#SY6522_A_PH_BASE+SY6522_IFR
 	lda		(MBBase),y
-	sta		(MBBase),y				; clear IRQ
+	sta		(MBBase),y					; clear IRQ
 
 	;------
 
@@ -684,23 +686,48 @@ AYTonesISR
 	and		#1
 	beq		@ay_b
 
-@ay_next	lda		#AY_ENABLE
-			jsr		SF_SelectReg
-			ldx		#0
-			cpy		#SY6522_A_PH_BASE+SY6522_ORA
-			beq		+
-				inx
-+			lda		ayEna,x
-			jsr		SF_WriteReg
+	ldx		#0
+@ay_next	lda		ayEna,x
+			tax
+			lda		#AY_ENABLE
+			jsr		AY1_WriteRegValue	; compatible with both Mockingboard & Phasor
 
 @ay_b	lda		hasAY8913
 		and		#2
+		beq		@ay_a2b2
+
+		cpy		#SY6522_B_BASE+SY6522_ORA
+		beq		@ay_a2b2
+		ldy		#SY6522_B_BASE+SY6522_ORA
+		ldx		#1
+		bne		@ay_next
+
+	;
+
+@ay_a2b2
+	ldy		#SY6522_A_PH_BASE+SY6522_ORA
+
+	lda		hasAY8913
+	and		#4
+	beq		@ay_b2
+
+	ldx		#2
+@ay_next2	lda		ayEna,x
+			tax
+			lda		#AY_ENABLE
+			jsr		AY2_WriteRegValue
+
+@ay_b2	lda		hasAY8913
+		and		#8
 		beq		@done
 
 		cpy		#SY6522_B_BASE+SY6522_ORA
 		beq		@done
 		ldy		#SY6522_B_BASE+SY6522_ORA
-		bne		@ay_next
+		ldx		#3
+		bne		@ay_next2
+
+	;
 
 @done
 
