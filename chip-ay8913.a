@@ -607,7 +607,7 @@ TestAYTones
 ;------------------
 
 @InitAYRegs	; Pre: Y = SY6522_ORA for chip A or B
-; NB. In native Phasor mode, the AY select & writes are done to both A1/A2 (or B1/B2) AY chips
+; NB. In native Phasor mode, calls to AY_WriteRegValue() are done to both A1/A2 (or B1/B2) AY chips
 
 	sty		zpTmp1
 
@@ -620,15 +620,16 @@ TestAYTones
 	sta		zpTmp2
 -		ldy		zpTmp2
 		lda		(zpTmpPtr),y
-		ldy		zpTmp1
-		jsr		SF_SelectReg
-		inc		zpTmp2
-
-		ldy		zpTmp2
+		pha							; reg#
+		iny
 		lda		(zpTmpPtr),y
+		tax							; X=value
+		iny
+		sty		zpTmp2
+
 		ldy		zpTmp1
-		jsr		SF_WriteReg
-		inc		zpTmp2
+		pla							; A=reg#
+		jsr		AY_WriteRegValue	; Pre: A=reg#, X=value
 
 		ldy		zpTmp2
 		cpy		#(AY_CVOL+1)*2
@@ -708,7 +709,7 @@ AYTonesISR
 	ldy		#SY6522_A_PH_BASE+SY6522_ORA
 
 	lda		hasAY8913
-	and		#4
+	and		#4							; native Phasor mode only
 	beq		@ay_b2
 
 	ldx		#2
@@ -718,7 +719,7 @@ AYTonesISR
 			jsr		AY2_WriteRegValue
 
 @ay_b2	lda		hasAY8913
-		and		#8
+		and		#8						; native Phasor mode only
 		beq		@done
 
 		cpy		#SY6522_B_BASE+SY6522_ORA
