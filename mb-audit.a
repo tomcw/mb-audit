@@ -985,8 +985,8 @@ msg_ResetOKEnd !text 0
 msg_MultiCardOK !text "Multi-card tests passed",0xd
 msg_MultiCardOKEnd !text 0
 
-msg_ToneKeys !text "A:123, B:456"
+msg_ToneKeys !text "A1:123, B1:456"
 msg_ToneKeysEnd !text 0
 
-msg_ToneKeysPhasor !text ", C:QWE, D:RTY"
+msg_ToneKeysPhasor !text ", A2:QWE, B2:RTY"
 msg_ToneKeysPhasorEnd !text 0
