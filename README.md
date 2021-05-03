@@ -80,6 +80,20 @@ After all cards have been tested then:
 # Details on tests
 
 6522 tests
+- In general it will do the same test for 6522s at $Cn00 and $Cn80 (if the cards has 2x 6522s).
+  - And in most cases it will test both Timer1 and Timer2.
+- Some tests of note:
+  - test all the instructions that can _write_ to Timer1/2 (excluding read-modify-write instructions)
+  - test all the instructions that can _read_ to Timer1/2 (excluding read-modify-write instructions)
+  - test timers before/after underflow
+  - test Timer1 with very small latch values (both one-shot & free-running modes)
+  - test Timer1's period is N+2 cycles
+  - test cycle-accurate (sub-instruction) reading of IFR at Timer1/2 underflow
+  - test that the 6522's 16-byte I/O space is mirrored throughout the $Cnxx address space
+  - test Phasor's Echo+ mode
+  - test up to 4 simultaneous, active interrupts (1 card)
+  - test up to 8 simultaneous, active interrupts (2 cards)
+  - test that certain 6522 state (eg. pending IRQ, enabled timers) are disabled on RESET
 
 AY-3-8913 tests
 - Try to write then read back the AY registers.
