@@ -404,6 +404,7 @@ Check6522IRQ
 
 	lda		#0
 	sta		isrNMIcount
+	sta		isrIFR_A
 
 	lda		#1
 	ldy		#SY6522_A_BASE+SY6522_TIMER1L_COUNTER
@@ -434,6 +435,7 @@ Check6522IRQ
 	sei
 
 	and		isrIFR_A
+	ora		isrNMIcount_A
 	beq		@6522_err
 
 @6522_B_int
@@ -443,6 +445,7 @@ Check6522IRQ
 
 	lda		#0
 	sta		isrNMIcount
+	sta		isrIFR_B
 
 	lda		#1
 	ldy		#SY6522_B_BASE+SY6522_TIMER1L_COUNTER
@@ -473,6 +476,7 @@ Check6522IRQ
 	sei
 
 	and		isrIFR_B
+	ora		isrNMIcount_B
 	beq		@6522_err
 
 @6522_ok
@@ -484,6 +488,13 @@ Check6522IRQ
 	rts
 
 ;------------------------------------------------------------------------------
+
+Check6522ISR_NMI
+; 6502's NMI is triggered on NMI(active low) falling edge (H->L).
+; Interrupt will be cleared by IRQ handler above.
+
+	inc		isrNMIcount
+	; fall through...
 
 Check6522ISR
 ; Pre:
@@ -531,15 +542,6 @@ SetISR_NMI
 	lda		#>Check6522ISR_NMI
 	sta		NMI+2
 	rts
-
-	;
-
-Check6522ISR_NMI
-; 6502's NMI is triggered on NMI(active low) falling edge (H->L).
-; Interrupt will be cleared by IRQ handler above.
-
-	inc		isrNMIcount
-	rti
 
 ;------------------------------------------------------------------------------
 ; Notes:

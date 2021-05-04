@@ -93,8 +93,6 @@ entrypoint
 		sta		saveNMI,x
 		dex
 		bpl		-
-	lda		#$40	; RTI opcode
-	sta		NMI
 
 	lda		IRQL
 	sta		saveIRQL
