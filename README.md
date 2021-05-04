@@ -82,11 +82,11 @@ When a test fails, the display will indicate the failing test and reason:
 ```
 mb-audit v0.1, 2021                     
                     1  2  3  4  5  6  7 
-               $00: ?           C       
-               $80: ?           C       
-                SP:             B       
+               $00: ?        C          
+               $80: ?        C          
+                SP:          B          
 65C02 detected                          
-Slot #5 :Mockingboard failed test: 6522 
+Slot #4 :Mockingboard failed test: 6522 
 Test: 11:04:0A                          
 Expected:09 Actual:F1                   
 ```
