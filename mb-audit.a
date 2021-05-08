@@ -750,11 +750,11 @@ DisplayCardUpdate
 		tax
 		; keep going, as may have detected some speech...
 
-	lda		#$80+' '
++	lda		#$80+' '
 	sta		zpTmp1			; x-1 pos: default: ' '
 	sta		zpTmp2			; x+1 pos: default: ' '
 
-+	lda		hasAY8913
+	lda		hasAY8913
 	cmp		#1					; 6522/AY8913 at $00?
 	bne		+
 		lda		#$80+'1'		; MB-Sound I (has a 6522/AY8913 at $00) or MB-Speech I (has a 6522/SC01) at $00
