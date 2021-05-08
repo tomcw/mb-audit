@@ -194,9 +194,8 @@ TestSSI263
 +
 
 	lda		#<TestSSI263ISR
-	sta		IRQL
-	lda		#>TestSSI263ISR
-	sta		IRQH
+	ldx		#>TestSSI263ISR
+	jsr		SetIrqVector			; Since we have an SSI263, then MB card won't generate NMI
 
 	lda		#COMPONENT_SSI263+1		; test component $41
 	sta		testComponentNum

@@ -391,11 +391,12 @@ Check6522IRQ
 	sei
 
 	lda		#<Check6522ISR
-	sta		IRQL
-	lda		#>Check6522ISR
-	sta		IRQH
+	ldx		#>Check6522ISR
+	jsr		SetIrqVector
 
-	jsr		SetISR_NMI
+	lda		#<Check6522ISR_NMI
+	ldx		#>Check6522ISR_NMI
+	jsr		SetNmiVector
 
 ;@6522_A_int
 	lda		zpTmp1
@@ -425,19 +426,20 @@ Check6522IRQ
 
 	lda		isrNMIcount
 	sta		isrNMIcount_A
+	bne		+							; NMI occurred, so IFR.TIMER1 already cleared!
 
-	ldy		#SY6522_A_BASE+SY6522_IFR
-	lda		#IxR_TIMER1
-	and		(MBBase),y
-	beq		@6522_err
+		ldy		#SY6522_A_BASE+SY6522_IFR
+		lda		#IxR_TIMER1
+		and		(MBBase),y
+		beq		@6522_err
 
-	cli
-	sei
+		cli
+		sei
 
-	and		isrIFR_A
-	ora		isrNMIcount_A
-	beq		@6522_err
+		and		isrIFR_A
+		beq		@6522_err
 
++
 @6522_B_int
 	lda		zpTmp1
 	and		#2
@@ -466,19 +468,20 @@ Check6522IRQ
 
 	lda		isrNMIcount
 	sta		isrNMIcount_B
+	bne		+							; NMI occurred, so IFR.TIMER1 already cleared!
 
-	ldy		#SY6522_B_BASE+SY6522_IFR
-	lda		#IxR_TIMER1
-	and		(MBBase),y
-	beq		@6522_err
+		ldy		#SY6522_B_BASE+SY6522_IFR
+		lda		#IxR_TIMER1
+		and		(MBBase),y
+		beq		@6522_err
 
-	cli
-	sei
+		cli
+		sei
 
-	and		isrIFR_B
-	ora		isrNMIcount_B
-	beq		@6522_err
+		and		isrIFR_B
+		beq		@6522_err
 
++
 @6522_ok
 	clc
 	rts
@@ -533,17 +536,6 @@ Check6522ISR
 	rti
 
 ;------------------------------------------------------------------------------
-
-SetISR_NMI
-	lda		#$4C
-	sta		NMI+0
-	lda		#<Check6522ISR_NMI
-	sta		NMI+1
-	lda		#>Check6522ISR_NMI
-	sta		NMI+2
-	rts
-
-;------------------------------------------------------------------------------
 ; Notes:
 ;	T1:
 ;	. [T6522_1, T6522_2] oneshot|continuous x IRQ|poll
@@ -574,9 +566,8 @@ Test6522
 	sei
 
 	lda		#<Test6522ISR
-	sta		IRQL
-	lda		#>Test6522ISR
-	sta		IRQH
+	ldx		#>Test6522ISR
+	jsr		SetIrqNmiVectors
 
 	lda		#COMPONENT_6522+1	; test component $11
 	sta		testComponentNum
@@ -2316,9 +2307,8 @@ T6522_14
 	sei
 
 	lda		#<T6522_MultiCard_ISR
-	sta		IRQL
-	lda		#>T6522_MultiCard_ISR
-	sta		IRQH
+	ldx		#>T6522_MultiCard_ISR
+	jsr		SetIrqNmiVectors
 
 	lda		#0
 	sta		MBBase2H				; In ISR: not using MB card#2
@@ -2442,9 +2432,8 @@ T6522_14
 +	sei
 
 	lda		#<Test6522ISR
-	sta		IRQL
-	lda		#>Test6522ISR
-	sta		IRQH
+	ldx		#>Test6522ISR
+	jsr		SetIrqNmiVectors
 
 	jsr		@cleanup
 	clc								; C=0(OK)
@@ -2583,9 +2572,8 @@ Test6522MultiCard
 	sei
 
 	lda		#<T6522_MultiCard_ISR
-	sta		IRQL
-	lda		#>T6522_MultiCard_ISR
-	sta		IRQH
+	ldx		#>T6522_MultiCard_ISR
+	jsr		SetIrqNmiVectors
 
 	ldx		#-1						; timerConfig index
 
@@ -2731,9 +2719,8 @@ Test6522MultiCard
 +	sei
 
 	lda		#<Test6522ISR
-	sta		IRQL
-	lda		#>Test6522ISR
-	sta		IRQH
+	ldx		#>Test6522ISR
+	jsr		SetIrqNmiVectors
 
 	jsr		@cleanup
 	clc								; C=0(OK)

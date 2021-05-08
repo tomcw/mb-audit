@@ -550,6 +550,29 @@ SetPhasorMode
 
 ;------------------------------------------------------------------------------
 
+SetIrqNmiVectors
+; Pre: A(l),X(h) = ISR
+
+	jsr		SetNmiVector
+	; fall through...
+
+SetIrqVector
+	sta		IRQL
+	stx		IRQH
+	rts
+
+SetNmiVector
+	pha
+	lda		#$4C
+	sta		NMI+0
+	pla
+
+	sta		NMI+1
+	stx		NMI+2
+	rts
+
+;------------------------------------------------------------------------------
+
 resetSubTest
 
 	lda		#0

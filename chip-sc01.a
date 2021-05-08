@@ -126,9 +126,8 @@ TestSC01
 	sta		(MBBase),y
 
 	lda		#<TestSC01ISR
-	sta		IRQL
-	lda		#>TestSC01ISR
-	sta		IRQH
+	ldx		#>TestSC01ISR
+	jsr		SetIrqNmiVectors
 
 	lda		#COMPONENT_SC01+1		; test component $31
 	sta		testComponentNum

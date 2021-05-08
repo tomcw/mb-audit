@@ -447,9 +447,8 @@ TestAYTones
 	sei
 
 	lda		#<AYTonesISR
-	sta		IRQL
-	lda		#>AYTonesISR
-	sta		IRQH
+	ldx		#>AYTonesISR
+	jsr		SetIrqNmiVectors
 
 	; Init AY8913 regs
 
