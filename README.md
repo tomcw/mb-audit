@@ -56,7 +56,7 @@ Key:
 - For the '$00' and '$80' rows:
   - ? = 6522(VIA)
   - 1 = Sound-I or Speech-I
-  - S = Sound/Speech-I
+  - S/S = Sound/Speech-I
   - M = MEGA Audio
   - M4C = MB4C
   - E=Echo+
