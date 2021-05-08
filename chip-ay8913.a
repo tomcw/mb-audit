@@ -28,6 +28,15 @@ DetectAY8913
 		rts
 +
 
+	lda		hasSC01				; Sound/Speech-I? (ie. hasSC01 && NMI_FOR_6522B)
+	beq		+
+	lda		isrNMIcount_B
+	beq		+
+		lda		#%00000010
+		sta		hasAY8913		; can't test them, so just assume they are all working
+		rts
++
+
 	lda		#SY6522_A_BASE
 	sta		zpTmp3
 	lda		#1					; hasAY8913 mask

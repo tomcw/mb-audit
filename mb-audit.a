@@ -659,8 +659,8 @@ SLOT1POS = $13					; pos left of '1'
 
 Display
 ;               1  2  3  4  5  6  7
-;          $00: ?     1  S  C  P       ; ?=6522(VIA), 1=Sound-I(or Speech-I), S=Sound/Speech-I, M=MegaAudio, M4C=MB4C, E=Echo+, C=MB-C(or MB-A or Sound-II), P=Phasor
-;          $80:    ?     S  C  P
+;          $00: ?     1 S/S C  P       ; ?=6522(VIA), 1=Sound-I(or Speech-I), S/S=Sound/Speech-I, M=MegaAudio, M4C=MB4C, E=Echo+, C=MB-C(or MB-A or Sound-II), P=Phasor
+;          $80:    ?    S/S C  P
 ;           SP:           VABV B       ; A=SSI263(socket-A), B=SSI263(socket-B), V=Votrax/SC01
 
 	lda		#$80+'$'
@@ -750,6 +750,10 @@ DisplayCardUpdate
 		tax
 		; keep going, as may have detected some speech...
 
+	lda		#$80+' '
+	sta		zpTmp1			; x-1 pos: default: ' '
+	sta		zpTmp2			; x+1 pos: default: ' '
+
 +	lda		hasAY8913
 	cmp		#1					; 6522/AY8913 at $00?
 	bne		+
@@ -761,15 +765,15 @@ DisplayCardUpdate
 	bne		+
 		lda		hasSC01
 		beq		+				; no SC01 - don't know what this is!
-		lda		#$80+'S'		; MB-Sound/Speech I has a 6522/SC01 at $00; and a 6522/AY8913 at $80
-		sta		LINE3+SLOT1POS,x
+		lda		#$80+'S'		; 'S/S' : MB-Sound/Speech I has a 6522/SC01 at $00; and a 6522/AY8913 at $80
+		sta		zpTmp1
+		sta		zpTmp2
+		lda		#$80+'/'
+		bne		@out
 
 +	lda		hasAY8913
 	cmp		#3					; 6522/AY8913 at $00 && $80?
 	bcc		@speech				; (branch if A < 3)
-		lda		#$80+' '
-		sta		zpTmp1			; x-1 pos: default: ' '
-		sta		zpTmp2			; x+1 pos: default: ' '
 		lda		isMegaAudioCard
 		beq		+
 			lda		#$80+'M'
