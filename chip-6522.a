@@ -834,20 +834,22 @@ T6522_2
 	ldy		#SY6522_IFR
 -		lda		(MBBase),y
 		and		#IxR_TIMER1			; Poll Timer1 IRQ flag
+		bne		+
+		lda		isrIFR				; For NMI
 		beq		-
++
 
 	lda		#IER_SET|IxR_TIMER1
 	ldy		#SY6522_IER
-	sta		(MBBase),y				; Enable Timer1 IRQ
+	sta		(MBBase),y				; Enable Timer1 IRQ - for IRQ to fire
 
-	nop								; 1 insn for IRQ (6502 pipelining)
 	jsr		WaitT1OneShotUnderflow	; SEI & Disable Timer1 IRQ
 	jsr		WaitT2OneShotUnderflow	; SEI & Disable Timer2 IRQ
 
 	lda		#IxR_TIMER1
 	sta		zpTmp2					; expected
 	and		isrIFR
-	beq		+
+	beq		@error
 
 	; Repeat test but for T2
 	; . Setup T2C=0x0202 (implicit one-shot for T2)
@@ -880,25 +882,27 @@ T6522_2
 	ldy		#SY6522_IFR
 -		lda		(MBBase),y
 		and		#IxR_TIMER2			; Poll Timer2 IRQ flag
+		bne		+
+		lda		isrIFR				; For NMI
 		beq		-
++
 
 	lda		#IER_SET|IxR_TIMER2
 	ldy		#SY6522_IER
-	sta		(MBBase),y				; Enable Timer2 IRQ
+	sta		(MBBase),y				; Enable Timer2 IRQ - for IRQ to fire
 
-	nop								; 1 insn for IRQ (6502 pipelining)
 	jsr		WaitT1OneShotUnderflow	; SEI & Disable Timer1 IRQ
 	jsr		WaitT2OneShotUnderflow	; SEI & Disable Timer2 IRQ
 
 	lda		#IxR_TIMER2
 	sta		zpTmp2					; expected
 	and		isrIFR
-	beq		+
+	beq		@error
 
 	clc
 	rts								; C=0(OK)
 
-+	; error
+@error
 	sec
 	rts								; C=1(NG)
 
@@ -2930,6 +2934,10 @@ WaitT1OneShotUnderflow
 
 	sei
 
+	lda		#IER_CLR|IxR_TIMER1
+	ldy		#SY6522_IER
+	sta		(MBBase),y				; Disable Timer1 IRQ (do here to prevent any NMI from firing)
+
 	lda		#ACR_ONESHOT
 	ldy		#SY6522_ACR
 	sta		(MBBase),y				; T1 one-shot mode
@@ -2942,9 +2950,7 @@ WaitT1OneShotUnderflow
 
 	jsr		WaitT1Underflow
 
-	lda		#IER_CLR|IxR_TIMER1
-	ldy		#SY6522_IER
-	sta		(MBBase),y				; Disable Timer1 IRQ
+	lda		#IxR_TIMER1
 	ldy		#SY6522_IFR
 	sta		(MBBase),y				; Clear any Timer1 IRQ
 
@@ -2965,6 +2971,10 @@ WaitT2OneShotUnderflow
 
 	sei
 
+	lda		#IER_CLR|IxR_TIMER2
+	ldy		#SY6522_IER
+	sta		(MBBase),y				; Disable Timer2 IRQ (do here to prevent any NMI from firing)
+
 	lda		#1						; Set T2C=$0101
 	ldy		#SY6522_TIMER2L_COUNTER
 	sta		(MBBase),y
@@ -2974,8 +2984,6 @@ WaitT2OneShotUnderflow
 	jsr		WaitT2Underflow
 
 	lda		#IER_CLR|IxR_TIMER2
-	ldy		#SY6522_IER
-	sta		(MBBase),y				; Disable Timer2 IRQ
 	ldy		#SY6522_IFR
 	sta		(MBBase),y				; Clear any Timer2 IRQ
 
