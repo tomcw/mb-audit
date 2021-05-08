@@ -494,10 +494,27 @@ Check6522IRQ
 
 Check6522ISR_NMI
 ; 6502's NMI is triggered on NMI(active low) falling edge (H->L).
-; Interrupt will be cleared by IRQ handler above.
+; Interrupt will be cleared by IRQ handler below.
+; NMI asserted -> PUSH PC,P; PC=($FFFA)=$3FA -> JMP Check6522ISR_NMI (so doesn't execute the Apple II ROM)
+
+	pha
 
 	inc		isrNMIcount
-	; fall through...
+
+	; setup for ISR's RTI
+	lda		#>@NmiReturn
+	pha
+	lda		#<@NmiReturn
+	pha
+	php
+
+	jmp		Check6522ISR
+
+@NmiReturn
+	pla
+	rti
+
+;------------------------------------------------------------------------------
 
 Check6522ISR
 ; Pre:
@@ -567,7 +584,11 @@ Test6522
 
 	lda		#<Test6522ISR
 	ldx		#>Test6522ISR
-	jsr		SetIrqNmiVectors
+	jsr		SetIrqVector
+
+	lda		#<Test6522ISR_NMI
+	ldx		#>Test6522ISR_NMI
+	jsr		SetNmiVector
 
 	lda		#COMPONENT_6522+1	; test component $11
 	sta		testComponentNum
@@ -2293,7 +2314,7 @@ T6522_14
 ;	6522-B T2 is one-shot
 ; . NB T6522_MultiCard_ISR handles ints in any order, and simultaneously too.
 ; . ISR disables the T1/T2 int so it only generates an IRQ once.
-; . Don't use 6522 if it's connected to NMI (as nested IRQ then NMI aren't supported by Apple II ROM or my ISR)
+; . Don't use 6522 if it's connected to NMI (as nested IRQ then NMI aren't supported by my ISR)
 ;
 
 	lda		MBBaseL					; must be $00 for ISR (and because this test uses both 6522s)
@@ -2309,7 +2330,11 @@ T6522_14
 
 	lda		#<T6522_MultiCard_ISR
 	ldx		#>T6522_MultiCard_ISR
-	jsr		SetIrqNmiVectors
+	jsr		SetIrqVector
+
+	lda		#<T6522_MultiCard_ISR_NMI
+	ldx		#>T6522_MultiCard_ISR_NMI
+	jsr		SetNmiVector
 
 	lda		#0
 	sta		MBBase2H				; In ISR: not using MB card#2
@@ -2438,7 +2463,11 @@ T6522_14
 
 	lda		#<Test6522ISR
 	ldx		#>Test6522ISR
-	jsr		SetIrqNmiVectors
+	jsr		SetIrqVector
+
+	lda		#<Test6522ISR_NMI
+	ldx		#>Test6522ISR_NMI
+	jsr		SetNmiVector
 
 	jsr		@cleanup
 	clc								; C=0(OK)
@@ -2532,7 +2561,7 @@ Test6522MultiCard
 ;	Card1/2: 6522-B T2 is one-shot
 ; . NB Test_10_ISR handles ints in any order, and simultaneously too.
 ; . ISR disables the T1/T2 int so it only generates an IRQ once.
-; . Don't use 6522 if it's connected to NMI (as nested IRQ then NMI aren't supported by Apple II ROM or my ISR)
+; . Don't use 6522 if it's connected to NMI (as nested IRQ then NMI aren't supported by my ISR)
 ;
 
 	lda		#COMPONENT_6522+2	; test component $12
@@ -2579,7 +2608,11 @@ Test6522MultiCard
 
 	lda		#<T6522_MultiCard_ISR
 	ldx		#>T6522_MultiCard_ISR
-	jsr		SetIrqNmiVectors
+	jsr		SetIrqVector
+
+	lda		#<T6522_MultiCard_ISR_NMI
+	ldx		#>T6522_MultiCard_ISR_NMI
+	jsr		SetNmiVector
 
 	ldx		#-1						; timerConfig index
 
@@ -2734,7 +2767,11 @@ Test6522MultiCard
 
 	lda		#<Test6522ISR
 	ldx		#>Test6522ISR
-	jsr		SetIrqNmiVectors
+	jsr		SetIrqVector
+
+	lda		#<Test6522ISR_NMI
+	ldx		#>Test6522ISR_NMI
+	jsr		SetNmiVector
 
 	jsr		@cleanup
 	clc								; C=0(OK)
@@ -2799,6 +2836,28 @@ Test6522MultiCard
 }
 	;
 	!word	$ffff					; done
+
+;------------------------------------------------------------------------------
+
+T6522_MultiCard_ISR_NMI
+; 6502's NMI is triggered on NMI(active low) falling edge (H->L).
+; Interrupt will be cleared by IRQ handler below.
+; NMI asserted -> PUSH PC,P; PC=($FFFA)=$3FA -> JMP Check6522ISR_NMI (so doesn't execute the Apple II ROM)
+
+	pha
+
+	; setup for ISR's RTI
+	lda		#>@NmiReturn
+	pha
+	lda		#<@NmiReturn
+	pha
+	php
+
+	jmp		T6522_MultiCard_ISR
+
+@NmiReturn
+	pla
+	rti
 
 ;------------------------------------------------------------------------------
 
@@ -2999,6 +3058,28 @@ WaitT2Underflow
 -		lda		(MBBase),y			; wait $FFnn (as there's no T2L_h, then "after timing out, the counter will continue to decrement")
 		beq		-
 	rts
+
+;------------------------------------------------------------------------------
+
+Test6522ISR_NMI
+; 6502's NMI is triggered on NMI(active low) falling edge (H->L).
+; Interrupt will be cleared by IRQ handler below.
+; NMI asserted -> PUSH PC,P; PC=($FFFA)=$3FA -> JMP Check6522ISR_NMI (so doesn't execute the Apple II ROM)
+
+	pha
+
+	; setup for ISR's RTI
+	lda		#>@NmiReturn
+	pha
+	lda		#<@NmiReturn
+	pha
+	php
+
+	jmp		Test6522ISR
+
+@NmiReturn
+	pla
+	rti
 
 ;------------------------------------------------------------------------------
 

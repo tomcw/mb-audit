@@ -127,7 +127,11 @@ TestSC01
 
 	lda		#<TestSC01ISR
 	ldx		#>TestSC01ISR
-	jsr		SetIrqNmiVectors
+	jsr		SetIrqVector
+
+	lda		#<TestSC01ISR_NMI
+	ldx		#>TestSC01ISR_NMI
+	jsr		SetNmiVector
 
 	lda		#COMPONENT_SC01+1		; test component $31
 	sta		testComponentNum
@@ -211,6 +215,28 @@ TSC01_0
 	lda		#1						; actual
 	plp
 	rts
+
+;------------------------------------------------------------------------------
+
+TestSC01ISR_NMI
+; 6502's NMI is triggered on NMI(active low) falling edge (H->L).
+; Interrupt will be cleared by IRQ handler below.
+; NMI asserted -> PUSH PC,P; PC=($FFFA)=$3FA -> JMP Check6522ISR_NMI (so doesn't execute the Apple II ROM)
+
+	pha
+
+	; setup for ISR's RTI
+	lda		#>@NmiReturn
+	pha
+	lda		#<@NmiReturn
+	pha
+	php
+
+	jmp		TestSC01ISR
+
+@NmiReturn
+	pla
+	rti
 
 ;------------------------------------------------------------------------------
 
