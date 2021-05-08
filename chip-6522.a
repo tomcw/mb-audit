@@ -1885,10 +1885,23 @@ T6522_E
 ; Post: C=0(OK), C=1(NG)
 ;
 ; Test#E
-; . Test 6522 period is N+2 cycles
+; . Test 6522 T1 period is N+2 cycles
 ;	use IRQ to trigger at start of opcode
+;	NB. 6522 connected to NMI isn't supported
 ;
 
+	lda		MBBaseL
+	bne		+
+		lda		isrNMIcount_A
+		beq		@doTest
+			clc
+			rts
++		lda		isrNMIcount_B
+		beq		@doTest
+			clc
+			rts
+
+@doTest
 	jsr		resetSubTest			; subTest #0
 	jsr		incTotalTests
 
@@ -1921,6 +1934,8 @@ T6522_E
 	bne		@error
 
 	;
+
+	jsr		incSubTestNum			; subTest #1
 
 	jsr		WaitT1OneShotUnderflow
 
@@ -1966,7 +1981,7 @@ T6522_F
 ;
 ; Test#F
 ; . Test 6522 period is N+2 cycles
-;	alt version: just read IFR, not using IRQ - NG for emulators, since relies on sub-opcode accuracy for reading IFR
+;	alt version: just read IFR, not using IRQ - emulators must support sub-opcode accuracy for reading IFR
 ;
 
 	jsr		resetSubTest			; subTest #0
