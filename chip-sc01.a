@@ -14,7 +14,7 @@ DetectSC01
 	; - Speech using 6522 PCR w/o IRQ (based on Crimewave's SC01 code)
 
 	lda		zpTmp1
-	and		#1
+	and		#HAS_6522A
 	beq		+
 
 	lda		#IxR_VOTRAX

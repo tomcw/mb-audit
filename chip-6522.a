@@ -234,7 +234,7 @@ Check6522Datalines
 @loop
 ;@6522_A_w
 		lda		zpTmp1
-		and		#1
+		and		#HAS_6522A
 		beq		@6522_B_w
 
 		ldy		#SY6522_A_BASE+SY6522_DDRB
@@ -248,7 +248,7 @@ Check6522Datalines
 
 @6522_B_w
 		lda		zpTmp1
-		and		#2
+		and		#HAS_6522B
 		beq		@6522_A_r
 
 		ldy		#SY6522_B_BASE+SY6522_DDRB
@@ -262,7 +262,7 @@ Check6522Datalines
 
 @6522_A_r
 		lda		zpTmp1
-		and		#1
+		and		#HAS_6522A
 		beq		@6522_B_r
 
 		ldy		#SY6522_A_BASE+SY6522_DDRB
@@ -278,7 +278,7 @@ Check6522Datalines
 
 @6522_B_r
 		lda		zpTmp1
-		and		#2
+		and		#HAS_6522B
 		beq		@next
 
 		ldy		#SY6522_B_BASE+SY6522_DDRB
@@ -313,7 +313,7 @@ Check6522Addrlines
 ; Post: C=0(OK), C=1(NG)
 
 	lda		zpTmp1
-	and		#1
+	and		#HAS_6522A
 	beq		@next
 
 @loop
@@ -357,7 +357,7 @@ Check6522Addrlines
 
 @next
 	lda		zpTmp1
-	and		#2
+	and		#HAS_6522B
 	beq		@6522_ok
 
 	lda		MBBaseL
@@ -400,7 +400,7 @@ Check6522IRQ
 
 ;@6522_A_int
 	lda		zpTmp1
-	and		#1
+	and		#HAS_6522A
 	beq		@6522_B_int
 
 	lda		#0
@@ -442,7 +442,7 @@ Check6522IRQ
 +
 @6522_B_int
 	lda		zpTmp1
-	and		#2
+	and		#HAS_6522B
 	beq		@6522_ok
 
 	lda		#0
@@ -2322,7 +2322,7 @@ T6522_14
 
 ;@6522_A
 		lda		has6522
-		and		#1
+		and		#HAS_6522A
 		beq		@6522_B
 
 		lda		#ACR_FREERUNNING
@@ -2358,7 +2358,7 @@ T6522_14
 
 @6522_B
 		lda		has6522
-		and		#2
+		and		#HAS_6522B
 		beq		@test
 
 		lda		#ACR_FREERUNNING
@@ -2591,7 +2591,7 @@ Test6522MultiCard
 		sta		zpTmp2				; mask (also used by ISR, but OK since we have SEI)
 
 @6522_A		lda		has6522
-			and		#1
+			and		#HAS_6522A
 			beq		@6522_B
 
 			lda		#ACR_FREERUNNING
@@ -2630,7 +2630,7 @@ Test6522MultiCard
 			asl		zpTmp2
 
 			lda		has6522
-			and		#2
+			and		#HAS_6522B
 			beq		@nextCard
 
 			lda		#ACR_FREERUNNING

@@ -528,6 +528,17 @@ DetectSubunits
 	asl
 	ldx		slotUnderTest
 	ora		slotInfo,x
+
+	ldy		isrNMIcount_A
+	beq		+
+		ora		#NMI_FOR_6522A
++
+
+	ldy		isrNMIcount_B
+	beq		+
+		ora		#NMI_FOR_6522B
++
+
 	sta		slotInfo,x				; slotInfo[slot] |= (hasAY8913 << 4)
 	rts
 
@@ -933,7 +944,15 @@ COMPONENT_SSI263	= $40
 !align 15, 0, 0		; align to 16 bytes (pad with 0's)
 
 saveZP			!fill ($100-ZP_BASE),0
-slotInfo		!fill 8,0	; slot[0..7] : bits: b7..4=AYs, b1=6522/$80, b0=6522/$00
+
+; slotInfo bitfield:
+							;   b7..4: AY bitmap
+NMI_FOR_6522B	= %00001000	;   b3:    NMI for 6522 at $80
+NMI_FOR_6522A	= %00000100	;   b2:    NMI for 6522 at $00
+HAS_6522B		= %00000010	;   b1:    6522 at $80
+HAS_6522A		= %00000001	;   b0:    6522 at $00
+slotInfo		!fill 8,0	; slot[0..7]
+
 numMockingboards	!byte 0
 
 is65C02			!byte 0

@@ -25,7 +25,7 @@ DetectSSI263
 	sta		zpTmp2						; mask
 
 	lda		zpTmp1
-	and		#2							; SSI263A is connected to 2nd 6522
+	and		#HAS_6522B					; SSI263A is connected to 2nd 6522
 	beq		@nextSSI263
 
 @loop	lda		#IER_CLR|IxR_SSI263
@@ -58,7 +58,7 @@ DetectSSI263
 		asl		zpTmp2					; mask<<1
 
 		lda		zpTmp1
-		and		#1						; SSI263B is connected to 1st 6522
+		and		#HAS_6522A				; SSI263B is connected to 1st 6522
 		bne		@loop
 
 +	rts
@@ -176,7 +176,7 @@ TestSSI263
 ; Uses: zpTmp1 (so don't use in sub-funcs)
 
 	lda		has6522
-	and		#1
+	and		#HAS_6522A
 	beq		+
 		lda		#IER_CLR|IxR_TIMER1|IxR_TIMER2|IxR_SSI263
 		ldy		#SY6522_A_BASE+SY6522_IER	; disable IRQ
@@ -184,7 +184,7 @@ TestSSI263
 		ldy		#SY6522_A_BASE+SY6522_IFR	; clear IRQ flag
 		sta		(MBBase),y
 +	lda		has6522
-	and		#2
+	and		#HAS_6522B
 	beq		+
 		lda		#IER_CLR|IxR_TIMER1|IxR_TIMER2|IxR_SSI263
 		ldy		#SY6522_B_BASE+SY6522_IER	; disable IRQ
