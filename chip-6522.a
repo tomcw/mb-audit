@@ -392,11 +392,7 @@ Check6522IRQ
 
 	lda		#<Check6522ISR
 	ldx		#>Check6522ISR
-	jsr		SetIrqVector
-
-	lda		#<Check6522ISR_NMI
-	ldx		#>Check6522ISR_NMI
-	jsr		SetNmiVector
+	jsr		SetIrqNmiVectors
 
 ;@6522_A_int
 	lda		zpTmp1
@@ -492,30 +488,6 @@ Check6522IRQ
 
 ;------------------------------------------------------------------------------
 
-Check6522ISR_NMI
-; 6502's NMI is triggered on NMI(active low) falling edge (H->L).
-; Interrupt will be cleared by IRQ handler below.
-; NMI asserted -> PUSH PC,P; PC=($FFFA)=$3FA -> JMP Check6522ISR_NMI (so doesn't execute the Apple II ROM)
-
-	pha
-
-	inc		isrNMIcount
-
-	; setup for ISR's RTI
-	lda		#>@NmiReturn
-	pha
-	lda		#<@NmiReturn
-	pha
-	php
-
-	jmp		Check6522ISR
-
-@NmiReturn
-	pla
-	rti
-
-;------------------------------------------------------------------------------
-
 Check6522ISR
 ; Pre:
 ;	6502 has pushed P
@@ -584,11 +556,7 @@ Test6522
 
 	lda		#<Test6522ISR
 	ldx		#>Test6522ISR
-	jsr		SetIrqVector
-
-	lda		#<Test6522ISR_NMI
-	ldx		#>Test6522ISR_NMI
-	jsr		SetNmiVector
+	jsr		SetIrqNmiVectors
 
 	lda		#COMPONENT_6522+1	; test component $11
 	sta		testComponentNum
@@ -2330,11 +2298,7 @@ T6522_14
 
 	lda		#<T6522_MultiCard_ISR
 	ldx		#>T6522_MultiCard_ISR
-	jsr		SetIrqVector
-
-	lda		#<T6522_MultiCard_ISR_NMI
-	ldx		#>T6522_MultiCard_ISR_NMI
-	jsr		SetNmiVector
+	jsr		SetIrqNmiVectors
 
 	lda		#0
 	sta		MBBase2H				; In ISR: not using MB card#2
@@ -2463,11 +2427,7 @@ T6522_14
 
 	lda		#<Test6522ISR
 	ldx		#>Test6522ISR
-	jsr		SetIrqVector
-
-	lda		#<Test6522ISR_NMI
-	ldx		#>Test6522ISR_NMI
-	jsr		SetNmiVector
+	jsr		SetIrqNmiVectors
 
 	jsr		@cleanup
 	clc								; C=0(OK)
@@ -2608,11 +2568,7 @@ Test6522MultiCard
 
 	lda		#<T6522_MultiCard_ISR
 	ldx		#>T6522_MultiCard_ISR
-	jsr		SetIrqVector
-
-	lda		#<T6522_MultiCard_ISR_NMI
-	ldx		#>T6522_MultiCard_ISR_NMI
-	jsr		SetNmiVector
+	jsr		SetIrqNmiVectors
 
 	ldx		#-1						; timerConfig index
 
@@ -2767,11 +2723,7 @@ Test6522MultiCard
 
 	lda		#<Test6522ISR
 	ldx		#>Test6522ISR
-	jsr		SetIrqVector
-
-	lda		#<Test6522ISR_NMI
-	ldx		#>Test6522ISR_NMI
-	jsr		SetNmiVector
+	jsr		SetIrqNmiVectors
 
 	jsr		@cleanup
 	clc								; C=0(OK)
@@ -2836,28 +2788,6 @@ Test6522MultiCard
 }
 	;
 	!word	$ffff					; done
-
-;------------------------------------------------------------------------------
-
-T6522_MultiCard_ISR_NMI
-; 6502's NMI is triggered on NMI(active low) falling edge (H->L).
-; Interrupt will be cleared by IRQ handler below.
-; NMI asserted -> PUSH PC,P; PC=($FFFA)=$3FA -> JMP Check6522ISR_NMI (so doesn't execute the Apple II ROM)
-
-	pha
-
-	; setup for ISR's RTI
-	lda		#>@NmiReturn
-	pha
-	lda		#<@NmiReturn
-	pha
-	php
-
-	jmp		T6522_MultiCard_ISR
-
-@NmiReturn
-	pla
-	rti
 
 ;------------------------------------------------------------------------------
 
@@ -3058,28 +2988,6 @@ WaitT2Underflow
 -		lda		(MBBase),y			; wait $FFnn (as there's no T2L_h, then "after timing out, the counter will continue to decrement")
 		beq		-
 	rts
-
-;------------------------------------------------------------------------------
-
-Test6522ISR_NMI
-; 6502's NMI is triggered on NMI(active low) falling edge (H->L).
-; Interrupt will be cleared by IRQ handler below.
-; NMI asserted -> PUSH PC,P; PC=($FFFA)=$3FA -> JMP Check6522ISR_NMI (so doesn't execute the Apple II ROM)
-
-	pha
-
-	; setup for ISR's RTI
-	lda		#>@NmiReturn
-	pha
-	lda		#<@NmiReturn
-	pha
-	php
-
-	jmp		Test6522ISR
-
-@NmiReturn
-	pla
-	rti
 
 ;------------------------------------------------------------------------------
 

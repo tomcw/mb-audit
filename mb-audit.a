@@ -561,20 +561,61 @@ SetPhasorMode
 
 ;------------------------------------------------------------------------------
 
+NMI_Handler
+; Provide a wrapper for NMI, since there's no Apple II ROM support, other than vectoring to $3FA:
+; . NMI asserted -> PUSH PC,P; PC=($FFFA)=$3FA -> JMP Check6522ISR_NMI (so doesn't execute the Apple II ROM)
+; 6502's NMI is triggered on NMI(active low) falling edge (H->L).
+; Interrupt source will be cleared by ISR.
+
+	pha
+
+	inc		isrNMIcount
+
+	; setup for ISR's RTI
+	lda		#>@NmiReturn
+	pha
+	lda		#<@NmiReturn
+	pha
+	php
+
+	jmp		(NmiVector)				; this is the regular ISR for IRQ
+
+@NmiReturn
+	pla
+	rti
+
+; NB. 6502 can't page-cross!
+NmiVector
+	!byte	0,0
+
+;------------------------------------------------------------------------------
+
+SetIrqNmiVectors
+; Pre: A(l),X(h) = ISR
+
+	jsr		SetIrqVector
+
+	; fall through...
+
+;SetNmiVector
+; Pre: A(l),X(h) = ISR
+
+	sta		NmiVector+0
+	stx		NmiVector+1
+
+	lda		#$4C
+	sta		NMI+0
+	lda		#<NMI_Handler
+	sta		NMI+1
+	lda		#>NMI_Handler
+	sta		NMI+2
+	rts
+
 SetIrqVector
 ; Pre: A(l),X(h) = ISR
 
 	sta		IRQL
 	stx		IRQH
-	rts
-
-SetNmiVector
-; Pre: A(l),X(h) = ISR
-
-	sta		NMI+1
-	stx		NMI+2
-	lda		#$4C
-	sta		NMI+0
 	rts
 
 ;------------------------------------------------------------------------------

@@ -448,11 +448,7 @@ TestAYTones
 
 	lda		#<AYTonesISR
 	ldx		#>AYTonesISR
-	jsr		SetIrqVector
-
-	lda		#<AYTonesISR_NMI
-	ldx		#>AYTonesISR_NMI
-	jsr		SetNmiVector
+	jsr		SetIrqNmiVectors
 
 	; Init AY8913 regs
 
@@ -662,28 +658,6 @@ ayEna	; 6522 chip A at $Cn00(+$Cn10), 6522 chip B at $Cn80
 		; . AY8913 B1 (and B2) connected to 6522 chip B
 	!byte $3f,$3f	; chip A1,B1 (1=dis, 0=ena -- just like reg#7)
 	!byte $3f,$3f	; chip A2,B2 (for Phasor)
-
-;------------------------------------------------------------------------------
-
-AYTonesISR_NMI
-; 6502's NMI is triggered on NMI(active low) falling edge (H->L).
-; Interrupt will be cleared by IRQ handler below.
-; NMI asserted -> PUSH PC,P; PC=($FFFA)=$3FA -> JMP Check6522ISR_NMI (so doesn't execute the Apple II ROM)
-
-	pha
-
-	; setup for ISR's RTI
-	lda		#>@NmiReturn
-	pha
-	lda		#<@NmiReturn
-	pha
-	php
-
-	jmp		AYTonesISR
-
-@NmiReturn
-	pla
-	rti
 
 ;------------------------------------------------------------------------------
 
