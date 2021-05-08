@@ -2293,6 +2293,7 @@ T6522_14
 ;	6522-B T2 is one-shot
 ; . NB T6522_MultiCard_ISR handles ints in any order, and simultaneously too.
 ; . ISR disables the T1/T2 int so it only generates an IRQ once.
+; . Don't use 6522 if it's connected to NMI (as nested IRQ then NMI aren't supported by Apple II ROM or my ISR)
 ;
 
 	lda		MBBaseL					; must be $00 for ISR (and because this test uses both 6522s)
@@ -2324,6 +2325,8 @@ T6522_14
 		lda		has6522
 		and		#HAS_6522A
 		beq		@6522_B
+		lda		isrNMIcount_A
+		bne		@6522_B
 
 		lda		#ACR_FREERUNNING
 		ldy		#SY6522_A_BASE+SY6522_ACR
@@ -2360,6 +2363,8 @@ T6522_14
 		lda		has6522
 		and		#HAS_6522B
 		beq		@test
+		lda		isrNMIcount_B
+		bne		@test
 
 		lda		#ACR_FREERUNNING
 		ldy		#SY6522_B_BASE+SY6522_ACR
@@ -2527,6 +2532,7 @@ Test6522MultiCard
 ;	Card1/2: 6522-B T2 is one-shot
 ; . NB Test_10_ISR handles ints in any order, and simultaneously too.
 ; . ISR disables the T1/T2 int so it only generates an IRQ once.
+; . Don't use 6522 if it's connected to NMI (as nested IRQ then NMI aren't supported by Apple II ROM or my ISR)
 ;
 
 	lda		#COMPONENT_6522+2	; test component $12
@@ -2543,7 +2549,7 @@ Test6522MultiCard
 		dex
 		bne		@findCard1
 
-+	sta		has6522
++	sta		has6522					; also includes "NMI for 6522" info
 	txa
 	ora		#$c0
 	sta		MBBaseH
@@ -2591,8 +2597,12 @@ Test6522MultiCard
 		sta		zpTmp2				; mask (also used by ISR, but OK since we have SEI)
 
 @6522_A		lda		has6522
+			pha
 			and		#HAS_6522A
 			beq		@6522_B
+			pla
+			and		#NMI_FOR_6522A
+			bne		@6522_B
 
 			lda		#ACR_FREERUNNING
 			ldy		#SY6522_A_BASE+SY6522_ACR
@@ -2630,8 +2640,12 @@ Test6522MultiCard
 			asl		zpTmp2
 
 			lda		has6522
+			pha
 			and		#HAS_6522B
 			beq		@nextCard
+			pla
+			and		#NMI_FOR_6522B
+			bne		@nextCard
 
 			lda		#ACR_FREERUNNING
 			ldy		#SY6522_B_BASE+SY6522_ACR
