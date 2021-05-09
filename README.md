@@ -28,9 +28,9 @@ Here's a high-level overview of what mb-audit does:
 - Detect Apple II model for lowercase support.
 - Scan slots 7..1 to detect any cards with a 6522 at $Cn00 and/or $Cn80
   - Detect 6522 using Timer2 as this is more robust than Timer1
-- Display overview of what has been detected (where ?=6522 detected):
+- Display overview of what has been detected in slots 1-7 (where ?=6522 detected):
 ```
-mb-audit v0.1, 2021                     
+mb-audit v0.1-beta, 2021                     
                     1  2  3  4  5  6  7 
                $00: ?        ?          
                $80: ?        ?          
@@ -45,7 +45,7 @@ Then for each card found:
   - (*1) Untested on real hardware
 - Display a more detailed summary of what has been detected, eg:
 ```
-mb-audit v0.1, 2021                     
+mb-audit v0.1-beta, 2021                     
                     1  2  3  4  5  6  7 
                $00: P        C          
                $80: P        C          
@@ -80,7 +80,7 @@ After all cards have been tested then:
 
 When a test fails, the display will indicate the failing test and reason:
 ```
-mb-audit v0.1, 2021                     
+mb-audit v0.1-beta, 2021                     
                     1  2  3  4  5  6  7 
                $00: ?        C          
                $80: ?        C          
