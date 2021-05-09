@@ -669,13 +669,14 @@ T263_3
 
 	sei
 
-	jsr		incSubTestNum			; subTest #1
-
 	lda		isPhasorCard
 	beq		@done
 
+	jsr		incSubTestNum			; subTest #1
+
 	;
 	; Now test Phasor in native Phasor mode
+	; NB. Phasor uses direct IRQ (which still works even if PCR is setup)
 	;
 
 	lda		#PH_PHASOR
@@ -686,6 +687,7 @@ T263_3
 	bne		+
 		lda		#SY6522_A_PH_BASE
 		sta		MBBaseL
++
 
 	lda		#<NullPhrase
 	ldx		#>NullPhrase
@@ -808,10 +810,10 @@ T263_4
 
 	;
 
-	jsr		incSubTestNum			; subTest #3
-
 	lda		isPhasorCard
 	beq		@done
+
+	jsr		incSubTestNum			; subTest #3
 
 	;
 	; Now test Phasor in native Phasor mode
@@ -825,6 +827,7 @@ T263_4
 	bne		+
 		lda		#SY6522_A_PH_BASE
 		sta		MBBaseL
++
 
 	lda		#<NullPhrase
 	ldx		#>NullPhrase
