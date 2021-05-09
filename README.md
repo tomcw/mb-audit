@@ -18,8 +18,10 @@ Motivation: to consolidate the sprawling set of individual tests I've been creat
 - AppleWin 1.30.1 passes all tests for mb-audit v0.1. Configurations: (a) 2x MB-C; (b) 1x Phasor
 
 Current test matrix for real hardware:
-- ReactiveMicro's Mockingboard-C, non-enhanced //e, 65C02, SSI263(socket-B) mb-audit v0.1
-- Applied Engineering's Phasor, non-enhanced //e, 65C02, SSI263(socket-A), mb-audit v0.1
+- ReactiveMicro's Mockingboard-C, non-enhanced //e, 65C02, SSI263(socket-B) mb-audit v0.1-beta
+- Applied Engineering's Phasor, non-enhanced //e, 65C02, SSI263(socket-A), mb-audit v0.1-beta
+
+![DSC00534-s](https://user-images.githubusercontent.com/6696896/117582673-188b6300-b0fb-11eb-9baf-4ba27d112542.png)
 
 ### Operation
 
