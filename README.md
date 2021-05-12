@@ -15,11 +15,11 @@ As it is intended as a full-correctness suite for emulators, then it goes deeper
 Tests are run in order and can't be skipped. On a first failure, then the audit will stop at that point, outputting an error to identify the test failure and some extra info to help narrow down the failure. There is no way to resume testing from after this failing test, mainly because subsequent tests rely on behaviour that must be working from previous tests.
 
 Motivation: to consolidate the sprawling set of individual tests I've been creating over the years for AppleWin.
-- AppleWin 1.30.1 passes all tests for mb-audit v0.1. Configurations: (a) 2x MB-C; (b) 1x Phasor
+- AppleWin 1.30.1 passes all tests for mb-audit v0.1-beta. Configurations: (a) 2x MB-C; (b) 1x Phasor
 
 Current test matrix for real hardware:
-- ReactiveMicro's Mockingboard-C, non-enhanced //e, 65C02, SSI263(socket-B) mb-audit v0.1-beta
-- Applied Engineering's Phasor, non-enhanced //e, 65C02, SSI263(socket-A), mb-audit v0.1-beta
+- ReactiveMicro's Mockingboard-C, non-enhanced //e, 65C02, SSI263(socket-B) mb-audit v0.2-beta
+- Applied Engineering's Phasor, non-enhanced //e, 65C02, SSI263(socket-A), mb-audit v0.2-beta
 
 ![DSC00534-s](https://user-images.githubusercontent.com/6696896/117582673-188b6300-b0fb-11eb-9baf-4ba27d112542.png)
 
@@ -125,7 +125,7 @@ Where:
 
 AY-3-8913 tests
 - Try to write then read back the AY registers.
-  - NB. Not all cards support reading the AY registers (eg. Phasor).
+  - NB. Not all cards support reading the AY registers (eg. Phasor in Echo+ mode).
 - Test address lines and data lines.
 - Test cards which have a single 6522, but 2x AY-3-8913s (eg. Echo+, MB4C).
 - Manual tone tests:
