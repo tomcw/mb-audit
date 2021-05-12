@@ -15,24 +15,14 @@ DetectAY8913
 
 	lda		isPhasorCard
 	beq		+
-		lda		#%00001111
-		sta		hasAY8913		; can't test them, so just assume they are all working
-		rts
+		lda		#PH_MOCKINGBOARD
+		jsr		SetPhasorMode
 +
 
 	lda		isMB4C
 	ora		isEchoPlus
 	beq		+
 		lda		#%00000011
-		sta		hasAY8913		; can't test them, so just assume they are all working
-		rts
-+
-
-	lda		hasSC01				; Sound/Speech-I? (ie. hasSC01 && NMI_FOR_6522B)
-	beq		+
-	lda		isrNMIcount_B
-	beq		+
-		lda		#%00000010
 		sta		hasAY8913		; can't test them, so just assume they are all working
 		rts
 +
@@ -86,6 +76,15 @@ DetectAY8913
 		sta		zpTmp3
 		bne		-
 
+	lda		isPhasorCard
+	beq		+
+	lda		#%00000011
+	cmp		hasAY8913
+	bne		+
+		lda		#%00001111
+		sta		hasAY8913
++
+
 	rts
 
 ;------------------------------------------------------------------------------
@@ -93,6 +92,7 @@ DetectAY8913
 ; TODO:
 ; . Set AY reg without setting INACTIVE state (AppleWin-GH#320)
 ; . Write AY reg outside of the 10us spec (AppleWin-GH#742)
+; . Read AY reg after setting to INACTIVE state (high impedance state, so should read back as $FF)
 
 TestAY8913
 ; Pre: hasAY8913 (Phasor: will be 0)
@@ -271,7 +271,7 @@ TestAYAddrlines
 ;--------------------------------------
 
 TestAYEchoPlus
-; Pre: isEcho==1 or isMB4C==1
+; Pre: isEcho==1 or isMB4C==1 or (isPhasorCard==1 && PH_ECHOPLUS)
 ; Post: C=0(OK), C=1(NG)
 ;	zpTmp2 = expected, A = actual
 
@@ -348,7 +348,7 @@ TestAYPhasor
 
 	; Test for 4 AYs (Phasor only)
 	; . Write to each AY's reg#0 with values: $11,$22,$33,$44
-	; . then read back (all should be $FF)
+	; . then read back
 	; NB. Phasor doesn't support PortA input - so can't read the AY8913 regs
 
 	jsr		resetSubTest
@@ -393,14 +393,14 @@ TestAYPhasor
 
 	ldx		#AY_AFINE
 	jsr		AY1_ReadRegValue
-	ldx		#$FF				; $11
-	cmp		#$FF
+	ldx		#$11
+	cmp		#$11
 	bne		+
 
 	ldx		#AY_AFINE
 	jsr		AY2_ReadRegValue
-	ldx		#$FF				; $22
-	cmp		#$FF
+	ldx		#$22
+	cmp		#$22
 	bne		+
 
 	;
@@ -409,13 +409,13 @@ TestAYPhasor
 
 	ldx		#AY_AFINE
 	jsr		AY1_ReadRegValue
-	ldx		#$FF				; $33
-	cmp		#$FF
+	ldx		#$33
+	cmp		#$33
 	bne		+
 
 	ldx		#AY_AFINE
 	jsr		AY2_ReadRegValue
-	ldx		#$FF				; $44
+	ldx		#$44
 
 +	stx		zpTmp2				; expected
 	sta		zpTmp1				; actual
@@ -783,6 +783,7 @@ AY_WriteRegValue
 ; Pre: Y = SY6522_ORA for chip A or B
 ;	A=reg#
 ;	X=value
+; Post: Y = SY6522_ORA for chip A or B
 	jsr		SF_SelectReg
 	txa
 	jmp		SF_WriteReg
@@ -790,7 +791,7 @@ AY_WriteRegValue
 AY_ReadRegValue
 ; Pre: Y = SY6522_ORA for chip A or B
 ;	X=reg#
-; Post:
+; Post: Y = SY6522_ORA for chip A or B
 ;	A=value
 	jsr		AY_SetPortAOutput
 	txa
@@ -830,8 +831,16 @@ AY_ReadReg
 ; Post: Y = SY6522_ORA for chip A or B
 ;	A = data
 	lda		#AY_READ
-	jsr		+
+	dey		; Y = ORB (reg#0)
+	sta		(MBBase),y
+	iny		; Y = ORA (reg#1)
 	lda		(MBBase),y		; Read Port-A
+	tax
+	lda		#AY_INACTIVE
+	dey		; Y = ORB (reg#0)
+	sta		(MBBase),y
+	iny		; Y = ORA (reg#1)
+	txa
 	rts
 
 SF_SelectReg
@@ -875,19 +884,35 @@ AY1_ReadReg
 ; Post: Y = SY6522_ORA for chip A or B
 ;	A = data
 	lda		#AY_READ|AY_CS1
-	jsr		+
+	dey		; Y = ORB (reg#0)
+	sta		(MBBase),y
+	iny		; Y = ORA (reg#1)
 	lda		(MBBase),y		; Read Port-A
+	tax
+	lda		#AY_INACTIVE|AY_CS1
+	dey		; Y = ORB (reg#0)
+	sta		(MBBase),y
+	iny		; Y = ORA (reg#1)
+	txa
 	rts
 AY2_ReadReg
 	lda		#AY_READ|AY_CS2
-	jsr		++
+	dey		; Y = ORB (reg#0)
+	sta		(MBBase),y
+	iny		; Y = ORA (reg#1)
 	lda		(MBBase),y		; Read Port-A
+	tax
+	lda		#AY_INACTIVE|AY_CS2
+	dey		; Y = ORB (reg#0)
+	sta		(MBBase),y
+	iny		; Y = ORA (reg#1)
+	txa
 	rts
 
 AY1_SelectReg
 ; Pre: Y = SY6522_ORA for chip A or B
-; Post: Y = SY6522_ORA for chip A or B
 ;	A = reg#
+; Post: Y = SY6522_ORA for chip A or B
 	sta		(MBBase),y
 	lda		#AY_LATCH|AY_CS1
 	bne		+
@@ -899,8 +924,8 @@ AY2_SelectReg
 AY1_WriteReg
 ; Pre: Y = SY6522_ORA for chip A or B
 ;	6522.DDRA = $FF (Port-A direction = output)
-; Post: Y = SY6522_ORA for chip A or B
 ;	A = data
+; Post: Y = SY6522_ORA for chip A or B
 	sta		(MBBase),y
 	lda		#AY_WRITE|AY_CS1
 	bne		+
