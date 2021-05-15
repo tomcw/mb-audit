@@ -2580,14 +2580,14 @@ T6522_15
 	beq		@error
 
 	jsr		incSubTestNum			; subTest #1
-	lda		#$10
+	lda		#$00
 	ldy		#SY6522_TIMER1L_COUNTER	; mustn't clear IFR.T1
 	sta		(MBBase),y
 	jsr		@checkIFR_T1
 	beq		@error
 
 	jsr		incSubTestNum			; subTest #2
-	lda		#$10
+	lda		#$00
 	ldy		#SY6522_TIMER1L_LATCH	; mustn't clear IFR.T1
 	sta		(MBBase),y
 	jsr		@checkIFR_T1
@@ -2639,10 +2639,9 @@ T6522_15
 	ldy		#SY6522_IFR
 	sta		(MBBase),y
 
-	lda		#$10
+	lda		#$00
 	ldy		#SY6522_TIMER1L_COUNTER
 	sta		(MBBase),y
-	lda		#$00
 	ldy		#SY6522_TIMER1H_COUNTER
 	sta		(MBBase),y
 	rts
