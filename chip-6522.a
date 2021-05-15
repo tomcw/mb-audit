@@ -537,7 +537,8 @@ Check6522ISR
 ;	. [T6522_7, T6522_9, T6522_A, T6522_C] oneshot|continuous underflow, then T1L -> T1C
 ;	. [T6522_B] T1L=$0000, can only read T1C values of $00 and $FF
 ;	. [T6522_A, T6522_E] 6522 period is N+2 cycles
-;	. [T6522_F]  Alt test that 6522 period is N+2 cycles - currently disabled
+;	. [T6522_F] Alt test that 6522 period is N+2 cycles - currently disabled
+;	. [T6522_15] T1 int cleared/not cleared by certain register r/w's
 ;	T2:
 ;	. [T6522_2] oneshot x IRQ|poll
 ;	. [T6522_4, T6522_6] 6502|65C02 addr modes access of 6522 T2C
@@ -655,6 +656,7 @@ testTbl
 	!word	T6522_12	; 32
 	!word	T6522_13	; 33
 	!word	T6522_14	; 34
+	!word	T6522_15	; 35
 	!word	0
 
 ;------------------------------------------------------------------------------
@@ -2538,6 +2540,119 @@ T6522_14
 }
 	;
 	!word	$ffff					; done
+
+;------------------------------------------------------------------------------
+
+T6522_15
+; Pre: has6522, isrNMIcount_A, isrNMIcount_B
+; Post: C=0(OK), C=1(NG)
+;
+; Test#15
+; . Poll for T1 IRQ, then check that IRQ is:
+; . not clear by:
+;   . writing T1C_L, T1L_L
+; . cleared by:
+;   . reading T1C_L
+;   . writing T1C_H, T1L_H
+
+	lda		MBBaseL
+	bne		+
+		lda		isrNMIcount_A
+		beq		@doTest
+			clc
+			rts
++		lda		isrNMIcount_B
+		beq		@doTest
+			clc
+			rts
+
+@doTest
+
+	jsr		resetSubTest			; subTest #0
+	jsr		incTotalTests
+
+	lda		#ACR_ONESHOT
+	ldy		#SY6522_ACR
+	sta		(MBBase),y
+
+	jsr		@setupIFR_T1
+	jsr		@checkIFR_T1
+	beq		@error
+
+	jsr		incSubTestNum			; subTest #1
+	lda		#$10
+	ldy		#SY6522_TIMER1L_COUNTER	; mustn't clear IFR.T1
+	sta		(MBBase),y
+	jsr		@checkIFR_T1
+	beq		@error
+
+	jsr		incSubTestNum			; subTest #2
+	lda		#$10
+	ldy		#SY6522_TIMER1L_LATCH	; mustn't clear IFR.T1
+	sta		(MBBase),y
+	jsr		@checkIFR_T1
+	beq		@error
+
+	jsr		incSubTestNum			; subTest #3
+	lda		#$00
+	ldy		#SY6522_TIMER1H_LATCH	; *must* clear IFR.T1
+	sta		(MBBase),y
+	jsr		@checkIFR_T1
+	bne		@error
+
+	jsr		incSubTestNum			; subTest #4
+	jsr		@setupIFR_T1
+	jsr		@checkIFR_T1
+	beq		@error
+
+	jsr		incSubTestNum			; subTest #5
+	ldy		#SY6522_TIMER1L_COUNTER	; *must* clear IFR.T1
+	lda		(MBBase),y
+	jsr		@checkIFR_T1
+	bne		@error
+
+	jsr		incSubTestNum			; subTest #6
+	jsr		@setupIFR_T1
+	jsr		@checkIFR_T1
+	beq		@error
+
+	jsr		incSubTestNum			; subTest #7
+	lda		#$01
+	ldy		#SY6522_TIMER1H_COUNTER	; *must* clear IFR.T1
+	sta		(MBBase),y
+	jsr		@checkIFR_T1
+	bne		@error
+
+	clc
+	rts
+
+@error	; Pre: A=actual, X=expected
+	stx		zpTmp2					; expected
+	sec								; C=1(NG)
+	rts
+
+@setupIFR_T1
+; Post: IFR.T1=1
+	lda		#IER_CLR|IxR_TIMER1
+	ldy		#SY6522_IER
+	sta		(MBBase),y
+	ldy		#SY6522_IFR
+	sta		(MBBase),y
+
+	lda		#$10
+	ldy		#SY6522_TIMER1L_COUNTER
+	sta		(MBBase),y
+	lda		#$00
+	ldy		#SY6522_TIMER1H_COUNTER
+	sta		(MBBase),y
+	rts
+
+@checkIFR_T1
+	ldy		#SY6522_IFR
+	lda		(MBBase),y
+	ldx		#IxR_TIMER1
+	and		#IxR_TIMER1
+	rts
 
 ;------------------------------------------------------------------------------
 
