@@ -18,7 +18,7 @@ Detect6522
 
 	; 6522's IER.b7 is always 1
 	; . Due to floating bus (and the visible TEXT screen being mainly $A0 values), then empty slots will likely pass this IER.b7 check
-	ldy		#SY6522_B_BASE+SY6522_IER
+	ldy		#SY6522_A_BASE+SY6522_IER
 	lda		(MBBase),y
 	bmi		@check_A
 	rts
