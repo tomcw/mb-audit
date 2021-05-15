@@ -572,21 +572,18 @@ NMI_Handler
 	inc		isrNMIcount
 
 	; setup for ISR's RTI
-	lda		#>@NmiReturn
+	lda		#>NmiReturn
 	pha
-	lda		#<@NmiReturn
+	lda		#<NmiReturn
 	pha
 	php
 
-	jmp		(NmiVector)				; this is the regular ISR for IRQ
+NmiVector
+	jmp		$0000					; this is the regular ISR for IRQ
 
-@NmiReturn
+NmiReturn
 	pla
 	rti
-
-; NB. 6502 can't page-cross!
-NmiVector
-	!byte	0,0
 
 ;------------------------------------------------------------------------------
 
@@ -600,8 +597,8 @@ SetIrqNmiVectors
 ;SetNmiVector
 ; Pre: A(l),X(h) = ISR
 
-	sta		NmiVector+0
-	stx		NmiVector+1
+	sta		NmiVector+1
+	stx		NmiVector+2
 
 	lda		#$4C
 	sta		NMI+0
@@ -1045,7 +1042,7 @@ errorActual		!byte 0
 hasBeenReset	!byte 0
 userlandSP		!byte 0
 
-msg_mbaudit	!text "mb-audit v0.2-beta, 2021",0xd
+msg_mbaudit	!text "mb-audit v0.3-beta, 2021",0xd
 msg_mbauditEnd !text 0
 
 msg_cpu6502Detected !text "6502 detected",0xd
