@@ -1776,6 +1776,7 @@ T6522_C
 	sta		(MBBase),y				; --- T1C=$00ff
 
 	; delay $f7 cycles: 2 + 14*(12+2+3)-1 + 4+4
+	; NB. timing sensitive, so the "bne" mustn't page-cross!
 	ldx		#14						; 2cy
 -		jsr		@rts				;12cy
 		dex							; 2cy
@@ -1860,6 +1861,7 @@ T6522_D
 	sta		(MBBase),y				; --- T2C=$00ff
 
 	; delay $f7 cycles: 2 + 14*(12+2+3)-1 + 4+4
+	; NB. timing sensitive, so the "bne" mustn't page-cross!
 	ldx		#14						; 2cy
 -		jsr		@rts				;12cy
 		dex							; 2cy
@@ -2065,8 +2067,8 @@ T6522_11
 	bne		+
 
 ; NB. Align to a page boundary, as the 2 branches in the inner-loop "@loop" can't page-cross
-;     as this incurs an extra cycle, and the loop & results are timing sensitive.
-; The follow align adds ~64 bytes of padding:
+;     as this incurs an extra cycle, and the loop+results are timing sensitive.
+; The following "align" currently adds ~64 bytes of padding:
 !align 255, 0, 0		; align to 256 bytes (pad with $EA's)
 
 +

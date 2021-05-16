@@ -169,6 +169,7 @@ TSC01_0
 ;
 ; Test#0
 ; . Play phrase "THE SPY STRIKES BACK" and check total duration is within tolerance
+; . NB. "Speech/Sound I" card has a potentiometer to manually control the speech rate.
 
 	jsr		resetSubTest			; subTest #0
 	jsr		incTotalTests
@@ -177,22 +178,22 @@ TSC01_0
 	ldx		#>TheSpyStrikesBack
 	jsr		PlaySC01
 
-	ldy		#15	; delay of 0x266053 cycles = 2,515,027 = ~2.458s
--		lda #$ff
-		jsr WAIT
+	ldy		#0						; delay of ~41.95s
+-		lda		#$ff
+		jsr		WAIT
+		lda		doingSpeechSC01
+		beq		@ok
 		dey
 		bne		-
 
-	lda		doingSpeechSC01
-	bne		@error
+	beq		@error
 
-	clc								; C=0(OK)
+@ok	clc								; C=0(OK)
 	bcc		@done
 
 @error
 	; Error: phrase not complete
--		lda		doingSpeechSC01
-		bne		-
+	lda		#0
 	sta		zpTmp2					; expected
 	sec								; C=1(NG)
 
@@ -200,11 +201,19 @@ TSC01_0
 	sei
 	php
 
+	lda		#0
+	sta		doingSpeechSC01
+	jsr		DisableSC01
+
 	ldy		#SY6522_IER
 	lda		#IER_CLR|IxR_VOTRAX
 	sta		(MBBase),y				; Disable SC01/Votrax IRQ
 	lda		#IER_CLR|IxR_TIMER1
 	sta		(MBTimer),y				; Disable Timer1 IRQ
+
+	lda		#IxR_VOTRAX
+	ldy		#SY6522_IFR
+	sta		(MBBase),y				; Clear SC01/Votrax IRQ
 
 	jsr		CalcPhraseDuration		; Real MB: <TODO> (MAME 0.230: 0x15E0BE; AppleWin: 0x250229,0x250C9B/running; 0x260B7B/stepping)
 
