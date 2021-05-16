@@ -1739,7 +1739,7 @@ T6522_C
 	ldy		#SY6522_TIMER1L_COUNTER
 	lda		(MBBase),y
 	sbc		(MBBase),y
-	ldx		#$05					; expect: $DA-$D5 = $05
+	ldx		#$05					; expect: $E0-$DB = $05
 	cmp		#$05
 	bne		@error
 
@@ -1775,14 +1775,12 @@ T6522_C
 	ldy		#SY6522_TIMER1H_COUNTER
 	sta		(MBBase),y				; --- T1C=$00ff
 
-	; delay $f7 cycles: 2 + 14*(12+2+3)-1 + 4+4
-	; NB. timing sensitive, so the "bne" mustn't page-cross!
-	ldx		#14						; 2cy
--		jsr		@rts				;12cy
-		dex							; 2cy
-		bne		-					; 3cy (except 2cy on last loop)
-	bit		$100					; 4cy
-	bit		$100					; 4cy
+	; delay $f7 cycles: $e8 + 12 + 3
+	; NB. timing sensitive, so avoid any "Bcc" opcodes that could page-cross (when taken)
+	lda		#7						;$e8 cycles
+	jsr		WAIT
+	jsr		@rts					;12cy
+	lda		0						; 3cy
 
 									; --- T1C=$0008
 	sec								; 2cy T1C=$0006
@@ -1824,7 +1822,7 @@ T6522_D
 	ldy		#SY6522_TIMER2L_COUNTER
 	lda		(MBBase),y
 	sbc		(MBBase),y
-	ldx		#$05					; expect: $D7-$D2 = $05
+	ldx		#$05					; expect: $DD-$D8 = $05
 	cmp		#$05
 	bne		@error
 
@@ -1860,14 +1858,12 @@ T6522_D
 	ldy		#SY6522_TIMER2H_COUNTER
 	sta		(MBBase),y				; --- T2C=$00ff
 
-	; delay $f7 cycles: 2 + 14*(12+2+3)-1 + 4+4
-	; NB. timing sensitive, so the "bne" mustn't page-cross!
-	ldx		#14						; 2cy
--		jsr		@rts				;12cy
-		dex							; 2cy
-		bne		-					; 3cy (except 2cy on last loop)
-	bit		$100					; 4cy
-	bit		$100					; 4cy
+	; delay $f7 cycles: $e8 + 12 + 3
+	; NB. timing sensitive, so avoid any "Bcc" opcodes that could page-cross (when taken)
+	lda		#7						;$e8 cycles
+	jsr		WAIT
+	jsr		@rts					;12cy
+	lda		0						; 3cy
 
 									; --- T2C=$0008
 	sec								; 2cy T2C=$0006
