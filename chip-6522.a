@@ -10,11 +10,7 @@ Detect6522
 ; Pre: X=slot#
 ; Post: X=slot#
 
-	txa
-	ora		#$c0
-	sta		MBBaseH
-	lda		#0
-	sta		MBBaseL
+	jsr		SetMBBase
 
 	; 6522's IER.b7 is always 1
 	; . Due to floating bus (and the visible TEXT screen being mainly $A0 values), then empty slots will likely pass this IER.b7 check
@@ -181,11 +177,7 @@ Check6522
 ; Pre: X=slot#
 ; Post: C=0(OK), C=1(NG)
 
-	txa
-	ora		#$c0
-	sta		MBBaseH
-	lda		#0
-	sta		MBBaseL
+	jsr		SetMBBase
 
 	lda		slotInfo,x
 	and		#3							; just 6522's
@@ -2682,11 +2674,7 @@ Test6522MultiCard
 		bne		@findCard1
 
 +	sta		has6522					; also includes "NMI for 6522" info
-	txa
-	ora		#$c0
-	sta		MBBaseH
-	lda		#0
-	sta		MBBaseL
+	jsr		SetMBBase
 
 	dex
 @findCard2
@@ -3187,11 +3175,7 @@ Setup6522ForReset
 
 	sei
 
-	txa
-	ora		#$c0
-	sta		MBBaseH
-	lda		#0
-	sta		MBBaseL
+	jsr		SetMBBase
 
 	lda		has6522
 	lsr

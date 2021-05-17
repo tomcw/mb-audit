@@ -444,7 +444,7 @@ TestAYPhasor
 ;------------------------------------------------------------------------------
 
 TestAYTones
-; Pre: hasAY8913, isPhasorCard
+; Pre: X=slot#, hasAY8913, isPhasorCard
 ; Post:
 
 	; Press 123 for AY8913-A1 ($Cn00) channels A,B,C
@@ -454,6 +454,8 @@ TestAYTones
 	; ESC to quit
 
 	sei
+
+	jsr		SetMBBase
 
 	lda		#<AYTonesISR
 	ldx		#>AYTonesISR

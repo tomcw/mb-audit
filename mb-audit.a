@@ -414,6 +414,7 @@ TestTones
 				jsr		COUT
 +
 
+			ldx		slotUnderTest
 			jsr		TestAYTones
 
 @nextSlot
@@ -442,6 +443,19 @@ GetSlotInfo
 		bne		-
 
 	lda		numMockingboards
+	rts
+
+;------------------------------------------------------------------------------
+
+SetMBBase
+; Pre: X=slot#
+; Post: X=slot#
+
+	txa
+	ora		#$c0
+	sta		MBBaseH
+	lda		#0
+	sta		MBBaseL
 	rts
 
 ;------------------------------------------------------------------------------
@@ -1042,7 +1056,7 @@ errorActual		!byte 0
 hasBeenReset	!byte 0
 userlandSP		!byte 0
 
-msg_mbaudit	!text "mb-audit v0.4-beta, 2021",0xd
+msg_mbaudit	!text "mb-audit v0.5-beta, 2021",0xd
 msg_mbauditEnd !text 0
 
 msg_cpu6502Detected !text "6502 detected",0xd
