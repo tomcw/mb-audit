@@ -176,6 +176,7 @@ DetectMB4CorEchoPlus
 Check6522
 ; Pre: X=slot#
 ; Post: C=0(OK), C=1(NG)
+;	errorActual, errorExpected
 
 	jsr		SetMBBase
 
@@ -189,22 +190,34 @@ Check6522
 	sta		testNum						; test #00
 	sta		subTestNum					; (not used for these tests, so just set to $00)
 	jsr		Check6522Datalines
-	bcc		+
-	rts
+	bcs		@error
 
-+	inc		testNum						; test #01
+	inc		testNum						; test #01
 	jsr		Check6522Addrlines
-	bcc		+
-	rts
+	bcs		@error
 
-+	inc		testNum						; test #02
-	jmp		Check6522IRQ
+	inc		testNum						; test #02
+	jsr		Check6522IRQ
+	bcs		@error
+	rts		; C=0 (OK)
+
+@error
+; Pre: X = expected value
+;	A = actual value
+; Post: C=1(NG)
+
+	sta		errorActual
+	stx		errorExpected
+
+	sec		; C=1(NG)
+	rts
 
 ;------------------
 
 Check6522Datalines
 ; Pre: zpTmp1 = slotInfo[slot]
 ; Post: C=0(OK), C=1(NG)
+; Uses: zpTmp2, zpTmp3
 
 	;
 	; Check r/w of all 8 data lines
@@ -260,12 +273,12 @@ Check6522Datalines
 		ldy		#SY6522_A_BASE+SY6522_DDRB
 		lda		#$55
 		eor		zpTmp2
-		cmp		(MBBase),y
+		jsr		@check
 		bne		@6522_err
 		lda		#$aa
 		eor		zpTmp2
 		iny								; Y=SY6522_DDRA
-		cmp		(MBBase),y
+		jsr		@check
 		bne		@6522_err
 
 @6522_B_r
@@ -276,12 +289,12 @@ Check6522Datalines
 		ldy		#SY6522_B_BASE+SY6522_DDRB
 		lda		#$69
 		eor		zpTmp2
-		cmp		(MBBase),y
+		jsr		@check
 		bne		@6522_err
 		lda		#$96
 		eor		zpTmp2
 		iny								; Y=SY6522_DDRA
-		cmp		(MBBase),y
+		jsr		@check
 		bne		@6522_err
 
 @next
@@ -290,12 +303,25 @@ Check6522Datalines
 	sta		zpTmp2
 	bne		@loop
 
-@6522_ok
+;@6522_ok
 	clc
 	rts
 
 @6522_err
+; Pre: zpTmp3 = expected value
+;	A = actual value
+; Post: C=1(NG)
+
+	ldx		zpTmp3
 	sec
+	rts
+
+;
+
+@check
+	sta		zpTmp3						; expected
+	lda		(MBBase),y					; actual
+	cmp		zpTmp3
 	rts
 
 ;------------------
@@ -548,6 +574,8 @@ Check6522ISR
 Test6522
 ; Pre: has6522
 ; Post: C=0(OK), C=1(NG)
+;	MBBaseL = $00
+;	errorActual, errorExpected
 ; Uses: zpTmp1 (so don't use in sub-funcs)
 
 	sei
@@ -2587,7 +2615,7 @@ T6522_15
 	lda		#$00
 	ldy		#SY6522_TIMER1H_LATCH	; *must* clear IFR.T1
 	sta		(MBBase),y
-	jsr		@checkIFR_T1
+	jsr		@checkIFR_T1_expect00
 	bne		@error
 
 	jsr		incSubTestNum			; subTest #4
@@ -2598,7 +2626,7 @@ T6522_15
 	jsr		incSubTestNum			; subTest #5
 	ldy		#SY6522_TIMER1L_COUNTER	; *must* clear IFR.T1
 	lda		(MBBase),y
-	jsr		@checkIFR_T1
+	jsr		@checkIFR_T1_expect00
 	bne		@error
 
 	jsr		incSubTestNum			; subTest #6
@@ -2610,7 +2638,7 @@ T6522_15
 	lda		#$01
 	ldy		#SY6522_TIMER1H_COUNTER	; *must* clear IFR.T1
 	sta		(MBBase),y
-	jsr		@checkIFR_T1
+	jsr		@checkIFR_T1_expect00
 	bne		@error
 
 	clc
@@ -2620,6 +2648,8 @@ T6522_15
 	stx		zpTmp2					; expected
 	sec								; C=1(NG)
 	rts
+
+;
 
 @setupIFR_T1
 ; Post: IFR.T1=1
@@ -2636,10 +2666,15 @@ T6522_15
 	sta		(MBBase),y
 	rts
 
+;
+
+@checkIFR_T1_expect00
+	ldx		#0
+	beq		+
 @checkIFR_T1
-	ldy		#SY6522_IFR
-	lda		(MBBase),y
 	ldx		#IxR_TIMER1
++	ldy		#SY6522_IFR
+	lda		(MBBase),y
 	and		#IxR_TIMER1
 	rts
 
