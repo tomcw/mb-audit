@@ -631,10 +631,13 @@ SetIrqVector
 
 ;------------------------------------------------------------------------------
 
-resetSubTest
+resetSubTestMinus1
+	lda		#$ff
+	bne		+
 
+resetSubTest
 	lda		#0
-	sta		subTestNum
++	sta		subTestNum
 	rts
 
 ;------------------------------------------------------------------------------
