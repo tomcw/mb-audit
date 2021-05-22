@@ -217,6 +217,7 @@ Check6522
 Check6522Datalines
 ; Pre: zpTmp1 = slotInfo[slot]
 ; Post: C=0(OK), C=1(NG)
+;	On C=1: X=expected, A=actual
 ; Uses: zpTmp2, zpTmp3
 
 	;
@@ -332,6 +333,7 @@ Check6522Datalines
 Check6522Addrlines
 ; Pre: zpTmp1 = slotInfo[slot]
 ; Post: C=0(OK), C=1(NG)
+;	On C=1: X=expected, A=actual
 
 	jsr		resetSubTest				; subTest #0 (for 6522 at $Cn00)
 
@@ -424,10 +426,13 @@ Check6522Addrlines
 Check6522IRQ
 ; Pre: zpTmp1 = slotInfo[slot]
 ; Post: C=0(OK), C=1(NG)
+;	On C=1: X=expected, A=actual
 
 	;
 	; Check interrupt line(s)
 	;
+
+	jsr		resetSubTest				; subTest #0,1 (for 6522 at $Cn00)
 
 	sei
 
@@ -465,7 +470,7 @@ Check6522IRQ
 	sta		isrNMIcount_A
 	bne		+							; NMI occurred, so IFR.TIMER1 already cleared!
 
-		ldy		#SY6522_A_BASE+SY6522_IFR
+		ldy		#SY6522_A_BASE+SY6522_IFR	; subTest #0
 		lda		#IxR_TIMER1
 		and		(MBBase),y
 		beq		@6522_err
@@ -473,6 +478,7 @@ Check6522IRQ
 		cli
 		sei
 
+		jsr		incSubTestNum			; subTest #1
 		and		isrIFR_A
 		beq		@6522_err
 
@@ -481,6 +487,9 @@ Check6522IRQ
 	lda		zpTmp1
 	and		#HAS_6522B
 	beq		@6522_ok
+
+	lda		#2
+	sta		subTestNum					; subTest #2,3 (for 6522 at $Cn80)
 
 	lda		#0
 	sta		isrNMIcount
@@ -507,7 +516,7 @@ Check6522IRQ
 	sta		isrNMIcount_B
 	bne		+							; NMI occurred, so IFR.TIMER1 already cleared!
 
-		ldy		#SY6522_B_BASE+SY6522_IFR
+		ldy		#SY6522_B_BASE+SY6522_IFR	; subTest #2
 		lda		#IxR_TIMER1
 		and		(MBBase),y
 		beq		@6522_err
@@ -515,6 +524,7 @@ Check6522IRQ
 		cli
 		sei
 
+		jsr		incSubTestNum			; subTest #3
 		and		isrIFR_B
 		beq		@6522_err
 
@@ -524,6 +534,8 @@ Check6522IRQ
 	rts
 
 @6522_err
+	ldx		#IxR_TIMER1					; expected
+	lda		#0							; actual
 	sec
 	rts
 
@@ -2086,7 +2098,6 @@ T6522_10
 	sta		zpTmpPtrH
 
 	lda		#SY6522_TIMER1L_COUNTER
-	sta		zpTmp6
 	bne		+
 
 T6522_11
@@ -2096,15 +2107,14 @@ T6522_11
 	sta		zpTmpPtrH
 
 	lda		#SY6522_TIMER2L_COUNTER
-	sta		zpTmp6
-	bne		+
++	sta		zpTmp6
+@T6522_11_prealign
 
 ; NB. Align to a page boundary, as the 2 branches in the inner-loop "@loop" can't page-cross
 ;     as this incurs an extra cycle, and the loop+results are timing sensitive.
 ; The following "align" currently adds ~64 bytes of padding:
-!align 255, 0, 0		; align to 256 bytes (pad with $EA's)
-
-+
+!align 255, 0, $EA		; align to 256 bytes (pad with $EA's)
+!warn "T6522_11 padding = ", * - @T6522_11_prealign
 
 ; Pre: zpTmp6 = SY6522_TIMER1L_COUNTER or SY6522_TIMER2L_COUNTER
 ;	MBBaseL = $00 or $80
