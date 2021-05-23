@@ -29,11 +29,11 @@ DetectSC01
 	ldy		#SY6522_IFR
 	lda		#IxR_VOTRAX				; check CB1(Speech) IRQ
 	and		(MBBase),y
-	beq		+
-	sta		(MBBase),y				; clear CB1(Speech) IRQ
-
-		jsr		DisableSC01
+	beq		++
+		sta		(MBBase),y			; clear CB1(Speech) IRQ
 		inc		hasSC01
+
+++	jsr		DisableSC01
 
 +	rts
 
