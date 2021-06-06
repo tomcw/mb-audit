@@ -2646,8 +2646,8 @@ T6522_15
 
 +	jsr		incSubTestNum			; subTest #3
 	lda		#$00
-	ldy		#SY6522_TIMER1L_LATCH
-	sta		(MBBase),y				; mustn't clear IFR.T1
+	ldy		#SY6522_TIMER1L_LATCH	; mustn't clear IFR.T1
+	sta		(MBBase),y
 	jsr		@checkIFR_T1
 	beq		@error
 
