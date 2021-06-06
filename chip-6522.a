@@ -2593,11 +2593,11 @@ T6522_15
 ; Test#15
 ; . Poll for T1 IRQ, then check that IRQ is:
 ; . not cleared by:
-;   . writing T1C_L (via 'STA ABS'), T1L_L
+;	. writing T1C_L (via 'STA ABS'), T1L_L
 ; . cleared by:
 ;	. writing T1C_L (via 'STA (ZP),Y')
-;   . reading T1C_L
-;   . writing T1C_H, T1L_H
+;	. reading T1C_L
+;	. writing T1C_H, T1L_H
 
 	lda		MBBaseL
 	bne		+
