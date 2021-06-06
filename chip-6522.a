@@ -199,7 +199,7 @@ Check6522
 	inc		testNum						; test #02
 	jsr		Check6522IRQ
 	bcs		@error
-	rts		; C=0 (OK)
+	rts		; C=0(OK)
 
 @error
 ; Pre: X = expected value
@@ -2592,9 +2592,10 @@ T6522_15
 ;
 ; Test#15
 ; . Poll for T1 IRQ, then check that IRQ is:
-; . not clear by:
-;   . writing T1C_L, T1L_L
+; . not cleared by:
+;   . writing T1C_L (via 'STA ABS'), T1L_L
 ; . cleared by:
+;	. writing T1C_L (via 'STA (ZP),Y')
 ;   . reading T1C_L
 ;   . writing T1C_H, T1L_H
 
@@ -2611,6 +2612,9 @@ T6522_15
 
 @doTest
 
+	lda		MBBaseH
+	sta		@0+2
+
 	jsr		resetSubTest			; subTest #0
 	jsr		incTotalTests
 
@@ -2618,35 +2622,44 @@ T6522_15
 	ldy		#SY6522_ACR
 	sta		(MBBase),y
 
-	jsr		@setupIFR_T1
-	jsr		@checkIFR_T1
-	beq		@error
+	jsr		@setupIFR_T1			; subTest #$ff (!0)
+	bcs		@error
 
 	jsr		incSubTestNum			; subTest #1
 	lda		#$00
-	ldy		#SY6522_TIMER1L_COUNTER	; mustn't clear IFR.T1
-	sta		(MBBase),y
+@0	sta		CARD_BASE+SY6522_TIMER1L_COUNTER	; mustn't clear IFR.T1 -- use STA ABS, as it doesn't do a false-read
 	jsr		@checkIFR_T1
 	beq		@error
 
 	jsr		incSubTestNum			; subTest #2
+	lda		is65C02
+	bne		+
+
+		lda		#$00
+		ldy		#SY6522_TIMER1L_COUNTER
+		sta		(MBBase),y			; *must* clear IFR.T1 -- due to STA (ZP),Y false read (6502/65816 only)
+		jsr		@checkIFR_T1_expect00
+		bne		@error
+
+		jsr		@setupIFR_T1		; subTest #$fd (!2)
+		bcs		@error
+
++	jsr		incSubTestNum			; subTest #3
 	lda		#$00
-	ldy		#SY6522_TIMER1L_LATCH	; mustn't clear IFR.T1
-	sta		(MBBase),y
+	ldy		#SY6522_TIMER1L_LATCH
+	sta		(MBBase),y				; mustn't clear IFR.T1
 	jsr		@checkIFR_T1
 	beq		@error
 
-	jsr		incSubTestNum			; subTest #3
+	jsr		incSubTestNum			; subTest #4
 	lda		#$00
 	ldy		#SY6522_TIMER1H_LATCH	; *must* clear IFR.T1
 	sta		(MBBase),y
 	jsr		@checkIFR_T1_expect00
 	bne		@error
 
-	jsr		incSubTestNum			; subTest #4
-	jsr		@setupIFR_T1
-	jsr		@checkIFR_T1
-	beq		@error
+	jsr		@setupIFR_T1			; subTest #$fb (!4)
+	bcs		@error
 
 	jsr		incSubTestNum			; subTest #5
 	ldy		#SY6522_TIMER1L_COUNTER	; *must* clear IFR.T1
@@ -2654,12 +2667,10 @@ T6522_15
 	jsr		@checkIFR_T1_expect00
 	bne		@error
 
-	jsr		incSubTestNum			; subTest #6
-	jsr		@setupIFR_T1
-	jsr		@checkIFR_T1
-	beq		@error
+	jsr		@setupIFR_T1			; subTest #$fa (!5)
+	bcs		@error
 
-	jsr		incSubTestNum			; subTest #7
+	jsr		incSubTestNum			; subTest #6
 	lda		#$01
 	ldy		#SY6522_TIMER1H_COUNTER	; *must* clear IFR.T1
 	sta		(MBBase),y
@@ -2677,7 +2688,8 @@ T6522_15
 ;
 
 @setupIFR_T1
-; Post: IFR.T1=1
+; Post: C=0(OK), IFR.T1=1
+;	C=1(NG), subTestNum=!subTestNum, A=actual, X=expected
 	lda		#IER_CLR|IxR_TIMER1
 	ldy		#SY6522_IER
 	sta		(MBBase),y
@@ -2689,7 +2701,19 @@ T6522_15
 	sta		(MBBase),y
 	ldy		#SY6522_TIMER1H_COUNTER
 	sta		(MBBase),y
-	rts
+
+	jsr		@checkIFR_T1
+	beq		+
+	clc
+	rts		; C=0(OK)
+
++	pha
+	lda		#$ff
+	eor		subTestNum
+	sta		subTestNum
+	pla
+	sec
+	rts		; C=1(NG)
 
 ;
 
