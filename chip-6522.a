@@ -464,7 +464,7 @@ Check6522IRQ
 	sta		(MBBase),y
 
 	lda		#$f							; wait 0x304 cycles (and NMI may have occurred)
-	jsr		WAIT
+	jsr		myWAIT
 
 	lda		isrNMIcount
 	sta		isrNMIcount_A
@@ -510,7 +510,7 @@ Check6522IRQ
 	sta		(MBBase),y
 
 	lda		#$f							; wait 0x304 cycles (and NMI may have occurred)
-	jsr		WAIT
+	jsr		myWAIT
 
 	lda		isrNMIcount
 	sta		isrNMIcount_B
@@ -1705,6 +1705,8 @@ T6522_B
 ; Then verify that both $C4n4(l) and $C4n5(h) = $00 or $FF (and nothing else - but one can be $00, the other $FF)
 ;
 
+	sei								; cycle-accurate test, so prevent other IIgs IRQs occurring
+
 	jsr		resetSubTest			; subTest #0
 	jsr		incTotalTests
 
@@ -1724,7 +1726,7 @@ T6522_B
 	;   so a "big" gap between 6522 accesses may result in an out of bounds value.
 	ldx		#0						; 2cy (*)
 	lda		#$78
-	jsr		WAIT					; WAIT $9301cy => T1=$7nnn (ie. sign extended it's now +ve)
+	jsr		myWAIT					; WAIT $9301cy => T1=$7nnn (ie. sign extended it's now +ve)
 
 	ldy		#SY6522_TIMER1H_COUNTER
 	lda		(MBBase),y
@@ -1748,7 +1750,7 @@ T6522_B
 	;   so a "big" gap between 6522 accesses may result in an out of bounds value.
 	ldx		0						; 3cy (*)
 	lda		#$78
-	jsr		WAIT					; WAIT $9301cy => T1=$7nnn (ie. sign extended it's now +ve)
+	jsr		myWAIT					; WAIT $9301cy => T1=$7nnn (ie. sign extended it's now +ve)
 
 	ldy		#SY6522_TIMER1H_COUNTER
 	lda		(MBBase),y
@@ -1778,6 +1780,8 @@ T6522_C
 ; . Check MB detection by reading T1C_l either side of the underflow
 ; (ie. in these cases, MB detection will correctly fail!)
 ;
+
+	sei								; cycle-accurate test, so prevent other IIgs IRQs occurring
 
 	jsr		resetSubTest			; subTest #0
 	jsr		incTotalTests
@@ -1827,7 +1831,7 @@ T6522_C
 	; delay $f7 cycles: $e8 + 12 + 3
 	; NB. timing sensitive, so avoid any "Bcc" opcodes that could page-cross (when taken)
 	lda		#7						;$e8 cycles
-	jsr		WAIT
+	jsr		myWAIT
 	jsr		@rts					;12cy
 	lda		0						; 3cy
 
@@ -1861,6 +1865,8 @@ T6522_D
 ; Test#D
 ; . Check reading T2C_l either side of the underflow
 ;
+
+	sei								; cycle-accurate test, so prevent other IIgs IRQs occurring
 
 	jsr		resetSubTest			; subTest #0
 	jsr		incTotalTests
@@ -1910,7 +1916,7 @@ T6522_D
 	; delay $f7 cycles: $e8 + 12 + 3
 	; NB. timing sensitive, so avoid any "Bcc" opcodes that could page-cross (when taken)
 	lda		#7						;$e8 cycles
-	jsr		WAIT
+	jsr		myWAIT
 	jsr		@rts					;12cy
 	lda		0						; 3cy
 
@@ -2112,7 +2118,7 @@ T6522_11
 
 ; NB. Align to a page boundary, as the 2 branches in the inner-loop "@loop" can't page-cross
 ;     as this incurs an extra cycle, and the loop+results are timing sensitive.
-; The following "align" currently adds ~64 bytes of padding:
+; The following "align" currently adds ~240 bytes of padding:
 !align 255, 0, $EA		; align to 256 bytes (pad with $EA's)
 !warn "T6522_11 padding = ", * - @T6522_11_prealign
 

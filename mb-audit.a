@@ -664,6 +664,23 @@ incTotalTests
 
 ;------------------------------------------------------------------------------
 
+; Copy of the II ROM's WAIT routine.
+;
+; WAIT on a IIgs is not cycle accurate, since the WAIT description says it waits a minimum number of microseconds.
+; The IIgs ROM has extra code to ensure the CPU is running at slow speed, and this adds extra time.
+
+myWAIT
+	sec
+-	pha
+--		sbc		#1
+		bne		--
+	pla
+	sbc		#1
+	bne		-
+	rts
+
+;------------------------------------------------------------------------------
+
 ;LINE0=$400
 LINE1=$480
 LINE2=$500
