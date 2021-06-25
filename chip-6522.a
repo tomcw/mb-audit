@@ -770,7 +770,7 @@ T6522_1
 ; Post: C=0(OK), C=1(NG)
 ;
 ; Test#1
-; . Setup T1C=0x0202 and ACR=free-running
+; . Setup T1C=0x0303 and ACR=free-running
 ; . Enable T1 & T2 IRQs
 ; . Poll for T1 int
 ; . ACR=one-shot
@@ -785,7 +785,7 @@ T6522_1
 	lda		#0
 	sta		isrIFR
 
-	lda		#$02
+	lda		#$03					; T1C=0x0303 (*) / For IIgs ROM3, 0x0202 is too short
 	ldy		#SY6522_TIMER1L_COUNTER
 	sta		(MBBase),y
 	ldy		#SY6522_TIMER1H_COUNTER
@@ -822,6 +822,7 @@ T6522_1
 +	lda		#0
 	sta		isrIFR
 
+									; NB. Need T1C timeout to be longer than IIgs ROM3's IRQ handler (*)
 -		lda		#IxR_TIMER1			; T1 int from one-shot mode
 		and		isrIFR
 		beq		-
