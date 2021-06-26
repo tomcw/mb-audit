@@ -770,13 +770,17 @@ T6522_1
 ; Post: C=0(OK), C=1(NG)
 ;
 ; Test#1
-; . Setup T1C=0x0303 and ACR=free-running
+; . Setup T1C=$0303 and ACR=free-running
 ; . Enable T1 & T2 IRQs
 ; . Poll for T1 int
 ; . ACR=one-shot
 ; . CLI & expect ISR to immediately set flag (T1 free-running)
 ; . wait for ISR to set flag (T1 one-shot)
 ; . SEI & wait for T1 underflow & check that no T1|T2 ints pending
+;
+; NB. For IIgs ROM0/1/3, T1C=$0202 is too short: See (*)
+; . it takes ~$100 cycles for the IIgs ROM to call the user ISR
+; . it takes ~$100 cycles on exit of the user ISR to return to user code
 
 	jsr		resetSubTest			; subTest #0
 	jsr		incTotalTests
@@ -785,7 +789,7 @@ T6522_1
 	lda		#0
 	sta		isrIFR
 
-	lda		#$03					; T1C=0x0303 (*) / For IIgs ROM3, 0x0202 is too short
+	lda		#$03					; T1C=$0303
 	ldy		#SY6522_TIMER1L_COUNTER
 	sta		(MBBase),y
 	ldy		#SY6522_TIMER1H_COUNTER
@@ -807,6 +811,8 @@ T6522_1
 		and		#IxR_TIMER1			; Poll Timer1 IRQ flag
 		beq		-
 
+									; T1C = T1L = $0303, as T1 is free-running (*)
+
 	lda		#ACR_ONESHOT
 	ldy		#SY6522_ACR
 	sta		(MBBase),y				; One-shot timer
@@ -822,7 +828,7 @@ T6522_1
 +	lda		#0
 	sta		isrIFR
 
-									; NB. Need T1C timeout to be longer than IIgs ROM3's IRQ handler (*)
+									; NB. Need T1C timeout to be longer than IIgs ROM's IRQ handler, else code will hang! (*)
 -		lda		#IxR_TIMER1			; T1 int from one-shot mode
 		and		isrIFR
 		beq		-
