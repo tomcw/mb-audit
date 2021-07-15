@@ -770,7 +770,7 @@ T6522_1
 ; Post: C=0(OK), C=1(NG)
 ;
 ; Test#1
-; . Setup T1C=$0303 and ACR=free-running
+; . Setup T1C=$0404 (mb-audit/GH#6) and ACR=free-running
 ; . Enable T1 & T2 IRQs
 ; . Poll for T1 int
 ; . ACR=one-shot
@@ -789,7 +789,7 @@ T6522_1
 	lda		#0
 	sta		isrIFR
 
-	lda		#$03					; T1C=$0303
+	lda		#$04					; T1C=$0404
 	ldy		#SY6522_TIMER1L_COUNTER
 	sta		(MBBase),y
 	ldy		#SY6522_TIMER1H_COUNTER
@@ -811,31 +811,33 @@ T6522_1
 		and		#IxR_TIMER1			; Poll Timer1 IRQ flag
 		beq		-
 
-									; T1C = T1L = $0303, as T1 is free-running (*)
+									; T1C = T1L = $0404, as T1 is free-running (*)
 
 	lda		#ACR_ONESHOT
 	ldy		#SY6522_ACR
 	sta		(MBBase),y				; One-shot timer
 
-	cli
-	nop								; 1 insn for IRQ (6502 pipelining)
+	cli								; IRQ
 
 	lda		#IxR_TIMER1
 	sta		zpTmp2					; expected
 	and		isrIFR					; T1 int from free-running mode
-	bne		+
-		beq		@error				; subTest #0 (failed)
-+	lda		#0
+	beq		@error					; subTest #0 (failed)
+	lda		#0
 	sta		isrIFR
 
-									; NB. Need T1C timeout to be longer than IIgs ROM's IRQ handler, else code will hang! (*)
--		lda		#IxR_TIMER1			; T1 int from one-shot mode
+	jsr		incSubTestNum			; subTest #1
+
+	ldx		#0						; NB. Need T1C timeout to be longer than IIgs ROM's IRQ handler, else loop will timeout (X->0)! (*)
+-		dex
+		beq		@error				; subTest #1 (failed)
+		lda		#IxR_TIMER1			; T1 int from one-shot mode
 		and		isrIFR
 		beq		-
 
 	sei
 
-	jsr		incSubTestNum			; subTest #1
+	jsr		incSubTestNum			; subTest #2
 
 	; NB. T1C reloaded with T1L
 
@@ -846,7 +848,7 @@ T6522_1
 	ldy		#SY6522_IFR
 	lda		(MBBase),y
 	and		#IxR_TIMER1|IxR_TIMER2	; Poll Timer1&2 IRQ flag (expect none set)
-	bne		@error
+	bne		@error					; subTest #2 (failed)
 
 	clc
 	rts
@@ -2125,7 +2127,7 @@ T6522_11
 
 ; NB. Align to a page boundary, as the 2 branches in the inner-loop "@loop" can't page-cross
 ;     as this incurs an extra cycle, and the loop+results are timing sensitive.
-; The following "align" currently adds ~240 bytes of padding:
+; The following "align" currently adds ~230 bytes of padding:
 !align 255, 0, $EA		; align to 256 bytes (pad with $EA's)
 !warn "T6522_11 padding = ", * - @T6522_11_prealign
 
