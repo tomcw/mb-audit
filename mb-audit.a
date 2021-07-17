@@ -678,11 +678,17 @@ myWAIT
 
 ;------------------------------------------------------------------------------
 
-;LINE0=$400
-LINE1=$480
-LINE2=$500
-LINE3=$580
-LINE4=$600
+TEXTLINE0=$400
+TEXTLINE1=$480
+TEXTLINE2=$500
+TEXTLINE3=$580
+TEXTLINE4=$600
+TEXTLINE5=$680
+
+LINE1=TEXTLINE2
+LINE2=TEXTLINE3
+LINE3=TEXTLINE4
+LINE4=TEXTLINE5
 SLOT1POS = $13					; pos left of '1'
 
 Display
@@ -737,6 +743,8 @@ Display
 		dey
 		bne		-
 
+	lda		#$80+$0a
+	jsr		COUT
 	lda		#$80+$0a
 	jsr		COUT
 	lda		#$80+$0a
@@ -1073,7 +1081,7 @@ errorActual		!byte 0
 hasBeenReset	!byte 0
 userlandSP		!byte 0
 
-msg_mbaudit	!text "mb-audit v0.7-beta, 2021",0xd
+msg_mbaudit	!text "mb-audit v0.8, Tom Charlesworth, 2021",0xd
 msg_mbauditEnd !text 0
 
 msg_cpu6502Detected !text "6502 detected",0xd
