@@ -655,15 +655,24 @@ Check6522ISR
 
 	;------
 
+	; Cope with the case where a single 6522 is mapped to both $00 and $80
+	; . read IFR from both A & B, *before* clearing IFR
+	; . otherwise reading & clear A first, means that B (read second) will always reads as 0.
+	; NB. Needed for Check6522IRQ, eg. for EchoPlus
+
 	ldy		#SY6522_A_BASE+SY6522_IFR
 	lda		(MBBase),y
-	sta		(MBBase),y
 	sta		isrIFR_A
 
 	ldy		#SY6522_B_BASE+SY6522_IFR
 	lda		(MBBase),y
-	sta		(MBBase),y
 	sta		isrIFR_B
+
+	sta		(MBBase),y					; clear 6522_B's IFR
+
+	ldy		#SY6522_A_BASE+SY6522_IFR
+	lda		isrIFR_A
+	sta		(MBBase),y					; clear 6522_A's IFR
 
 	;------
 
