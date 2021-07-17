@@ -516,10 +516,7 @@ DetectSubunits
 	cmp		#3
 	bne		+
 		jsr		DetectMegaAudioCard
-		jsr		DetectMB4CorEchoPlus
-
-		lda		isMB4C
-		ora		isEchoPlus
+		jsr		DetectMB4CorEchoPlus	; Post: Z=1 if no MB4C/EchoPlus
 		beq		+
 			; Indicate there's only a 6522 at $Cn00, otherwise some 6522 tests will fail
 			ldx		slotUnderTest

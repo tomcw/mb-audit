@@ -116,6 +116,7 @@ DetectMegaAudioCard
 DetectMB4CorEchoPlus
 ; Pre:
 ; Post: isMB4C, isEchoPlus
+;	Z=1:  no MB4C/EchoPlus
 
 	; MB4C/Echo+ only has 1x 6522, but mapped to both $00 and $80
 	; . it'll use the 6522's b7 addr to determine which AY8913 to write to
@@ -169,6 +170,7 @@ DetectMB4CorEchoPlus
 @done
 	sta		isMB4C
 	stx		isEchoPlus
+	ora		isEchoPlus					; set Z
 	rts
 
 ;------------------------------------------------------------------------------
@@ -193,10 +195,14 @@ Check6522
 	bcs		@error
 
 	inc		testNum						; test #01
-	jsr		Check6522Addrlines
+	jsr		Check6522Datalines2
 	bcs		@error
 
 	inc		testNum						; test #02
+	jsr		Check6522Addrlines
+	bcs		@error
+
+	inc		testNum						; test #03
 	jsr		Check6522IRQ
 	bcs		@error
 	rts		; C=0(OK)
@@ -220,15 +226,23 @@ Check6522Datalines
 ;	On C=1: X=expected, A=actual
 ; Uses: zpTmp2, zpTmp3
 
+	; Just return OK if same 6522 is mapped to both $00 and $80
+	jsr		DetectMB4CorEchoPlus
+	beq		+
+		clc
+		rts
++
+
 	;
 	; Check r/w of all 8 data lines
+	; . NB. Check 6522-A interleaved with 6522-B (doesn't work with a single 6522 mapped at both $00 and $80)
 	; (NB. my real Phasor occasionally powers-on with r/w to 2nd 6522's DDRA with b7=1!)
 	;
 	;                 1st loop  2nd loop
 	; 6522-A:  DDRB =   $55       $AA
 	; 6522-A:  DDRA =   $AA       $55
-	; 6522-B:  DDRB =   $96       $69
-	; 6522-B:  DDRA =   $69       $96
+	; 6522-B:  DDRB =   $69       $96
+	; 6522-B:  DDRA =   $96       $69
 	; check A: DDRB ==  $55       $AA
 	; check A: DDRA ==  $AA       $55
 	; check B: DDRB ==  $69       $96
@@ -309,6 +323,90 @@ Check6522Datalines
 	bne		@loop
 
 ;@6522_ok
+	clc
+	rts
+
+@6522_err
+; Pre: zpTmp3 = expected value
+;	A = actual value
+; Post: C=1(NG)
+	ldx		zpTmp3
+	sec
+	rts
+
+;
+
+@check
+	sta		zpTmp3						; expected
+	lda		(MBBase),y					; actual
+	cmp		zpTmp3
+	rts
+
+;------------------
+
+Check6522Datalines2
+; Pre: zpTmp1 = slotInfo[slot]
+; Post: C=0(OK), C=1(NG)
+;	On C=1: X=expected, A=actual
+; Uses: zpTmp2, zpTmp3
+
+	;
+	; Check r/w of all 8 data lines
+	; . NB. Check 6522-A first, then 6522-B (ie. don't interleave - so that it works with a single 6522 mapped at both $00 and $80)
+	;
+	; loop n = {0,1,...$ff}
+	;   6522-A:  DDRB =   n
+	;   6522-A:  DDRA =   ~DDRB
+	;   check A: DDRB =   n
+	;   check A: DDRA =   ~DDRB
+	;   6522-B:  DDRB =   n
+	;   6522-B:  DDRA =   ~DDRB
+	;   check B: DDRB =   n
+	;   check B: DDRA =   ~DDRB
+	;
+
+	jsr		resetSubTest					; subTest #0 (for 6522-A)
+	ldy		#SY6522_A_BASE+SY6522_DDRB
+
+	lda		#0
+	sta		zpTmp2
+
+	lda		zpTmp1
+	and		#HAS_6522A
+	beq		@next6522
+
+@6522_w		lda		zpTmp2
+			sta		(MBBase),y
+			iny								; Y=SY6522_DDRA
+			eor		#$ff
+			sta		(MBBase),y
+
+@6522_r		dey								; Y=SY6522_DDRB
+			lda		zpTmp2
+			jsr		@check
+			bne		@6522_err
+			iny								; Y=SY6522_DDRA
+			lda		zpTmp2
+			eor		#$ff
+			jsr		@check
+			bne		@6522_err
+			dey								; Y=SY6522_DDRB
+
+@next	inc		zpTmp2
+		bne		@6522_w
+
+@next6522
+		tya
+		bmi		@6522_ok
+
+		ldy		#SY6522_B_BASE+SY6522_DDRB
+		jsr		incSubTestNum				; subTest #1 (for 6522-B)
+
+		lda		zpTmp1
+		and		#HAS_6522B
+		bne		@6522_w
+
+@6522_ok
 	clc
 	rts
 
@@ -817,7 +915,7 @@ T6522_1
 	ldy		#SY6522_ACR
 	sta		(MBBase),y				; One-shot timer
 
-	cli								; IRQ
+	cli								; 1st IRQ
 
 	lda		#IxR_TIMER1
 	sta		zpTmp2					; expected
@@ -827,7 +925,9 @@ T6522_1
 	sta		isrIFR
 
 	jsr		incSubTestNum			; subTest #1
+	; zpTmp2 = IxR_TIMER1			; expected
 
+									; 2nd IRQ in this loop...
 	ldx		#0						; NB. Need T1C timeout to be longer than IIgs ROM's IRQ handler, else loop will timeout (X->0)! (*)
 -		dex
 		beq		@error				; subTest #1 (failed)
