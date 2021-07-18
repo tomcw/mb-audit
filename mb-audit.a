@@ -134,6 +134,14 @@ entrypoint
 		sta		hasLowerCase
 +
 
+	jsr		isIIc
+	bne		+
+		; //c only: Enable MB4c (and disable mouse firmware). (mb-audit/GH#8)
+		lda		#$ff
+		sta		$C403		; SY6522_DDRA
+		sta		$C404		; SY6522_TIMER1L_COUNTER - just writes to T1_LATCH(low)
++
+
 	lda		TEXTON
 	lda		MIXEDOFF
 	lda		PAGE2OFF
@@ -675,6 +683,19 @@ myWAIT
 	sbc		#1
 	bne		-
 	rts
+
+;------------------------------------------------------------------------------
+
+isIIc
+; Post: Z=1 if //c
+
+	lda		VERSION
+	cmp		#VERSION_IIE_OR_HIGHER
+	bne		+
+
+	lda		VERSION3
+	cmp		VERSION3_IIC
++	rts
 
 ;------------------------------------------------------------------------------
 

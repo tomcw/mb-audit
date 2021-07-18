@@ -149,8 +149,7 @@ DetectMB4CorEchoPlus
 		bne		@loop
 
 +	; MB4C is only in a //c, and Echo+ is never in a //c
-	lda		VERSION3
-	cmp		VERSION3_IIC
+	jsr		isIIc
 	bne		@EchoPlus
 
 ;@MB4C
@@ -2236,7 +2235,7 @@ T6522_11
 
 ; NB. Align to a page boundary, as the 2 branches in the inner-loop "@loop" can't page-cross
 ;     as this incurs an extra cycle, and the loop+results are timing sensitive.
-; The following "align" currently adds ~230 bytes of padding:
+; The following "align" currently adds ~110 bytes of padding:
 !align 255, 0, $EA		; align to 256 bytes (pad with $EA's)
 !warn "T6522_11 padding = ", * - @T6522_11_prealign
 
