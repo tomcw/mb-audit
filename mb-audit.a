@@ -530,6 +530,7 @@ DetectSubunits
 			ldx		slotUnderTest
 			lda		#1
 			sta		slotInfo,x
+			sta		has6522
 			sta		zpTmp1
 
 +
@@ -1102,7 +1103,7 @@ errorActual		!byte 0
 hasBeenReset	!byte 0
 userlandSP		!byte 0
 
-msg_mbaudit	!text "mb-audit v0.8, Tom Charlesworth, 2021",0xd
+msg_mbaudit	!text "mb-audit v0.9, Tom Charlesworth, 2021",0xd
 msg_mbauditEnd !text 0
 
 msg_cpu6502Detected !text "6502 detected",0xd

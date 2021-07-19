@@ -2710,7 +2710,7 @@ T6522_14
 ;------------------------------------------------------------------------------
 
 T6522_15
-; Pre: has6522, isrNMIcount_A, isrNMIcount_B
+; Pre: isrNMIcount_A, isrNMIcount_B
 ; Post: C=0(OK), C=1(NG)
 ;
 ; Test#15
