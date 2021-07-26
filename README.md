@@ -20,6 +20,8 @@ Motivation: to consolidate the sprawling set of individual tests I've been creat
 Current test matrix for real hardware:
 - ReactiveMicro's Mockingboard-C, non-enhanced //e, 65C02, SSI263(socket-B) mb-audit v0.2-beta
 - Applied Engineering's Phasor, non-enhanced //e, 65C02, SSI263(socket-A), mb-audit v0.2-beta
+- SMS's Sound/Speech I, mb-audit v0.4-beta
+- Ian Kim's SD Music Deluxe, mb-audit v0.9
 
 ![DSC00534-s](https://user-images.githubusercontent.com/6696896/117582673-188b6300-b0fb-11eb-9baf-4ba27d112542.png)
 
