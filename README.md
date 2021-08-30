@@ -149,6 +149,14 @@ SC-01 tests
 - Play back and time the phrase "The Spy Strikes Back" (from Penguin Software's game of the same name).
   - A real Speech/Sound I card has a hardware potentiometer to control the playback rate. Potentially the test will fail if the rate is too low.
 
+Running on a IIgs
+- enter Control Panel, eg. using Ctrl-Cmd-Esc during boot
+  - For MAME on Windows, reboot using Ctrl-L.Alt-F12, then Ctrl-L.Alt-Esc for Control Panel
+- then from Control Panel, set:
+  - System Speed=Normal
+  - Slot-4=Your card
+- Ctrl-Reset so that these new settings take effect
+
 ### To Do
 - confirm mb-audit works with all the advertised real hardware
 - add more tests
