@@ -1080,6 +1080,7 @@ isrIFR_A		!byte 0
 isrIFR_B		!byte 0
 isrIFR			!byte 0
 isrFlag			!byte 0
+isrCount		!byte 0
 isrError		!byte 0,0
 isrCopyA		!byte 0
 
@@ -1103,7 +1104,7 @@ errorActual		!byte 0
 hasBeenReset	!byte 0
 userlandSP		!byte 0
 
-msg_mbaudit	!text "mb-audit v0.9, Tom Charlesworth, 2021",0xd
+msg_mbaudit	!text "mb-audit v1.0, Tom Charlesworth, 2021,22",0xd
 msg_mbauditEnd !text 0
 
 msg_cpu6502Detected !text "6502 detected",0xd

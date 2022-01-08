@@ -703,6 +703,7 @@ Check6522ISR
 ;	[T6522_12] Test 6522s at $Cn10 and $Cn90
 ;	[T6522_13] Test Phasor can switch to Echo+
 ;	[T6522_14] Both 6522s: test T1 & T2 (from chips A&B) all running at the same time
+;	[T6522_16] Check T1 & T2 ints occur the correct number of times over a longer interval
 ;	[Test6522MultiCard] 2 cards: Both 6522s: test T1 & T2 (from chips A&B) all running at the same time
 ;	[Test6522AfterReset] 6522 IRQ pending, CTRL+RESET should clear it
 ;
@@ -813,6 +814,7 @@ testTbl
 	!word	T6522_13	; 33
 	!word	T6522_14	; 34
 	!word	T6522_15	; 35
+	!word	T6522_16	; 36
 	!word	0
 
 ;------------------------------------------------------------------------------
@@ -2852,6 +2854,113 @@ T6522_15
 
 ;------------------------------------------------------------------------------
 
+T6522_16
+; Pre:
+; Post: C=0(OK), C=1(NG)
+;
+; Test#16
+; . Check that timer intervals are correct:
+;   . Count number of T1 free-running IRQs over a fixed number of WAIT cycles.
+;   . Count number of T2 one-show IRQs over a period of T1 counting down from $FFFF.
+
+	jsr		resetSubTest			; subTest #0
+	jsr		incTotalTests
+
+	sei
+
+	lda		#<Test6522ISR
+	ldx		#>Test6522ISR
+	jsr		SetIrqNmiVectors
+
+	lda		#0
+	sta		isrCount
+
+	; T1 Latch = $4000 (NB. must be longer than IIgs ROM's IRQ handler duration * isrCount)
+	lda		#$00
+	ldy		#SY6522_TIMER1L_COUNTER
+	sta		(MBBase),y
+	lda		#$40
+	ldy		#SY6522_TIMER1H_COUNTER
+	sta		(MBBase),y				; Clear T1 IRQ
+
+	lda		#ACR_FREERUNNING
+	ldy		#SY6522_ACR
+	sta		(MBBase),y
+
+	lda		#IER_SET|IxR_TIMER1
+	ldy		#SY6522_IER
+	sta		(MBBase),y				; Enable T1 IRQ
+
+	cli
+
+	; delay for $2800D cycles (~160ms) + ISR overhead
+	lda		#$0A
+	jsr		myWAIT					; delay $0018E cycles
+	lda		#$FD
+	jsr		myWAIT					; delay $27E7B cycles
+									; .     //e: $28391 = $2800D + $384 =>  90cy overhead/interrupt (same for II/II+)
+									; . Enh //e: $28D5F = $2800D + $D52 => 341cy overhead/interrupt
+									; .    IIgs: ROM03 works under MAME
+
+	sei
+
+	jsr		WaitT1OneShotUnderflow
+
+	lda		isrCount				; should be $28nnn / $4000 = $A
+	ldx		#$A
+	cmp		#$A
+	bne		@error
+
+	;
+
+	jsr		incSubTestNum			; subTest #1
+
+	ldx		#0						; count # of T2 underflows
+
+	; T1 one-shot from above
+	lda		#$ff
+	ldy		#SY6522_TIMER1L_COUNTER
+	sta		(MBBase),y
+	ldy		#SY6522_TIMER1H_COUNTER
+	sta		(MBBase),y				; clear T1 IRQ
+
+@reset_t2
+		lda		#$00
+		ldy		#SY6522_TIMER2L_COUNTER
+		sta		(MBBase),y
+		lda		#$10
+		ldy		#SY6522_TIMER2H_COUNTER
+		sta		(MBBase),y			; clear T2 IRQ
+
+		ldy		#SY6522_IFR
+@loop		lda		(MBBase),y
+			asl						; T1 flag -> b7
+			bmi		+
+			asl						; T2 flag -> b7
+			bpl		@loop
+		inx
+		bne		@reset_t2
+
++	lda		#IxR_TIMER1
+	sta		(MBBase),y				; clear T1 int flag
+
+	jsr		WaitT2Underflow
+
+	txa								; should be $FFnn / $1000 = $F
+	ldx		#$F
+	cmp		#$F
+	bne		@error
+
+	clc
+	rts
+
+@error	; Pre: A=actual, X=expected
+	stx		zpTmp2					; expected
+	sec								; C=1(NG)
+	rts
+
+;------------------------------------------------------------------------------
+
 Test6522MultiCard
 ; Pre:
 ; Post: C=0(OK), C=1(NG)
@@ -3317,7 +3426,7 @@ WaitT2OneShotUnderflow
 
 	jsr		WaitT2Underflow
 
-	lda		#IER_CLR|IxR_TIMER2
+	lda		#IxR_TIMER2
 	ldy		#SY6522_IFR
 	sta		(MBBase),y				; Clear any Timer2 IRQ
 
@@ -3353,6 +3462,8 @@ Test6522ISR
 
 	lda		#1
 	sta		isrFlag
+
+	inc		isrCount
 
 	;------
 
