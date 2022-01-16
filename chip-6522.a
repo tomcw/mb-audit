@@ -2931,10 +2931,10 @@ T6522_16
 	sta		(MBBase),y				; clear T1 IRQ
 
 @reset_t2
-		lda		#$00
+		lda		#$ff
 		ldy		#SY6522_TIMER2L_COUNTER
 		sta		(MBBase),y
-		lda		#$10
+		lda		#$0f
 		ldy		#SY6522_TIMER2H_COUNTER
 		sta		(MBBase),y			; clear T2 IRQ
 
