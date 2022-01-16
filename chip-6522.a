@@ -74,6 +74,11 @@ DetectMegaAudioCard
 ; Pre:
 ; Post: isMegaAudioCard
 
+	sei
+	lda		#<Check6522ISR
+	ldx		#>Check6522ISR
+	jsr		SetIrqNmiVectors
+
 	lda		#0
 	sta		isrCopyA
 	sta		isrIFR_A
@@ -2941,10 +2946,14 @@ T6522_16
 		inx
 		bne		@reset_t2
 
-+	lda		#IxR_TIMER1
-	sta		(MBBase),y				; clear T1 int flag
+	lda		#$fe
+	sta		subTestNum				; subTest #$fe (!1)
 
-	jsr		WaitT2Underflow
++	jsr		WaitT2Underflow
+
+	lda		#IxR_TIMER1|IxR_TIMER2
+	ldy		#SY6522_IFR
+	sta		(MBBase),y				; clear T1 & T2 int flags
 
 	txa								; should be $FFnn / $1000 = $F
 	ldx		#$F
