@@ -1667,8 +1667,9 @@ T6522_9
 ; Post: C=0(OK), C=1(NG)
 ;
 ; Test#9 (AppleWin-GH#833)
-; . Test T1C in free-running mode (on underflow) gets reloaded with T1L
-; . Test T1C in one-shot mode (on underflow) gets reloaded with T1L
+; . Test 4x that T1C in free-running mode (on underflow) gets reloaded with T1C_h=$01
+; . Test 4x that T1C in one-shot mode (on underflow) gets reloaded with T1C_h=$02
+; . Test 1x that T2C (on underflow) gets reloaded with T2C_h=$ff
 
 	jsr		resetSubTest			; subTest #0
 	jsr		incTotalTests
