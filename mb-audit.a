@@ -677,12 +677,20 @@ incTotalTests
 
 myWAIT
 	sec
+.x0
 -	pha
+.x1
 --		sbc		#1
 		bne		--
+!if >.x1 != >* {
+      !serious "branch crosses a page"
+}
 	pla
 	sbc		#1
 	bne		-
+!if >.x0 != >* {
+      !serious "branch crosses a page"
+}
 	rts
 
 ;------------------------------------------------------------------------------
