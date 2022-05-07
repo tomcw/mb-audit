@@ -349,7 +349,6 @@ TestAYPhasor
 	; Test for 4 AYs (Phasor only)
 	; . Write to each AY's reg#0 with values: $11,$22,$33,$44
 	; . then read back
-	; NB. Phasor doesn't support PortA input - so can't read the AY8913 regs
 
 	jsr		resetSubTest
 	jsr		incTotalTests

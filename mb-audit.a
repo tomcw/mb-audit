@@ -503,8 +503,8 @@ DetectSubunits
 	; Determine if this is a Mockingboard or Phasor card
 
 	lda		zpTmp1
-	and		#3
-	cmp		#3
+	and		#HAS_6522B|HAS_6522A
+	cmp		#HAS_6522B|HAS_6522A
 	bne		@donePhasor
 
 	lda		#$55
@@ -536,15 +536,15 @@ DetectSubunits
 @donePhasor
 
 	lda		zpTmp1
-	and		#3
-	cmp		#3
+	and		#HAS_6522B|HAS_6522A
+	cmp		#HAS_6522B|HAS_6522A
 	bne		+
 		jsr		DetectMegaAudioCard
 		jsr		DetectMB4CorEchoPlus	; Post: Z=1 if no MB4C/EchoPlus
 		beq		+
 			; Indicate there's only a 6522 at $Cn00, otherwise some 6522 tests will fail
 			ldx		slotUnderTest
-			lda		#1
+			lda		#HAS_6522A
 			sta		slotInfo,x
 			sta		has6522
 			sta		zpTmp1
@@ -738,6 +738,7 @@ LINE4=TEXTLINE5
 SLOT1POS = $13					; pos left of '1'
 
 Display
+;(blank)
 ;               1  2  3  4  5  6  7
 ;          $00: ?     1 S/S C  P       ; ?=6522(VIA), 1=Sound-I(or Speech-I), S/S=Sound/Speech-I, M=MegaAudio, M4C=MB4C, E=Echo+, C=MB-C(or MB-A or Sound-II), P=Phasor
 ;          $80:    ?    S/S C  P
