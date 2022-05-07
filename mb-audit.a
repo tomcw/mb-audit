@@ -80,6 +80,9 @@ entrypoint
 ; Pre: TODO: disable accelerators or set to 1MHz
 ;
 
+	lda		#0				; Callee can POKE 8193,1 to force reboot on exit
+	sta		rebootOnExit
+
 	sei
 
 	ldx		#($ff-ZP_BASE)
@@ -262,6 +265,19 @@ exit
 		sta		ZP_BASE,x
 		dex
 		bpl		-
+
+	lda		rebootOnExit
+	beq		+
+		lda		#<msg_PressKeyToReboot
+		ldx		#>msg_PressKeyToReboot
+		jsr		Print
+-			lda		KBD
+			bpl		-
+		lda		KBDSTRB
+		lda		SOFTEV_H
+		sta		PWREDUP		; force a system reboot (as PWREDUP = SOFTEV_H ^ $A5 to prevent reboot)
+		jmp		($fffc)		; reset vector
++
 
 	rts
 
@@ -1112,7 +1128,9 @@ errorActual		!byte 0
 hasBeenReset	!byte 0
 userlandSP		!byte 0
 
-msg_mbaudit	!text "mb-audit v1.0, Tom Charlesworth, 2021,22",0xd
+rebootOnExit	!byte 0
+
+msg_mbaudit	!text "mb-audit v1.1, Tom Charlesworth, 2021,22",0xd
 msg_mbauditEnd !text 0
 
 msg_cpu6502Detected !text "6502 detected",0xd
@@ -1176,3 +1194,6 @@ msg_ToneKeysB456End !text 0
 	;Slot #? :Tone: A:123,B:456,A2:QWE,B2:RTY
 msg_ToneKeysPhasor !text ",A2:QWE,B2:RTY"
 msg_ToneKeysPhasorEnd !text 0
+
+msg_PressKeyToReboot !text "Press any key to reboot",0xd
+msg_PressKeyToRebootEnd !text 0
