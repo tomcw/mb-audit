@@ -44,6 +44,9 @@
 
 ZP_BASE = $f0
 
+zpTmpPtr2 = $f2
+zpTmpPtr2L = zpTmpPtr2
+zpTmpPtr2H = zpTmpPtr2+1
 MBTimer = $f4
 MBTimerL = MBTimer
 MBTimerH = MBTimer+1
@@ -80,8 +83,23 @@ entrypoint
 ; Pre: TODO: disable accelerators or set to 1MHz
 ;
 
-	lda		#0				; Callee can POKE 8193,1 to force reboot on exit
-	sta		rebootOnExit
+	ldx		#0				; Callee can POKE 8193,%bitfield to configure behaviour
+
+	txa
+	and		#1
+	sta		cfgRebootOnExit	; b0: force reboot on exit
+
+	txa
+	lsr
+	tax
+	and		#1
+	bne		+
+		lda		#NO_SOAK_TEST
+		bne		++
++		lda		#SOAK_TEST
+++	sta		cfgDoSoakTest	; b1: soak test
+
+	;
 
 	sei
 
@@ -178,6 +196,7 @@ entrypoint
 	lda		#0
 	sta		totalTests+0
 	sta		totalTests+1
+	sta		totalTests+2
 
 	lda		#7
 	sta		slotUnderTest
@@ -230,6 +249,8 @@ entrypoint
 	lda		#<msg_OK
 	ldx		#>msg_OK
 	jsr		Print
+	ldx		totalTests+2
+	jsr		PRNTX
 	ldy		totalTests+1
 	ldx		totalTests+0
 	jsr		PRNTYX
@@ -266,7 +287,7 @@ exit
 		dex
 		bpl		-
 
-	lda		rebootOnExit
+	lda		cfgRebootOnExit
 	beq		+
 		lda		#<msg_PressKeyToReboot
 		ldx		#>msg_PressKeyToReboot
@@ -682,6 +703,123 @@ incTotalTests
 	inc		totalTests+0
 	bne		+
 	inc		totalTests+1
+	bne		+
+	inc		totalTests+2
++	rts
+
+;------------------------------------------------------------------------------
+
+initSoakDisplayTest0
+; Pre: A=$00(6522-A or both) or $80(6522-B)
+; Trashes: zpTmpPtr2L,H
+
+	ldy		cfgDoSoakTest	; $ff=no repeat, $00=repeat
+	sty		soakTestNum
+	beq		+
+	rts
++
+
+	cmp		#$00
+	bne		+
+
+	lda		#<TEXTLINE3
+	sta		zpTmpPtr2L
+	lda		#>TEXTLINE3
+	sta		zpTmpPtr2H
+	bne		++
+
++	lda		#<TEXTLINE4
+	sta		zpTmpPtr2L
+	lda		#>TEXTLINE4
+	sta		zpTmpPtr2H
+
+++
+
+	; "FF:" = test#:
+	lda		#$80+':'
+	ldy		#2
+	sta		(zpTmpPtr2),y
+
+	lda		#$80+'F'
+	ldy		#0
+	sta		(zpTmpPtr2),y
+	iny
+	sta		(zpTmpPtr2),y
+	rts
+
+;
+
+incSoakDisplayTest
+	ldy		cfgDoSoakTest	; $ff=no repeat, $00=repeat
+	sty		soakTestNum
+	beq		+
+	rts
++
+
+	; ":FF" = rept#
+	lda		#$80+'F'
+	ldy		#3
+	sta		(zpTmpPtr2),y
+	iny
+	sta		(zpTmpPtr2),y
+
+	ldy		#1
+	bne		incSoakDisplayX
+
+;
+
+incSoakDisplayRept
+	bit		cfgDoSoakTest	; N flag = cfgDoSoakTest.b7
+	bpl		+
+	rts
++
+
+	ldy		#4
+
+incSoakDisplayX
+; Pre: Y=1 or 4
+; Trashes: zpTmpPtrL,H
+
+	lda		(zpTmpPtr2),y
+	jsr		incNibble
+	sta		(zpTmpPtr2),y
+	cmp		#$80+'0'
+	bne		+
+
+	dey
+	lda		(zpTmpPtr2),y
+	jsr		incNibble
+	sta		(zpTmpPtr2),y
+
++	rts
+
+;
+
+; Acc++
+; if Acc <= '9'+1
+;	if Acc == '9'+1
+;		Acc = 'A'
+; else
+;	if Acc == 'F'+1
+;		Acc = '0'
+;
+incNibble
+; Pre: A = hex char
+; Post: A = hex char++
+
+	clc
+	adc		#1
+	cmp		#$80+'9'+1
+	beq		+	; Acc == '9'+1
+	bcs		++	; Acc > '9'+1  (actually >=, as we've just dealt with == case)
+	rts			; Acc < '9'+1
+
++	lda		#$80+'A'
+	rts
+
+++	cmp		#$80+'F'+1
+	bne		+
+		lda		#$80+'0'
 +	rts
 
 ;------------------------------------------------------------------------------
@@ -761,6 +899,21 @@ Display
 	sta		LINE4+$10
 	lda		#$80+'P'
 	sta		LINE4+$11
+
+	lda		cfgDoSoakTest
+	cmp		#SOAK_TEST
+	bne		+
+		lda		#$80+'#'
+		sta		LINE1+0
+		lda		#$80+'S'
+		sta		LINE1+1
+		lda		#$80+'O'
+		sta		LINE1+2
+		lda		#$80+'A'
+		sta		LINE1+3
+		lda		#$80+'K'
+		sta		LINE1+4
++
 
 	ldx		#7*3-1
 	ldy		#7
@@ -1001,9 +1154,19 @@ PrintLineTestNum
 	jsr		COUT
 	ldx		subTestNum
 	jsr		PRNTX
-	lda		#$80+$0d
-	jmp		COUT
 
+	lda		cfgDoSoakTest
+	cmp		#SOAK_TEST
+	bne		+
+		lda		#$80+'('
+		jsr		COUT
+		ldx		soakTestNum
+		jsr		PRNTX
+		lda		#$80+')'
+		jsr		COUT
+
++	lda		#$80+$0d
+	jmp		COUT
 
 PrintSlotNum
 	lda		#<msg_Slot
@@ -1087,7 +1250,8 @@ slotUnderTest	!byte 0
 testComponentNum	!byte COMPONENT_CARD
 testNum			!byte 0
 subTestNum		!byte 0
-totalTests		!byte 0,0
+totalTests		!byte 0,0,0
+soakTestNum		!byte 0
 
 isMegaAudioCard	!byte 0
 isMB4C			!byte 0
@@ -1129,9 +1293,12 @@ errorActual		!byte 0
 hasBeenReset	!byte 0
 userlandSP		!byte 0
 
-rebootOnExit	!byte 0
+cfgRebootOnExit	!byte 0
+NO_SOAK_TEST = $ff
+SOAK_TEST    = $00
+cfgDoSoakTest	!byte NO_SOAK_TEST
 
-msg_mbaudit	!text "mb-audit v1.1, Tom Charlesworth, 2021,22",0xd
+msg_mbaudit	!text "mb-audit v1.2, Tom Charlesworth, 2021,22",0xd
 msg_mbauditEnd !text 0
 
 msg_cpu6502Detected !text "6502 detected",0xd

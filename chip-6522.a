@@ -193,23 +193,34 @@ Check6522
 	lda		#COMPONENT_6522+0			; test component $10
 	sta		testComponentNum
 
-	lda		#0
-	sta		testNum						; test #00
-	jsr		Check6522Datalines
-	bcs		@error
+	lda		MBBaseL						; $00 = tests are for both 6522-A/B
+	jsr		initSoakDisplayTest0
+	jsr		incSoakDisplayTest
 
-	inc		testNum						; test #01
-	jsr		Check6522Datalines2
-	bcs		@error
+@repeat	jsr		incSoakDisplayRept		; FIXME
 
-	inc		testNum						; test #02
-	jsr		Check6522Addrlines
-	bcs		@error
+		lda		#0
+		sta		testNum					; test #00
+		jsr		Check6522Datalines
+		bcs		@error
 
-	inc		testNum						; test #03
-	jsr		Check6522IRQ
-	bcs		@error
-	rts		; C=0(OK)
+		inc		testNum					; test #01
+		jsr		Check6522Datalines2
+		bcs		@error
+
+		inc		testNum					; test #02
+		jsr		Check6522Addrlines
+		bcs		@error
+
+		inc		testNum					; test #03
+		jsr		Check6522IRQ
+		bcs		@error
+
+		inc		soakTestNum
+		bne		@repeat
+
+	clc		; C=0(OK)
+	rts
 
 @error
 ; Pre: X = expected value
@@ -728,6 +739,7 @@ Test6522
 
 	lda		#COMPONENT_6522+1	; test component $11
 	sta		testComponentNum
+
 	lda		#$ff
 	sta		testNum				; test #$00
 
@@ -739,7 +751,12 @@ Test6522
 @loop	lda		#0
 		sta		testTblIdx
 
-@nextTest	ldx		testTblIdx
+		lda		MBBaseL
+		jsr		initSoakDisplayTest0
+
+@nextTest	jsr		incSoakDisplayTest
+
+			ldx		testTblIdx
 			lda		testTbl,x
 			sta		@jmpTest+1
 			inx
@@ -750,9 +767,14 @@ Test6522
 			ora		@jmpTest+1
 			beq		@done
 			inc		testNum
-@jmpTest	jsr		$0000
-			bcc		@nextTest
-			bcs		@error
+
+@repeat			jsr		incSoakDisplayRept
+@jmpTest		jsr		$0000
+				bcs		@error
+				inc		soakTestNum
+				bne		@repeat
+
+			jmp		@nextTest
 
 @done	jsr		WaitT1OneShotUnderflow	; clear & disable any T1 ints
 		jsr		WaitT2OneShotUnderflow	; clear & disable any T2 ints
