@@ -95,24 +95,18 @@ DetectAY8913
 ; . Read AY reg after setting to INACTIVE state (high impedance state, so should read back as $FF)
 
 TestAY8913
-; Pre: hasAY8913 (Phasor: will be 0)
+; Pre: hasAY8913
 ; Post: C=0(OK), C=1(NG)
-;	hasAY8913 (Phasor: set to %1111)
 
 	lda		#COMPONENT_AY8913+1	; test component $21
 	sta		testComponentNum
-	lda		#$ff
-	sta		testNum				; test #00
-
-	lda		#SY6522_A_BASE
-	sta		zpTmp3				; 6522 base addr
 
 	lda		isPhasorCard
 	beq		+
 
 		; Phasor
-		lda		#4
-		sta		testNum			; test #04
+		lda		#0
+		sta		testNum			; test #00
 		lda		#PH_ECHOPLUS
 		jsr		SetPhasorMode
 		jsr		TestAYEchoPlus
@@ -124,47 +118,53 @@ TestAY8913
 		plp
 		bcs		@error
 
-		inc		testNum			; test #05
+		inc		testNum			; test #01
 		jsr		TestAYPhasor	; only do this test once, since it covers both SY6522's
-		bcc		@ok
+		bcc		@TestMB
 		bcs		@error
 
 +	lda		isMB4C
 	ora		isEchoPlus
-	beq		+
+	beq		@TestMB
 
 		; MB4C / Echo+
-		lda		#6
-		sta		testNum			; test #06
+		lda		#2
+		sta		testNum			; test #02
 		jsr		TestAYEchoPlus
 		bcc		@ok
 		bcs		@error
 
-+	; Mockingboard
+@TestMB
+	; Mockingboard or Phasor(in PH_MOCKINGBOARD)
 
-	lda		hasAY8913
-	sta		zpTmp1
+	lda		#$0f
+	sta		testNum
 
--		lsr		zpTmp1
-		bcs		+
-			inc		testNum
-			inc		testNum
-			bne		++
+	lda		#SY6522_A_BASE
+	sta		zpTmp3				; 6522-A base addr
 
-+		jsr		Init6522ForAY
+	jsr		TestAYs				; test #10,11,12,13
+	bcs		@error
 
-		inc		testNum			; test #00, #02
-		jsr		TestAYDatalines
-		bcs		@error
+@TestPhasor
+	lda		isPhasorCard
+	beq		@ok
 
-		inc		testNum			; test #01, #03
-		jsr		TestAYAddrlines
-		bcs		@error
+	lda		#PH_PHASOR
+	jsr		SetPhasorMode
 
-++		lda		zpTmp3
-		eor		#$80
-		sta		zpTmp3
-		bne		-
+	lda		#SY6522_A_PH_BASE
+	sta		zpTmp3				; 6522-A base addr *for Phasor*
+
+	jsr		TestAYs				; test #14,15,16,17
+
+	php
+	pha
+	lda		#PH_MOCKINGBOARD
+	jsr		SetPhasorMode
+	pla
+	plp
+	bcs		@error
 
 @ok	clc
 	rts
@@ -182,6 +182,43 @@ TestAY8913
 
 ;--------------------------------------
 
+TestAYs
+; Pre:
+;	zpTmp3 = SY6522_A_BASE or SY6522_A_PH_BASE or SY6522_B_BASE
+; Post: C=0(OK), C=1(NG)
+;	zpTmp2 = expected, A = actual
+
+	lda		hasAY8913
+	and		#HAS_6522B|HAS_6522A
+	sta		zpTmp1
+
+-		lsr		zpTmp1
+		bcs		+
+			inc		testNum
+			inc		testNum
+			bne		++
+
++		jsr		Init6522ForAY	; pre: zpTmp3 = SY6522_A_BASE or SY6522_A_PH_BASE or SY6522_B_BASE
+
+		inc		testNum			; test #n+0, #n+2
+		jsr		TestAYDatalines
+		bcs		+
+
+		inc		testNum			; test #n+1, #n+3
+		jsr		TestAYAddrlines
+		bcs		+
+
+++		lda		#SY6522_B_BASE
+		cmp		zpTmp3
+		beq		++
+		sta		zpTmp3
+		bne		-				; bra
+
+++	clc
++	rts
+
+;--------------------------------------
+
 TestAYDatalines
 ; Pre:
 ;	zpTmp3 = SY6522_A_BASE or SY6522_A_PH_BASE or SY6522_B_BASE
@@ -189,7 +226,8 @@ TestAYDatalines
 ;	zpTmp2 = expected, A = actual
 
 	; Test the 8 data lines:
-	; . Write then Read: $01, $02, $04, ..., $80
+	; . Write then Read: $01, $02, $04, ..., $80 (Phasor 1st AY or Mockingboard)
+	; . Write then Read: $FE, $FD, $FB, ..., $7F (Phasor 2nd AY)
 
 	jsr		resetSubTest
 	jsr		incTotalTests
@@ -197,18 +235,56 @@ TestAYDatalines
 	lda		#1					; data to test
 	sta		zpTmp2
 
--		lda		#AY_AFINE
+-		lda		phasorMode
+		cmp		#PH_MOCKINGBOARD
+		beq		@mb
+
+		lda		#AY_AFINE
+		ldx		zpTmp2
+		jsr		AY1_WriteRegValue
+
+		lda		zpTmp2
+		eor		#$ff
+		tax
+		lda		#AY_AFINE
+		jsr		AY2_WriteRegValue
+
+		ldx		#AY_AFINE
+		jsr		AY1_ReadRegValue
+		cmp		zpTmp2
+		beq		+
+		sec
+		rts						; C=1(NG)
+
++		ldx		#AY_AFINE
+		jsr		AY2_ReadRegValue
+		eor		#$ff
+		cmp		zpTmp2
+		beq		@resetPortA
+		eor		#$ff
+		tax
+		lda		zpTmp2
+		eor		#$ff
+		sta		zpTmp2
+		txa
+		sec
+		rts						; C=1(NG)
+
+		;
+
+@mb		lda		#AY_AFINE
 		ldx		zpTmp2
 		jsr		AY_WriteRegValue
 
 		ldx		#AY_AFINE
 		jsr		AY_ReadRegValue
 		cmp		zpTmp2
-		beq		+
+		beq		@resetPortA
 		sec
 		rts						; C=1(NG)
 
-+		jsr		AY_SetPortAOutput	; DDRA=0xFF
+@resetPortA
+		jsr		AY_SetPortAOutput	; DDRA=0xFF
 
 		asl		zpTmp2
 		bne		-
@@ -242,7 +318,7 @@ TestAYAddrlines
 		lda		zpTmp2
 		cmp		#AY_ENABLE		; skip ENABLE to avoid enabling ABC noise
 		beq		--
-		cmp		#AY_ESHAPE
+		cmp		#AY_PORTA
 		bne		-
 
 	lda		#0					; reg & data to test
@@ -259,7 +335,7 @@ TestAYAddrlines
 		lda		zpTmp2
 		cmp		#AY_ENABLE		; skip ENABLE to avoid enabling ABC noise
 		beq		--
-		cmp		#AY_ESHAPE
+		cmp		#AY_PORTA
 		bne		-
 
 	ldy		zpTmp3

@@ -1,5 +1,5 @@
 ;license:MIT
-;(c) 2021 by Tom Charlesworth
+;(c) 2021-2022 by Tom Charlesworth
 ;
 ; 6522 related
 ;
@@ -197,7 +197,7 @@ Check6522
 	jsr		initSoakDisplayTest0
 	jsr		incSoakDisplayTest
 
-@repeat	jsr		incSoakDisplayRept		; FIXME
+@repeat	jsr		incSoakDisplayRept		; NB. "00:nn" - just inc's rept#nn
 
 		lda		#0
 		sta		testNum					; test #00
