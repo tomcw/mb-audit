@@ -96,10 +96,6 @@ DetectAY8913
 	lda		#PH_PHASOR
 	jsr		SetPhasorMode
 
-!if 1 {
-	jsr		DebugPhasorAYs
-}
-
 	lda		#SY6522_A_PH_BASE
 	sta		zpTmp3				; 6522-A base addr *for Phasor*
 	lda		#%00000100			; hasAY8913 mask
@@ -156,54 +152,6 @@ DetectAY8913
 	;
 
 @ok	rts
-
-;------------------------------------------------------------------------------
-
-!if 1 {
-DebugPhasorAYs
-
-	lda		#$1f
-	ldy		#SY6522_DDRB+SY6522_A_PH_BASE
-	sta		(MBBase),y
-
-	ldy		#SY6522_ORA+SY6522_A_PH_BASE
-
-	;
-
-	ldx		#AY_AFINE
-	jsr		AY1_ReadRegValue
-	sta		debugPhasorAyData+0
-
-	ldx		#AY_BFINE
-	jsr		AY1_ReadRegValue
-	sta		debugPhasorAyData+1
-
-	ldx		#AY_CFINE
-	jsr		AY1_ReadRegValue
-	sta		debugPhasorAyData+2
-
-	;
-
-	ldx		#AY_AFINE
-	jsr		AY2_ReadRegValue
-	sta		debugPhasorAyData+3
-
-	ldx		#AY_BFINE
-	jsr		AY2_ReadRegValue
-	sta		debugPhasorAyData+4
-
-	ldx		#AY_CFINE
-	jsr		AY2_ReadRegValue
-	sta		debugPhasorAyData+5
-
-	rts
-
-; AW:  AA 55 69 00 00 00
-; //e: 00 00 00 AA 55 69
-; TODO: test that emu is r/w to correct AY (unlike now!)
-debugPhasorAyData
-	!fill 6,0
-}
 
 ;------------------------------------------------------------------------------
 

@@ -2889,7 +2889,7 @@ T6522_16
 ; Test#16
 ; . Check that timer intervals are correct:
 ;   . Count number of T1 free-running IRQs over a fixed number of WAIT cycles.
-;   . Count number of T2 one-show IRQs over a period of T1 counting down from $FFFF.
+;   . Count number of T2 one-shot IRQs over a period of T1 counting down from $FFFF.
 
 	jsr		resetSubTest			; subTest #0
 	jsr		incTotalTests
