@@ -609,11 +609,42 @@ TestAYPhasor
 	ldx		#AY_AFINE
 	jsr		AY2_ReadRegValue
 	ldx		#$44
+	cmp		#$44
+	bne		+
+
+	;
+	; Check that the 1st AY is correctly mapped between Phasor & Mockingboard modes
+	;
+
+	jsr		incSubTestNum
+	lda		#PH_MOCKINGBOARD
+	jsr		SetPhasorMode
+
+	ldy		#SY6522_A_BASE+SY6522_ORA
+
+	ldx		#AY_AFINE
+	jsr		AY_ReadRegValue
+	ldx		#$22
+	cmp		#$22
+	bne		+
+
+	ldy		#SY6522_B_BASE+SY6522_ORA
+
+	ldx		#AY_AFINE
+	jsr		AY_ReadRegValue
+	ldx		#$44
+	cmp		#$44
+;	bne		+
+
+	;
 
 +	stx		zpTmp2				; expected
 	sta		zpTmp1				; actual
 
-++	lda		#SY6522_A_PH_BASE
+	lda		#PH_PHASOR
+	jsr		SetPhasorMode
+
+	lda		#SY6522_A_PH_BASE
 	sta		zpTmp3
 	jsr		Init6522ForAY		; Reset 6522-A's 2x AYs
 	lda		#SY6522_B_BASE
