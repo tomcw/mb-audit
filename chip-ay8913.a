@@ -403,8 +403,10 @@ TestAYAddrlines
 
 --		inc		zpTmp2
 		lda		zpTmp2
-		cmp		#AY_ENABLE		; skip ENABLE to avoid enabling ABC noise
-		beq		--
+		cmp		#AY_ENABLE		; skip ENABLE to avoid enabling ABC noise and skip AVOL/BVOL/CVOL to avoid any clicks
+		bcc		-				; bra < AY_ENABLE
+		cmp		#AY_CVOL+1
+		bcc		--				; bra <= AY_CVOL
 		cmp		#AY_PORTA
 		bne		-
 
@@ -420,8 +422,10 @@ TestAYAddrlines
 +
 --		inc		zpTmp2
 		lda		zpTmp2
-		cmp		#AY_ENABLE		; skip ENABLE to avoid enabling ABC noise
-		beq		--
+		cmp		#AY_ENABLE		; skip ENABLE to avoid enabling ABC noise and skip AVOL/BVOL/CVOL to avoid any clicks
+		bcc		-				; bra < AY_ENABLE
+		cmp		#AY_CVOL+1
+		bcc		--				; bra <= AY_CVOL
 		cmp		#AY_PORTA
 		bne		-
 
