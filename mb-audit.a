@@ -6,7 +6,7 @@
 ; . Verify emulated h/w is operating correctly at a chip level, eg. chip functionality
 ;
 
-; ACME 0.96.4
+; ACME 0.97
 ;
 !cpu 6502	; Compatible with all Apple2's
 !to "mb-audit", plain

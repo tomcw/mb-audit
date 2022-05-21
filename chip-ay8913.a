@@ -11,7 +11,11 @@ DetectAY8913
 ;	hasAY8913 = 0
 ;	isPhasorCard, isMB4C, isEchoPlus
 ; Post:
-;	hasAY8913 = %00,%01,%10,%11 (or %1111 for Phasor)
+;	hasAY8913 = %0000,%0001,%0010,%0011 - for Mockingboard
+;	hasAY8913 = %0011,%0111,%1011,%1111 - for Phasor (NB. only test for 2nd AYs if 1st AYs = %11)
+
+	lda		zpTmp1
+	sta		@smcPh+1
 
 	lda		isPhasorCard
 	beq		+
@@ -80,12 +84,126 @@ DetectAY8913
 	beq		+
 	lda		#%00000011
 	cmp		hasAY8913
-	bne		+
-		lda		#%00001111
-		sta		hasAY8913
-+
+	bne		@ok
+
+	;
+	; Phasor: detect any 2nd-ary AYs
+	;
+
+@smcPh	lda		#0
+	sta		zpTmp1
+
+	lda		#PH_PHASOR
+	jsr		SetPhasorMode
+
+!if 1 {
+	jsr		DebugPhasorAYs
+}
+
+	lda		#SY6522_A_PH_BASE
+	sta		zpTmp3				; 6522-A base addr *for Phasor*
+	lda		#%00000100			; hasAY8913 mask
+	sta		zpTmp2
+
+-		lsr		zpTmp1			; 6522 at this addr?
+		bcc		+
+
+		jsr		Init6522ForAY
+
+		lda		#AY_AFINE
+		ldx		#$AA
+		jsr		AY2_WriteRegValue
+
+		lda		#AY_BFINE
+		ldx		#$55
+		jsr		AY2_WriteRegValue
+
+		lda		#AY_CFINE
+		ldx		#$69
+		jsr		AY2_WriteRegValue
+
+		;
+
+		ldx		#AY_AFINE
+		jsr		AY2_ReadRegValue
+		cmp		#$AA
+		bne		+
+
+		ldx		#AY_BFINE
+		jsr		AY2_ReadRegValue
+		cmp		#$55
+		bne		+
+
+		ldx		#AY_CFINE
+		jsr		AY2_ReadRegValue
+		cmp		#$69
+		bne		+
+
+			lda		hasAY8913
+			ora		zpTmp2
+			sta		hasAY8913
+
++		asl		zpTmp2			; mask <<= 1
+		lda		#SY6522_B_BASE
+		cmp		zpTmp3
+		beq		+
+		sta		zpTmp3
+		bne		-
+
++	lda		#PH_MOCKINGBOARD
+	jsr		SetPhasorMode
+
+	;
+
+@ok	rts
+
+;------------------------------------------------------------------------------
+
+!if 1 {
+DebugPhasorAYs
+
+	lda		#$1f
+	ldy		#SY6522_DDRB+SY6522_A_PH_BASE
+	sta		(MBBase),y
+
+	ldy		#SY6522_ORA+SY6522_A_PH_BASE
+
+	;
+
+	ldx		#AY_AFINE
+	jsr		AY1_ReadRegValue
+	sta		debugPhasorAyData+0
+
+	ldx		#AY_BFINE
+	jsr		AY1_ReadRegValue
+	sta		debugPhasorAyData+1
+
+	ldx		#AY_CFINE
+	jsr		AY1_ReadRegValue
+	sta		debugPhasorAyData+2
+
+	;
+
+	ldx		#AY_AFINE
+	jsr		AY2_ReadRegValue
+	sta		debugPhasorAyData+3
+
+	ldx		#AY_BFINE
+	jsr		AY2_ReadRegValue
+	sta		debugPhasorAyData+4
+
+	ldx		#AY_CFINE
+	jsr		AY2_ReadRegValue
+	sta		debugPhasorAyData+5
 
 	rts
+
+; AW:  AA 55 69 00 00 00
+; //e: 00 00 00 AA 55 69
+; TODO: test that emu is r/w to correct AY (unlike now!)
+debugPhasorAyData
+	!fill 6,0
+}
 
 ;------------------------------------------------------------------------------
 
