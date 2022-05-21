@@ -772,6 +772,23 @@ initSoakDisplayTest0
 
 ;
 
+incSoakTestNum
+; Post: Z=1 (completed), Z=0(do next repeat)
+
+	lda		KBD
+	bpl		+
+		bit		KBDSTRB
+		cmp		#$80+27			; ESC?
+		bne		+
+			; Complete this test
+			lda		#NO_SOAK_TEST
+			sta		soakTestNum
+
++	inc		soakTestNum
+	rts
+
+;
+
 incSoakDisplayTest
 	ldy		cfgDoSoakTest	; $ff=no repeat, $00=repeat
 	sty		soakTestNum

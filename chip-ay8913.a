@@ -203,7 +203,7 @@ TestAY8913
 			lda		#2
 			sta		testNum			; test #02
 			jsr		TestAYEchoPlus
-			bcc		@ok
+			bcc		@soak
 			bcs		@error
 
 @TestMB	; Mockingboard or Phasor(in PH_MOCKINGBOARD)
@@ -219,7 +219,7 @@ TestAY8913
 
 @TestPhasor
 		lda		isPhasorCard
-		beq		@ok
+		beq		@soak
 
 		lda		#PH_PHASOR
 		jsr		SetPhasorMode
@@ -237,10 +237,10 @@ TestAY8913
 		plp
 		bcs		@error
 
-		inc		soakTestNum
+@soak	jsr		incSoakTestNum
 		bne		@repeat
 
-@ok	clc
+	clc
 	rts
 
 @error
@@ -274,6 +274,11 @@ TestAYs
 
 +		jsr		Init6522ForAY	; pre: zpTmp3 = SY6522_A_BASE or SY6522_A_PH_BASE or SY6522_B_BASE
 
+		; Disable all channels (Phasor: disable for both AYs)
+		lda		#AY_ENABLE
+		ldx		#AY_DIS_A+AY_DIS_B+AY_DIS_C
+		jsr		AY_WriteRegValue
+
 		inc		testNum			; test #n+0, #n+2
 		jsr		TestAYDatalines
 		bcs		+
@@ -305,6 +310,10 @@ TestAYDatalines
 
 	jsr		resetSubTest
 	jsr		incTotalTests
+
+	lda		#SY6522_ORA
+	ora		zpTmp3
+	tay							; init Y for AY_WriteRegValue(), etc.
 
 	lda		#1					; data to test
 	sta		zpTmp2
@@ -381,6 +390,10 @@ TestAYAddrlines
 	jsr		resetSubTest
 	jsr		incTotalTests
 
+	lda		#SY6522_ORA
+	ora		zpTmp3
+	tay							; init Y for AY_WriteRegValue(), etc.
+
 	lda		#0					; reg & data to test
 	sta		zpTmp2
 
@@ -412,7 +425,6 @@ TestAYAddrlines
 		cmp		#AY_PORTA
 		bne		-
 
-	ldy		zpTmp3
 	jsr		Init6522ForAY
 
 	clc							; C=0(OK)

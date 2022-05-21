@@ -216,7 +216,7 @@ Check6522
 		jsr		Check6522IRQ
 		bcs		@error
 
-		inc		soakTestNum
+		jsr		incSoakTestNum
 		bne		@repeat
 
 	clc		; C=0(OK)
@@ -771,7 +771,7 @@ Test6522
 @repeat			jsr		incSoakDisplayRept
 @jmpTest		jsr		$0000
 				bcs		@error
-				inc		soakTestNum
+				jsr		incSoakTestNum
 				bne		@repeat
 
 			jmp		@nextTest
