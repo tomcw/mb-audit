@@ -1,5 +1,5 @@
 ;license:MIT
-;(c) 2021 by Tom Charlesworth
+;(c) 2021-2022 by Tom Charlesworth
 ;
 ; AY8913 related
 ;
@@ -167,15 +167,68 @@ TestAY8913
 	lda		#COMPONENT_AY8913+1	; test component $21
 	sta		testComponentNum
 
-	lda		isPhasorCard
-	beq		+
+	lda		MBBaseL						; $00 = tests are for both 6522-A/B
+	jsr		initSoakDisplayTest0
+	jsr		incSoakDisplayTest
 
-		; Phasor
-		lda		#0
-		sta		testNum			; test #00
-		lda		#PH_ECHOPLUS
+@repeat	jsr		incSoakDisplayRept		; NB. "00:nn" - just inc's rept#nn
+
+		lda		isPhasorCard
+		beq		+
+
+			; Phasor
+			lda		#0
+			sta		testNum			; test #00
+			lda		#PH_ECHOPLUS
+			jsr		SetPhasorMode
+			jsr		TestAYEchoPlus
+			php
+			pha
+			lda		#PH_MOCKINGBOARD
+			jsr		SetPhasorMode
+			pla
+			plp
+			bcs		@error
+
+			inc		testNum			; test #01
+			jsr		TestAYPhasor	; only do this test once, since it covers both SY6522's
+			bcc		@TestMB
+			bcs		@error
+
++		lda		isMB4C
+		ora		isEchoPlus
+		beq		@TestMB
+
+			; MB4C / Echo+
+			lda		#2
+			sta		testNum			; test #02
+			jsr		TestAYEchoPlus
+			bcc		@ok
+			bcs		@error
+
+@TestMB	; Mockingboard or Phasor(in PH_MOCKINGBOARD)
+
+		lda		#$0f
+		sta		testNum
+
+		lda		#SY6522_A_BASE
+		sta		zpTmp3				; 6522-A base addr
+
+		jsr		TestAYs				; test #10,11,12,13
+		bcs		@error
+
+@TestPhasor
+		lda		isPhasorCard
+		beq		@ok
+
+		lda		#PH_PHASOR
 		jsr		SetPhasorMode
-		jsr		TestAYEchoPlus
+
+		lda		#SY6522_A_PH_BASE
+		sta		zpTmp3				; 6522-A base addr *for Phasor*
+
+		jsr		TestAYs				; test #14,15,16,17
+
 		php
 		pha
 		lda		#PH_MOCKINGBOARD
@@ -184,53 +237,8 @@ TestAY8913
 		plp
 		bcs		@error
 
-		inc		testNum			; test #01
-		jsr		TestAYPhasor	; only do this test once, since it covers both SY6522's
-		bcc		@TestMB
-		bcs		@error
-
-+	lda		isMB4C
-	ora		isEchoPlus
-	beq		@TestMB
-
-		; MB4C / Echo+
-		lda		#2
-		sta		testNum			; test #02
-		jsr		TestAYEchoPlus
-		bcc		@ok
-		bcs		@error
-
-@TestMB
-	; Mockingboard or Phasor(in PH_MOCKINGBOARD)
-
-	lda		#$0f
-	sta		testNum
-
-	lda		#SY6522_A_BASE
-	sta		zpTmp3				; 6522-A base addr
-
-	jsr		TestAYs				; test #10,11,12,13
-	bcs		@error
-
-@TestPhasor
-	lda		isPhasorCard
-	beq		@ok
-
-	lda		#PH_PHASOR
-	jsr		SetPhasorMode
-
-	lda		#SY6522_A_PH_BASE
-	sta		zpTmp3				; 6522-A base addr *for Phasor*
-
-	jsr		TestAYs				; test #14,15,16,17
-
-	php
-	pha
-	lda		#PH_MOCKINGBOARD
-	jsr		SetPhasorMode
-	pla
-	plp
-	bcs		@error
+		inc		soakTestNum
+		bne		@repeat
 
 @ok	clc
 	rts

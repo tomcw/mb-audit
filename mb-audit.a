@@ -709,6 +709,10 @@ incTotalTests
 
 ;------------------------------------------------------------------------------
 
+; 01234567
+; #SOAK
+; CC:TT:RR (Component#:Test#:Repeat#)
+
 initSoakDisplayTest0
 ; Pre: A=$00(6522-A or both) or $80(6522-B)
 ; Trashes: zpTmpPtr2L,H
@@ -735,13 +739,32 @@ initSoakDisplayTest0
 
 ++
 
-	; "FF:" = test#:
+	; "CC"
+	lda		testComponentNum
+	lsr
+	lsr
+	lsr
+	lsr
+	clc
+	adc		#$80+'0'
+	ldy		#0
+	sta		(zpTmpPtr2),y
+	lda		testComponentNum
+	and		#$0F
+	clc
+	adc		#$80+'0'
+	iny
+	sta		(zpTmpPtr2),y
+
+	; ":TT:" : test#=$FF
 	lda		#$80+':'
 	ldy		#2
 	sta		(zpTmpPtr2),y
+	ldy		#5
+	sta		(zpTmpPtr2),y
 
 	lda		#$80+'F'
-	ldy		#0
+	ldy		#3
 	sta		(zpTmpPtr2),y
 	iny
 	sta		(zpTmpPtr2),y
@@ -756,14 +779,14 @@ incSoakDisplayTest
 	rts
 +
 
-	; ":FF" = rept#
+	; "RR" : rept#=$FF
 	lda		#$80+'F'
-	ldy		#3
+	ldy		#6
 	sta		(zpTmpPtr2),y
 	iny
 	sta		(zpTmpPtr2),y
 
-	ldy		#1
+	ldy		#4
 	bne		incSoakDisplayX
 
 ;
@@ -774,10 +797,10 @@ incSoakDisplayRept
 	rts
 +
 
-	ldy		#4
+	ldy		#7
 
 incSoakDisplayX
-; Pre: Y=1 or 4
+; Pre: Y=4 or 7 (end of TT or RR)
 ; Trashes: zpTmpPtrL,H
 
 	lda		(zpTmpPtr2),y
