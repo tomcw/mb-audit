@@ -67,8 +67,8 @@ AY_READ		= 5
 AY_WRITE	= 6
 AY_LATCH	= 7
 ; Phasor extra chip-select bits (when in native Phasor mode):
-AY_NOT_CS1	= $08
-AY_NOT_CS2	= $10
+AY_NOT_CS1	= $10
+AY_NOT_CS2	= $08
 AY_CS1		= AY_NOT_CS2
 AY_CS2		= AY_NOT_CS1
 
