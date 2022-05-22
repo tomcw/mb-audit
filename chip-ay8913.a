@@ -284,11 +284,6 @@ TestAYs
 
 +		jsr		Init6522ForAY		; pre: zpTmp3 = SY6522_A_BASE or SY6522_A_PH_BASE or SY6522_B_BASE
 
-		; Disable all channels (Phasor: disable for both AYs attached to this 6522)
-		lda		#AY_ENABLE
-		ldx		#AY_DIS_A+AY_DIS_B+AY_DIS_C
-		jsr		AY_WriteRegValue
-
 		inc		testNum				; test #n+0, #n+3
 		jsr		TestAYDatalines
 		bcs		+
@@ -448,8 +443,8 @@ TestAYAddrlines
 +
 --		inc		zpTmp2
 		lda		zpTmp2
-		cmp		#AY_ENABLE		; skip ENABLE to avoid enabling ABC noise and skip AVOL/BVOL/CVOL to avoid any clicks
-		bcc		@loop_w			; bra < AY_ENABLE
+		cmp		#AY_AVOL		; skip AVOL/BVOL/CVOL to avoid any clicks (on soak test)
+		bcc		@loop_w			; bra < AY_AVOL
 		cmp		#AY_CVOL+1
 		bcc		--				; bra <= AY_CVOL
 		cmp		#AY_PORTA
@@ -480,8 +475,8 @@ TestAYAddrlines
 +
 --		inc		zpTmp2
 		lda		zpTmp2
-		cmp		#AY_ENABLE		; skip ENABLE to avoid enabling ABC noise and skip AVOL/BVOL/CVOL to avoid any clicks
-		bcc		@loop_r			; bra < AY_ENABLE
+		cmp		#AY_AVOL		; skip AVOL/BVOL/CVOL to avoid any clicks (on soak test)
+		bcc		@loop_r			; bra < AY_AVOL
 		cmp		#AY_CVOL+1
 		bcc		--				; bra <= AY_CVOL
 		cmp		#AY_PORTA
