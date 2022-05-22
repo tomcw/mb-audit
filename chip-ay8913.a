@@ -277,40 +277,52 @@ TestAYs
 -		lsr		zpTmp1
 		bcs		+
 			clc
-			lda		#3
+			lda		#4
 			adc		testNum
 			sta		testNum
 			bne		++
 
 +		jsr		Init6522ForAY		; pre: zpTmp3 = SY6522_A_BASE or SY6522_A_PH_BASE or SY6522_B_BASE
 
-		inc		testNum				; test #n+0, #n+3
-		jsr		TestAYDatalines
-		bcs		+
-
 		lda		phasorMode
 		cmp		#PH_PHASOR
 		beq		@ph
 
-			inc		testNum			; test #n+1, #n+4
-			lda		#0				; AY select
+			lda		#0				; AY select ($00)
 			sta		zpTmp4
+
+			inc		testNum			; test #n+0, #n+4
+			jsr		TestAYDatalines
+			bcs		+
+
+			inc		testNum			; test #n+1, #n+5
 			jsr		TestAYAddrlines
 			bcs		+
 
 			inc		testNum			; test #n+2 - skip, as Phasor only
+			inc		testNum			; test #n+3 - skip, as Phasor only
 			bcc		++
 
 		;
 
-@ph			inc		testNum			; test #n+1, #n+5
-			lda		#$40			; AY1 select ($40)
+@ph			lda		#$40			; AY1 select ($40)
 			sta		zpTmp4
+
+			inc		testNum			; test #n+0, #n+4
+			jsr		TestAYDatalines
+			bcs		+
+
+			inc		testNum			; test #n+1, #n+5
 			jsr		TestAYAddrlines
 			bcs		+
 
-			inc		testNum			; test #n+2, #n+6
 			asl		zpTmp4			; AY2 select ($80)
+
+			inc		testNum			; test #n+2, #n+6
+			jsr		TestAYDatalines
+			bcs		+
+
+			inc		testNum			; test #n+3, #n+7
 			jsr		TestAYAddrlines
 			bcs		+
 
@@ -328,12 +340,12 @@ TestAYs
 TestAYDatalines
 ; Pre:
 ;	zpTmp3 = SY6522_A_BASE or SY6522_A_PH_BASE or SY6522_B_BASE
+;	zpTmp4 = AY chip select: 0(MB), $40(Phasor-AY1), $80(Phasor-AY2)
 ; Post: C=0(OK), C=1(NG)
 ;	zpTmp2 = expected, A = actual
 
 	; Test the 8 data lines:
-	; . Write then Read: $01, $02, $04, ..., $80 (Phasor 1st AY or Mockingboard)
-	; . Write then Read: $FE, $FD, $FB, ..., $7F (Phasor 2nd AY)
+	; . Write then read AY reg#0: {$01, $02, $03,... $FF}
 
 	jsr		resetSubTest
 	jsr		incTotalTests
@@ -342,53 +354,32 @@ TestAYDatalines
 	ora		zpTmp3
 	tay							; init Y for AY_WriteRegValue(), etc.
 
-	lda		#1					; data to test
+	lda		#0					; data to test
 	sta		zpTmp2
 
--		lda		phasorMode
-		cmp		#PH_MOCKINGBOARD
-		beq		@mb
+@loop	lda		#AY_AFINE		; reg#
+		ldx		zpTmp2			; value
 
-		lda		#AY_AFINE
-		ldx		zpTmp2
-		jsr		AY1_WriteRegValue
+		bit		zpTmp4			; N=b7, V=b6
+		bvs		@ph1
+		bmi		@ph2
 
-		lda		zpTmp2
-		eor		#$ff
-		tax
-		lda		#AY_AFINE
-		jsr		AY2_WriteRegValue
-
-		ldx		#AY_AFINE
-		jsr		AY1_ReadRegValue
-		cmp		zpTmp2
-		beq		+
-		sec
-		rts						; C=1(NG)
-
-+		ldx		#AY_AFINE
-		jsr		AY2_ReadRegValue
-		eor		#$ff
-		cmp		zpTmp2
-		beq		@resetPortA
-		eor		#$ff
-		tax
-		lda		zpTmp2
-		eor		#$ff
-		sta		zpTmp2
-		txa
-		sec
-		rts						; C=1(NG)
-
-		;
-
-@mb		lda		#AY_AFINE
-		ldx		zpTmp2
-		jsr		AY_WriteRegValue
-
+@mb		jsr		AY_WriteRegValue
 		ldx		#AY_AFINE
 		jsr		AY_ReadRegValue
-		cmp		zpTmp2
+		bne		+
+
+@ph1	jsr		AY1_WriteRegValue
+		ldx		#AY_AFINE
+		jsr		AY1_ReadRegValue
+		bne		+
+
+@ph2	jsr		AY2_WriteRegValue
+		ldx		#AY_AFINE
+		jsr		AY2_ReadRegValue
+		bne		+
+
++		cmp		zpTmp2
 		beq		@resetPortA
 		sec
 		rts						; C=1(NG)
@@ -396,8 +387,8 @@ TestAYDatalines
 @resetPortA
 		jsr		AY_SetPortAOutput	; DDRA=0xFF
 
-		asl		zpTmp2
-		bne		-
+		inc		zpTmp2
+		bne		@loop
 
 	clc
 	rts							; C=0(OK)
