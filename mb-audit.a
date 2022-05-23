@@ -206,12 +206,13 @@ entrypoint
 		beq		+
 			and		#3
 			sta		has6522
+			jsr		DisplaySlotUpdate
+			ldx		slotUnderTest
 			jsr		Check6522		; Basic 6522 checks
 			bcc		++
 				jsr		PrintTestFailedErrBytes
 				jmp		exit
 ++			jsr		DetectSubunits	; AY8913 & speech chips
-			ldx		slotUnderTest
 			jsr		DisplayCardUpdate
 			;
 			jsr		Test6522
@@ -317,6 +318,7 @@ nextSlot
 			sta		has6522
 			jsr		Setup6522ForReset
 			bcs		++
+			jsr		DisplaySlotUpdate
 			jsr		PrintSlotNum
 			lda		#<msg_PressReset
 			ldx		#>msg_PressReset
@@ -458,6 +460,8 @@ TestTones
 @cr				lda		#$80+$0d
 				jsr		COUT
 +
+
+			jsr		DisplaySlotUpdate
 
 			ldx		slotUnderTest
 			jsr		TestAYTones
@@ -710,9 +714,14 @@ incTotalTests
 ;------------------------------------------------------------------------------
 
 ; 01234567
-; #SOAK
+; Sn:SOAK#
 ; CC:TT:RR (Component#:Test#:Repeat#)
 
+SOAK_S_OFFSET      = 0
+SOAK_Sn            = 1
+SOAK_COLON_Sn_SOAK = 2
+SOAK_SOAK_OFFSET   = 3
+;
 SOAK_CC_LO       = 1
 SOAK_COLON_CC_TT = 2
 SOAK_TT_LO       = 4
@@ -744,6 +753,12 @@ initSoakDisplayTest0
 	sta		zpTmpPtr2H
 
 ++
+
+	; "Sn"
+	lda		slotUnderTest
+	clc
+	adc		#'0'			; b7=0 for INVERSE
+	sta		TEXTLINE2+SOAK_Sn
 
 	; "CC"
 	lda		testComponentNum
@@ -959,16 +974,19 @@ Display
 	lda		cfgDoSoakTest
 	cmp		#SOAK_TEST
 	bne		+
+		lda		#$80+':'
+		sta		LINE1+SOAK_COLON_Sn_SOAK
 		lda		#$80+'S'
-		sta		LINE1+0
+		sta		LINE1+SOAK_S_OFFSET+0
+		sta		LINE1+SOAK_SOAK_OFFSET+0
 		lda		#$80+'O'
-		sta		LINE1+1
+		sta		LINE1+SOAK_SOAK_OFFSET+1
 		lda		#$80+'A'
-		sta		LINE1+2
+		sta		LINE1+SOAK_SOAK_OFFSET+2
 		lda		#$80+'K'
-		sta		LINE1+3
+		sta		LINE1+SOAK_SOAK_OFFSET+3
 		lda		#$80+'#'
-		sta		LINE1+4
+		sta		LINE1+SOAK_SOAK_OFFSET+4
 +
 
 	ldx		#7*3-1
@@ -1014,14 +1032,38 @@ Display
 
 ;--------------------------------------
 
+DisplaySlotUpdate
+
+	ldx		#7*3-1
+	ldy		#7
+
+-		tya
+		cmp		slotUnderTest
+		bne		+
+			ora		#'0'
+			bne		++
+			;
++			ora		#$80+'0'
+++		sta		LINE1+$12,x		; '1  2  3  4  5  6  7'
+
+		dex
+		dex
+		dex
+		dey
+		bne		-
+
+	rts
+
+;--------------------------------------
+
 DisplayCardUpdate
-; Pre: X=slot#
 
 	;
 	; Update cards
 	;
 
 	; x = (x-1)*3 + 1 = the position of the slot# (eg. '1')
+	ldx		slotUnderTest
 	dex
 	stx		zpTmp1
 	txa
