@@ -713,6 +713,12 @@ incTotalTests
 ; #SOAK
 ; CC:TT:RR (Component#:Test#:Repeat#)
 
+SOAK_CC_LO       = 1
+SOAK_COLON_CC_TT = 2
+SOAK_TT_LO       = 4
+SOAK_COLON_TT_RR = 5
+SOAK_RR_LO       = 7
+
 initSoakDisplayTest0
 ; Pre: A=$00(6522-A or both) or $80(6522-B)
 ; Trashes: zpTmpPtr2L,H
@@ -741,32 +747,32 @@ initSoakDisplayTest0
 
 	; "CC"
 	lda		testComponentNum
-	lsr
-	lsr
-	lsr
-	lsr
-	clc
-	adc		#$80+'0'
-	ldy		#0
-	sta		(zpTmpPtr2),y
-	lda		testComponentNum
 	and		#$0F
 	clc
 	adc		#$80+'0'
-	iny
+	ldy		#SOAK_CC_LO
+	sta		(zpTmpPtr2),y
+	lda		testComponentNum
+	lsr
+	lsr
+	lsr
+	lsr
+	clc
+	adc		#$80+'0'
+	dey
 	sta		(zpTmpPtr2),y
 
-	; ":TT:" : test#=$FF
+	; "CC:TT:RR" : test#=$FF
 	lda		#$80+':'
-	ldy		#2
+	ldy		#SOAK_COLON_CC_TT
 	sta		(zpTmpPtr2),y
-	ldy		#5
+	ldy		#SOAK_COLON_TT_RR
 	sta		(zpTmpPtr2),y
 
 	lda		#$80+'F'
-	ldy		#3
+	ldy		#SOAK_TT_LO
 	sta		(zpTmpPtr2),y
-	iny
+	dey
 	sta		(zpTmpPtr2),y
 	rts
 
@@ -798,12 +804,12 @@ incSoakDisplayTest
 
 	; "RR" : rept#=$FF
 	lda		#$80+'F'
-	ldy		#6
+	ldy		#SOAK_RR_LO
 	sta		(zpTmpPtr2),y
-	iny
+	dey
 	sta		(zpTmpPtr2),y
 
-	ldy		#4
+	ldy		#SOAK_TT_LO
 	bne		incSoakDisplayX
 
 ;
@@ -814,10 +820,10 @@ incSoakDisplayRept
 	rts
 +
 
-	ldy		#7
+	ldy		#SOAK_RR_LO
 
 incSoakDisplayX
-; Pre: Y=4 or 7 (end of TT or RR)
+; Pre: Y = SOAK_TT_LO or SOAK_RR_LO (end of TT or RR)
 ; Trashes: zpTmpPtrL,H
 
 	lda		(zpTmpPtr2),y
@@ -917,10 +923,19 @@ SLOT1POS = $13					; pos left of '1'
 
 Display
 ;(blank)
-;               1  2  3  4  5  6  7
+;         SLOT: 1  2  3  4  5  6  7
 ;          $00: ?     1 S/S C  P       ; ?=6522(VIA), 1=Sound-I(or Speech-I), S/S=Sound/Speech-I, M=MegaAudio, M4C=MB4C, E=Echo+, C=MB-C(or MB-A or Sound-II), P=Phasor
 ;          $80:    ?    S/S C  P
 ;           SP:           VABV B       ; A=SSI263(socket-A), B=SSI263(socket-B), V=Votrax/SC01
+
+	lda		#$80+'S'
+	sta		LINE1+$0e
+	lda		#$80+'L'
+	sta		LINE1+$0f
+	lda		#$80+'O'
+	sta		LINE1+$10
+	lda		#$80+'T'
+	sta		LINE1+$011
 
 	lda		#$80+'$'
 	sta		LINE2+$0f
@@ -932,6 +947,7 @@ Display
 	lda		#$80+'8'
 	sta		LINE3+$10
 	lda		#$80+':'
+	sta		LINE1+$12
 	sta		LINE2+$12
 	sta		LINE3+$12
 	sta		LINE4+$12
@@ -943,15 +959,15 @@ Display
 	lda		cfgDoSoakTest
 	cmp		#SOAK_TEST
 	bne		+
-		lda		#$80+'#'
-		sta		LINE1+0
 		lda		#$80+'S'
-		sta		LINE1+1
+		sta		LINE1+0
 		lda		#$80+'O'
-		sta		LINE1+2
+		sta		LINE1+1
 		lda		#$80+'A'
-		sta		LINE1+3
+		sta		LINE1+2
 		lda		#$80+'K'
+		sta		LINE1+3
+		lda		#$80+'#'
 		sta		LINE1+4
 +
 

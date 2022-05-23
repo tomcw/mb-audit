@@ -259,10 +259,11 @@ TestAY8913
 
 ;--------------------------------------
 
-; Called once for Mockingboard.
-; Called twice for Phasor:
-;	1) phasorMode = PH_MOCKINGBOARD
-;	2) phasorMode = PH_PHASOR
+; 1) Called for Mockingboard or Phasor(phasorMode = PH_MOCKINGBOARD)
+;		test AY: data & addr lines
+; 2) Called for Phasor(phasorMode = PH_PHASOR)
+;		test AY1: data & addr lines
+;		test AY2: data & addr lines
 
 TestAYs
 ; Pre:
