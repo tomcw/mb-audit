@@ -1072,7 +1072,49 @@ DisplayCardUpdate
 	adc		zpTmp1
 	tax
 
-	lda		hasAY8913			; No AYs found? (eg. AYs erroneously reading back as $FF)
+	lda		isPhasorCard
+	beq		@mb
+
+		lda		hasAY8913
+		cmp		#%00001111
+		beq		+
+
+			txa
+			pha
+			jsr		PrintSlotNum
+			lda		#<msg_WarningMissingAYs
+			ldx		#>msg_WarningMissingAYs
+			jsr		Print
+			lda		#4
+			sta		zpTmp3
+			lda		hasAY8913
+			asl
+			asl
+			asl
+			asl
+-				asl
+				pha
+				lda		#$80+'0'
+				bcc		++
+				adc		#0	; C=1, so this is "INC A"
+++				jsr		COUT
+				pla
+				dec		zpTmp3
+				bne		-
+			lda		#$80+$0d
+			jsr		COUT
+			pla
+			tax
+
++		lda		#$80+' '
+		sta		zpTmp1			; x-1 pos: default: ' '
+		sta		zpTmp2			; x+1 pos: default: ' '
+		lda		#$80+'P'
+		bne		@out
+
+	;
+
+@mb	lda		hasAY8913			; No AYs found? (eg. AYs erroneously reading back as $FF)
 	bne		+
 		txa
 		pha
@@ -1089,13 +1131,13 @@ DisplayCardUpdate
 	sta		zpTmp2			; x+1 pos: default: ' '
 
 	lda		hasAY8913
-	cmp		#1					; 6522/AY8913 at $00?
+	cmp		#%00000001			; 6522/AY8913 at $00?
 	bne		+
 		lda		#$80+'1'		; MB-Sound I (has a 6522/AY8913 at $00) or MB-Speech I (has a 6522/SC01) at $00
 		sta		LINE2+SLOT1POS,x
 
 +	lda		hasAY8913
-	cmp		#2					; 6522/AY8913 at $80?
+	cmp		#%00000010			; 6522/AY8913 at $80?
 	bne		+
 		lda		hasSC01
 		beq		+				; no SC01 - don't know what this is!
@@ -1106,7 +1148,7 @@ DisplayCardUpdate
 		bne		@out
 
 +	lda		hasAY8913
-	cmp		#3					; 6522/AY8913 at $00 && $80?
+	cmp		#%00000011			; 6522/AY8913 at $00 && $80?
 	bcc		@speech				; (branch if A < 3)
 		lda		isMegaAudioCard
 		beq		+
@@ -1124,13 +1166,10 @@ DisplayCardUpdate
 		beq		+
 			lda		#$80+'E'
 			bne		@out
-+		lda		isPhasorCard
-		beq		@isIIorC
-			lda		#$80+'P'
++			lda		#$80+'C'	; MB-C or MB-Sound II (has 2x 6522/AY8913, but no SC01 nor SSI263)
 			bne		@out
-@isIIorC	lda		#$80+'C'	; MB-C or MB-Sound II (has 2x 6522/AY8913, but no SC01 nor SSI263)
-@out:
-		sta		LINE2+SLOT1POS,x
+
+@out	sta		LINE2+SLOT1POS,x
 		sta		LINE3+SLOT1POS,x
 		lda		zpTmp1
 		sta		LINE2+SLOT1POS-1,x
@@ -1409,8 +1448,11 @@ msg_cpu65816DetectedEnd !text 0
 msg_NoMB !text "No Mockingboard detected!",0xd
 msg_NoMBEnd !text 0
 
-msg_WarningNoAYs	!text "Warning: unknown card (no AYs)",0xd
-msg_WarningNoAYsEnd	!text 0
+msg_WarningNoAYs !text "Warning: unknown card (no AYs)",0xd
+msg_WarningNoAYsEnd !text 0
+
+msg_WarningMissingAYs !text "Phasor missing AY(s): %"
+msg_WarningMissingAYsEnd !text 0
 
 msg_Slot !text "Slot #"	; 0
 msg_SlotEnd !text 0
