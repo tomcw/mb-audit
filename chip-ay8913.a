@@ -256,9 +256,9 @@ TestAY8913
 
 ;--------------------------------------
 
-; 1) Called for Mockingboard or Phasor(phasorMode = PH_MOCKINGBOARD)
+; 1) Test #10,... Called for Mockingboard or Phasor(phasorMode = PH_MOCKINGBOARD)
 ;		test AY: data & addr lines
-; 2) Called for Phasor(phasorMode = PH_PHASOR)
+; 2) Test #20,... Called for Phasor(phasorMode = PH_PHASOR)
 ;		test AY1: data & addr lines
 ;		test AY2: data & addr lines
 
@@ -269,7 +269,7 @@ TestAYs
 ;	zpTmp2 = expected, A = actual
 
 	lda		hasAY8913
-	and		#HAS_6522B|HAS_6522A
+	and		#%00000011				; NB. b1:0 set => respective 6522 exists
 	sta		zpTmp1
 
 -		lsr		zpTmp1
@@ -411,33 +411,7 @@ TestAYAddrlines
 	ora		zpTmp3
 	tay							; init Y for AY_WriteRegValue(), etc.
 
-	lda		#0					; reg & data to test
-	sta		zpTmp2
-
-@loop_w	lda		zpTmp2			; reg#
-		tax						; value
-
-		bit		zpTmp4			; N=b7, V=b6
-		bvs		@ph1_w
-		bmi		@ph2_w
-
-@mb_w	jsr		AY_WriteRegValue
-		bne		+
-
-@ph1_w	jsr		AY1_WriteRegValue
-		bne		+
-
-@ph2_w	jsr		AY2_WriteRegValue
-
-+
---		inc		zpTmp2
-		lda		zpTmp2
-		cmp		#AY_AVOL		; skip AVOL/BVOL/CVOL to avoid any clicks (on soak test)
-		bcc		@loop_w			; bra < AY_AVOL
-		cmp		#AY_CVOL+1
-		bcc		--				; bra <= AY_CVOL
-		cmp		#AY_PORTA
-		bne		@loop_w
+	jsr		WriteAYRegs
 
 	lda		#0					; reg & data to test
 	sta		zpTmp2
@@ -474,6 +448,45 @@ TestAYAddrlines
 	jsr		Init6522ForAY
 
 	clc							; C=0(OK)
+	rts
+
+;--------------------------------------
+
+WriteAYRegs
+; Write AY regs: [0..$D] with values [0..$D]
+; Pre:
+; 	Y = SY6522_ORA for chip A or B
+;	zpTmp3 = SY6522_A_BASE or SY6522_A_PH_BASE or SY6522_B_BASE
+;	zpTmp4 = AY chip select: 0(MB), $40(Phasor-AY1), $80(Phasor-AY2)
+
+	lda		#0					; reg & data to test
+	sta		zpTmp2
+
+@loop_w	lda		zpTmp2			; reg#
+		tax						; value
+
+		bit		zpTmp4			; N=b7, V=b6
+		bvs		@ph1_w
+		bmi		@ph2_w
+
+@mb_w	jsr		AY_WriteRegValue
+		bne		+
+
+@ph1_w	jsr		AY1_WriteRegValue
+		bne		+
+
+@ph2_w	jsr		AY2_WriteRegValue
+
++
+--		inc		zpTmp2
+		lda		zpTmp2
+		cmp		#AY_AVOL		; skip AVOL/BVOL/CVOL to avoid any clicks (on soak test)
+		bcc		@loop_w			; bra < AY_AVOL
+		cmp		#AY_CVOL+1
+		bcc		--				; bra <= AY_CVOL
+		cmp		#AY_PORTA
+		bne		@loop_w
+
 	rts
 
 ;--------------------------------------
@@ -992,6 +1005,77 @@ AYTonesISR
 
 ;------------------------------------------------------------------------------
 
+AYSetAndReadRegs
+; Pre:
+;	zpTmp3 = SY6522_A_BASE or SY6522_A_PH_BASE or SY6522_B_BASE
+;	zpTmp4 = AY chip select: 0(MB), $40(Phasor-AY1), $80(Phasor-AY2)
+; Trashes:
+;	zpTmp2
+
+	lda		#SY6522_ORA
+	ora		zpTmp3
+	tay							; init Y for AY_WriteRegValue(), etc.
+
+	jsr		WriteAYRegs
+	; fall through...
+
+;------------------------------------------------------------------------------
+
+AYReadRegs
+; Pre:
+;	zpTmp3 = SY6522_A_BASE or SY6522_A_PH_BASE or SY6522_B_BASE
+;	zpTmp4 = AY chip select: 0(MB), $40(Phasor-AY1), $80(Phasor-AY2)
+; Post:
+; 	A = data
+; Trashes:
+;	zpTmp2
+
+	lda		#<ayRegs
+	sta		zpTmpPtr2L
+	lda		#>ayRegs
+	sta		zpTmpPtr2H
+
+	lda		#0
+	sta		zpTmp2
+
+@nextReg
+		lda		#SY6522_ORA
+		ora		zpTmp3
+		tay						; init Y for AY_ReadRegValue(), etc.
+
+		ldx		zpTmp2			; reg#
+
+		bit		zpTmp4			; N=b7, V=b6
+		bvs		@ph1_r
+		bmi		@ph2_r
+
+@mb_r	jsr		AY_ReadRegValue
+		bne		+
+
+@ph1_r	jsr		AY1_ReadRegValue
+		bne		+
+
+@ph2_r	jsr		AY2_ReadRegValue
+
++		ldy		zpTmp2
+		sta		(zpTmpPtr2),y
+		inc		zpTmp2
+		lda		#AY_PORTA
+		cmp		zpTmp2
+		bne		@nextReg
+
+	;
+
+	ldy		#SY6522_A_PH_BASE+SY6522_ORA
+	jsr		AY_SetPortAOutput	; DDRA=0xFF
+
+	ldy		#SY6522_B_BASE+SY6522_ORA
+	jsr		AY_SetPortAOutput	; DDRA=0xFF
+
+	rts
+
+;------------------------------------------------------------------------------
+
 Init6522ForAY
 ; Pre: phasorMode
 ;	zpTmp3 = SY6522_A_BASE or SY6522_A_PH_BASE or SY6522_B_BASE
@@ -1106,7 +1190,7 @@ SF_WriteReg
 
 SF_ChipReset
 ; NB. For native Phasor mode, reset both AY's, since cmd=AY_RESET|(%00<<3) - and CS is active low
-; Pre: Y = SY6522_A_BASE or SY6522_B_BASE
+; Pre: Y = SY6522_A_BASE or SY6522_A_PH_BASE or SY6522_B_BASE
 ; Post: Y = SY6522_ORA for chip A or B
 ;	Z = 0
 	lda		#AY_RESET

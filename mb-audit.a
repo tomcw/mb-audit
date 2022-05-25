@@ -224,7 +224,12 @@ entrypoint
 			jsr		TestSC01
 			bcc		++
 @error			jsr		PrintTestFailedErrBytes
-				jmp		exit
+				lda		testComponentNum
+				and		#$f0
+				cmp		#COMPONENT_AY8913
+				bne		+++
+					jsr		DumpAYRegs	; if AY8913 failed then dump all AY regs
++++				jmp		exit
 ++
 			;
 +		dec		slotUnderTest
@@ -471,6 +476,122 @@ TestTones
 		bne		@loop
 
 	rts
+
+;------------------------------------------------------------------------------
+
+DumpAYRegs
+
+	lda		#<msg_DumpAYRegs
+	ldx		#>msg_DumpAYRegs
+	jsr		Print
+
+	lda		isPhasorCard
+	beq		+
+		lda		#PH_PHASOR
+		jsr		SetPhasorMode
++
+
+	lda		#SY6522_A_PH_BASE
+	sta		zpTmp3
+	jsr		Init6522ForAY		; ...and completes with SF_ChipReset
+
+	lda		#SY6522_B_BASE
+	sta		zpTmp3
+	jsr		Init6522ForAY		; ...and completes with SF_ChipReset
+
+	;
+
+	lda		isPhasorCard
+	bne		@phAY1
+
+		; Mockingboard
+
+		lda		#SY6522_A_PH_BASE
+		sta		zpTmp3
+
+-			lda		#0			; AY select ($00)
+			sta		zpTmp4
+
+			jsr		AYReadRegs
+			jsr		@OutputAYRegs
+
+			jsr		AYSetAndReadRegs
+			jsr		@OutputAYRegs
+
+			lda		#SY6522_B_BASE
+			cmp		zpTmp3
+			beq		@done
+			sta		zpTmp3
+			bne		-			; bra
+
+		; Phasor
+
+@phAY1	lda		#SY6522_A_PH_BASE
+		sta		zpTmp3
+
+-			lda		#$40		; AY1 select ($40)
+			sta		zpTmp4
+
+			jsr		AYReadRegs
+			jsr		@OutputAYRegs
+
+			jsr		AYSetAndReadRegs
+			jsr		@OutputAYRegs
+
+			lda		#SY6522_B_BASE
+			cmp		zpTmp3
+			beq		@phAY2
+			sta		zpTmp3
+			bne		-			; bra
+
+@phAY2	lda		#SY6522_A_PH_BASE
+		sta		zpTmp3
+
+-			asl		zpTmp4		; AY2 select ($80)
+
+			jsr		AYReadRegs
+			jsr		@OutputAYRegs
+
+			jsr		AYSetAndReadRegs
+			jsr		@OutputAYRegs
+
+			lda		#SY6522_B_BASE
+			cmp		zpTmp3
+			beq		@done
+			sta		zpTmp3
+			bne		-			; bra
+
+;
+
+@done
+	lda		isPhasorCard
+	beq		+
+		lda		#PH_MOCKINGBOARD
+		jsr		SetPhasorMode
++
+	rts
+
+;
+
+@OutputAYRegs
+	lda		#<ayRegs
+	sta		zpTmpPtr2L
+	lda		#>ayRegs
+	sta		zpTmpPtr2H
+
+	lda		#0
+	sta		zpTmp2
+-		ldy		zpTmp2
+		lda		(zpTmpPtr2),y
+		tax
+		jsr		PRNTX
+		inc		zpTmp2
+		lda		#AY_PORTA
+		cmp		zpTmp2
+		bne		-
+
+	lda		#$80+$0d
+	jmp		COUT
 
 ;------------------------------------------------------------------------------
 
@@ -1435,6 +1556,8 @@ NO_SOAK_TEST = $ff
 SOAK_TEST    = $00
 cfgDoSoakTest	!byte NO_SOAK_TEST
 
+ayRegs			!fill 16,0
+
 msg_mbaudit	!text "mb-audit v1.2, Tom Charlesworth, 2021,22",0xd
 msg_mbauditEnd !text 0
 
@@ -1505,3 +1628,6 @@ msg_ToneKeysPhasorEnd !text 0
 
 msg_PressKeyToReboot !text "Press any key to reboot",0xd
 msg_PressKeyToRebootEnd !text 0
+
+msg_DumpAYRegs !text "AY registers dump:",0xd
+msg_DumpAYRegsEnd !text 0
