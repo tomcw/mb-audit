@@ -502,66 +502,23 @@ DumpAYRegs
 	;
 
 	lda		isPhasorCard
-	bne		@phAY1
+	bne		@ph
 
 		; Mockingboard
 
-		lda		#SY6522_A_PH_BASE
-		sta		zpTmp3
-
--			lda		#0			; AY select ($00)
-			sta		zpTmp4
-
-			jsr		AYReadRegs
-			jsr		@OutputAYRegs
-
-			jsr		AYSetAndReadRegs
-			jsr		@OutputAYRegs
-
-			lda		#SY6522_B_BASE
-			cmp		zpTmp3
-			beq		@done
-			sta		zpTmp3
-			bne		-			; bra
+		lda		#0			; AY select ($00)
+		jsr		@ReadRegsAndOutputForChipsAB
+		beq		@done
 
 		; Phasor
 
-@phAY1	lda		#SY6522_A_PH_BASE
-		sta		zpTmp3
+@ph		lda		#$40		; AY1 select ($40)
+		jsr		@ReadRegsAndOutputForChipsAB
 
--			lda		#$40		; AY1 select ($40)
-			sta		zpTmp4
+		lda		#$80		; AY2 select ($80)
+		jsr		@ReadRegsAndOutputForChipsAB
 
-			jsr		AYReadRegs
-			jsr		@OutputAYRegs
-
-			jsr		AYSetAndReadRegs
-			jsr		@OutputAYRegs
-
-			lda		#SY6522_B_BASE
-			cmp		zpTmp3
-			beq		@phAY2
-			sta		zpTmp3
-			bne		-			; bra
-
-@phAY2	lda		#SY6522_A_PH_BASE
-		sta		zpTmp3
-
--			asl		zpTmp4		; AY2 select ($80)
-
-			jsr		AYReadRegs
-			jsr		@OutputAYRegs
-
-			jsr		AYSetAndReadRegs
-			jsr		@OutputAYRegs
-
-			lda		#SY6522_B_BASE
-			cmp		zpTmp3
-			beq		@done
-			sta		zpTmp3
-			bne		-			; bra
-
-;
+	;
 
 @done
 	lda		isPhasorCard
@@ -570,6 +527,31 @@ DumpAYRegs
 		jsr		SetPhasorMode
 +
 	rts
+
+;
+
+@ReadRegsAndOutputForChipsAB
+; Pre: A = AY chip select: 0(MB), $40(Phasor-AY1), $80(Phasor-AY2)
+; Post: Z = 1
+
+	sta		zpTmp4
+
+	lda		#SY6522_A_PH_BASE
+	sta		zpTmp3
+
+-		jsr		AYReadRegs
+		jsr		@OutputAYRegs
+
+		jsr		AYSetAndReadRegs
+		jsr		@OutputAYRegs
+
+		lda		#SY6522_B_BASE
+		cmp		zpTmp3
+		beq		+
+		sta		zpTmp3
+		bne		-			; bra
+
++	rts
 
 ;
 
