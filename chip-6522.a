@@ -3223,15 +3223,24 @@ Test6522MultiCard
 	;
 
 @cleanup
-; Post:	MBBaseL = SY6522_A_BASE
+; Post:	MBBaseH = 2nd card (ie. card at lower I/O addr), MBBaseL = SY6522_A_BASE
+
 	lda		#SY6522_B_BASE
 	sta		MBBaseL
 	jsr		WaitT1OneShotUnderflow
 	jsr		WaitT2OneShotUnderflow
+
 	lda		#SY6522_A_BASE
 	sta		MBBaseL
 	jsr		WaitT1OneShotUnderflow
-	jmp		WaitT2OneShotUnderflow
+	jsr		WaitT2OneShotUnderflow
+
+	lda		MBBase2H
+	cmp		MBBaseH
+	sta		MBBaseH					; (no flags affected)
+	bne		@cleanup
+
+	rts
 
 ;
 
