@@ -3002,7 +3002,7 @@ Test6522MultiCard
 ;	Card1/2: 6522-A T2 is one-shot
 ;	Card1/2: 6522-B T1 is free-running
 ;	Card1/2: 6522-B T2 is one-shot
-; . NB Test_10_ISR handles ints in any order, and simultaneously too.
+; . NB T6522_MultiCard_ISR handles ints in any order, and simultaneously too.
 ; . ISR disables the T1/T2 int so it only generates an IRQ once.
 ; . Don't use 6522 if it's connected to NMI (as nested IRQ then NMI aren't supported by my ISR)
 ;
@@ -3565,7 +3565,7 @@ Setup6522ForReset
 	ldy		#SY6522_TIMER1H_COUNTER
 	sta		(MBBase),y
 
-	lda		#$00					; T1C = $0000
+	lda		#$00					; T2C = $0000
 	ldy		#SY6522_TIMER2L_COUNTER
 	sta		(MBBase),y
 	ldy		#SY6522_TIMER2H_COUNTER
