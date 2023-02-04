@@ -2994,25 +2994,45 @@ T6522_16
 ;------------------------------------------------------------------------------
 
 Test6522MultiCard
-; Pre:
+; Pre: There are at least 2 MB cards
 ; Post: C=0(OK), C=1(NG)
-;
-; . Setup counters on both cards & all the 6522's T1+T2
-;	Card1/2: 6522-A T1 is free-running
-;	Card1/2: 6522-A T2 is one-shot
-;	Card1/2: 6522-B T1 is free-running
-;	Card1/2: 6522-B T2 is one-shot
-; . NB T6522_MultiCard_ISR handles ints in any order, and simultaneously too.
-; . ISR disables the T1/T2 int so it only generates an IRQ once.
-; . Don't use 6522 if it's connected to NMI (as nested IRQ then NMI aren't supported by my ISR)
 ;
 
 	lda		#COMPONENT_6522+2	; test component $12
 	sta		testComponentNum
-	lda		#$00
-	sta		testNum				; test #00
 
-	;
+@repeat
+
+		lda		#$00
+		sta		testNum				; test #00
+		jsr		FindMultiCards
+		jsr		MCT6522_0
+		bcs		@error
+
+		inc		testNum				; test #01
+		jsr		FindMultiCards
+		jsr		MCT6522_1
+		bcs		@error
+
+@error
+; Pre: zpTmp2 = expected value
+;	A = actual value
+;	C=1(NG)
+; Post: C=1(NG)
+
+	sta		errorActual
+	lda		zpTmp2
+	sta		errorExpected
+	rts
+
+;------------------------------------------------------------------------------
+
+FindMultiCards
+; Pre:
+; Post: (MBBase) = card #1 at higher I/O addr
+;		(MBBase2) = card #2 at lower I/O addr
+;		zpTmp1 = has6522 for card #2
+;
 
 	ldx		#7
 @findCard1
@@ -3038,7 +3058,25 @@ Test6522MultiCard
 	lda		#0
 	sta		MBBase2L
 
-	;
+	rts
+
+;------------------------------------------------------------------------------
+
+MCT6522_0
+; Pre: MBBase & MBase2 setup
+;	zpTmp1 = has6522 for card #2
+; Post: C=0(OK), C=1(NG)
+;
+; MultiCard Test#0
+; . Setup counters on both cards & all the 6522's T1+T2
+;	Card1/2: 6522-A T1 is free-running
+;	Card1/2: 6522-A T2 is one-shot
+;	Card1/2: 6522-B T1 is free-running
+;	Card1/2: 6522-B T2 is one-shot
+; . NB T6522_MultiCard_ISR handles ints in any order, and simultaneously too.
+; . ISR disables the T1/T2 int so it only generates an IRQ once.
+; . Don't use 6522 if it's connected to NMI (as nested IRQ then NMI aren't supported by my ISR)
+;
 
 	jsr		resetSubTest			; subTest #0
 	jsr		incTotalTests
@@ -3276,6 +3314,92 @@ Test6522MultiCard
 }
 	;
 	!word	$ffff					; done
+
+;------------------------------------------------------------------------------
+
+MCT6522_1
+; Pre: MBBase(card #1) & MBase2(card #2) setup
+;	zpTmp1 = has6522 for card #2
+; Post: C=0(OK), C=1(NG)
+;
+; MultiCard Test#1 (AppleWin-GH#1173)
+; . Setup card #1: T1C=T1L=0x0303, One-shot timer, IFR=IER=TIMER1 -- so *does* generate 6502 IRQ
+; . Setup card #2: T1C=T1L=0x0000, Free-running timer, IFR=TIMER1, IER=0 -- so does *not* generate 6502 IRQ
+;
+
+	jsr		resetSubTest			; subTest #0
+	jsr		incTotalTests
+
+	sei
+
+	lda		#<Test6522ISR
+	ldx		#>Test6522ISR
+	jsr		SetIrqNmiVectors
+
+	lda		#$ff
+	sta		zpTmp2					; repeat
+
+@loop	lda		#ACR_ONESHOT
+		ldy		#SY6522_A_BASE+SY6522_ACR
+		sta		(MBBase),y
+
+		lda		#$03							; T1C=T1L=$0303
+		ldy		#SY6522_A_BASE+SY6522_TIMER1L_COUNTER
+		sta		(MBBase),y
+		ldy		#SY6522_A_BASE+SY6522_TIMER1H_COUNTER
+		sta		(MBBase),y
+
+		lda		#IER_SET|IxR_TIMER1
+		ldy		#SY6522_A_BASE+SY6522_IER
+		sta		(MBBase),y						; Enable T1 IRQ
+		lda		#IxR_TIMER1|IxR_TIMER2
+		ldy		#SY6522_A_BASE+SY6522_IFR
+		sta		(MBBase),y						; Clear any T1 & T2 IRQs
+
+		;
+
+		lda		#ACR_FREERUNNING
+		ldy		#SY6522_A_BASE+SY6522_ACR
+		sta		(MBBase2),y
+
+		lda		#$00							; T1C=T1L=$0000
+		ldy		#SY6522_A_BASE+SY6522_TIMER1L_COUNTER
+		sta		(MBBase2),y
+		ldy		#SY6522_A_BASE+SY6522_TIMER1H_COUNTER
+		sta		(MBBase2),y
+
+		lda		#IER_CLR|IxR_TIMER1|IxR_TIMER2
+		ldy		#SY6522_A_BASE+SY6522_IER
+		sta		(MBBase2),y						; Disable T1 & T2 IRQs
+		; T1 immediately underflows & IFR = TIMER1
+
+		;
+
+		lda		#$f								; wait 0x304 cycles (and IRQ will have occurred)
+		jsr		myWAIT
+
+		lda		#0
+		sta		isrFlag
+
+		cli
+		sei
+
+		lda		isrFlag
+		beq		@error
+
+		dec		zpTmp2
+		beq		+
+		jsr		incSubTestNum
+		jmp		@loop
+
++	clc
+	rts
+
+@error	; Pre: A=actual
+	ldx		#1
+	stx		zpTmp2					; expected
+	sec								; C=1(NG)
+	rts
 
 ;------------------------------------------------------------------------------
 

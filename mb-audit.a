@@ -239,7 +239,7 @@ entrypoint
 	cmp		#2
 	bcc		+						; (branch if A < 2)
 		jsr		Test6522MultiCard
-		bcs		@error
+		bcs		@error				; NB. slotUnderTest=0
 		lda		#<msg_MultiCardOK
 		ldx		#>msg_MultiCardOK
 		jsr		Print
@@ -1540,7 +1540,7 @@ cfgDoSoakTest	!byte NO_SOAK_TEST
 
 ayRegs			!fill 16,0
 
-msg_mbaudit	!text "mb-audit v1.2, Tom Charlesworth, 2021,22",0xd
+msg_mbaudit	!text "mb-audit v1.3, Tom Charlesworth, 2021,23",0xd
 msg_mbauditEnd !text 0
 
 msg_cpu6502Detected !text "6502 detected",0xd
