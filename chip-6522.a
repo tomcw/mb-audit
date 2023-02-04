@@ -701,6 +701,7 @@ Check6522ISR
 
 ;------------------------------------------------------------------------------
 ; Notes:
+;	. [T6522_0] Check inactive T1+T2 counters don't set IFR bits on underflow
 ;	T1:
 ;	. [T6522_1, T6522_2] oneshot|continuous x IRQ|poll
 ;	. [T6522_3, T6522_5] 6502|65C02 addr modes access of 6522 T1C
@@ -721,7 +722,10 @@ Check6522ISR
 ;	[T6522_14] Both 6522s: test T1 & T2 (from chips A&B) all running at the same time
 ;	[T6522_16] Check T1 & T2 ints occur the correct number of times over a longer interval
 ;	[T6522_17] Check T1 int re-triggers every few opcodes when T1L=$0000
-;	[Test6522MultiCard] 2 cards: Both 6522s: test T1 & T2 (from chips A&B) all running at the same time
+;	[T6522_18] Calls MCT6522_1, except for 1 card (so uses 6522 A & B)
+;	[Test6522MultiCard] 2 cards:
+;	. [MCT6522_0] Both 6522s: test T1 & T2 (from chips A&B) all running at the same time
+;	. [MCT6522_1] 2 timers: 1 high-freq (no IRQ), 1 low-freq (IRQ). Check high-freq doesn't mask IRQ
 ;	[Test6522AfterReset] 6522 IRQ pending, CTRL+RESET should clear it
 ;
 
@@ -844,6 +848,7 @@ testTbl
 	!word	T6522_15	; 35
 	!word	T6522_16	; 36
 	!word	T6522_17	; 37
+	!word	T6522_18	; 38
 	!word	0
 
 ;------------------------------------------------------------------------------
@@ -853,10 +858,11 @@ T6522_0
 ; Post: C=0(OK), C=1(NG)
 ;
 ; Test#0 (AppleWin-GH#765)
-; . Enable T1 & T2 IRQs, but don't write to T1C_h
+; . Enable T1 & T2 IRQs in IER
 ; . Wait for T1 underflow
-; . Check no T1|T2 ints are pending
-; NB. Only runs OK after a MB card reset, or T1 has been set to one-shot mode
+; . Check no T1|T2 ints are pending in IFR
+; NB. T1C gets set to one-shot via WaitT1OneShotUnderflow(), so counter not active
+; NB. T2C not written to, so it's never armed (and so no T2 int should occur)
 
 	jsr		resetSubTest			; subTest #0
 	jsr		incTotalTests
@@ -864,7 +870,7 @@ T6522_0
 	lda		#0
 	sta		zpTmp2					; expected ($00)
 
-	jsr		WaitT1OneShotUnderflow	; Post: SEI
+	jsr		WaitT1OneShotUnderflow	; Post: SEI, T1=one-shot, T1L=$0101, IFR.T1=0
 
 	lda		#IER_SET|IxR_TIMER1|IxR_TIMER2
 	ldy		#SY6522_IER
@@ -898,7 +904,7 @@ T6522_0
 
 @error
 	sec
-	rts								; C=0(OK), C=1(NG)
+	rts
 
 ;------------------------------------------------------------------------------
 
@@ -3000,7 +3006,7 @@ T6522_17
 ; Post: C=0(OK), C=1(NG)
 ;
 ; Test#17
-; . Check T1 int re-triggers every few opcodes when T1L=$0000
+; . Check T1 int re-triggers every opcode when T1L=$0000
 ; Specifically check the case when T1C underflows and gets reloaded to $FFFF (GH#1175)
 
 	jsr		resetSubTest			; subTest #0
@@ -3040,7 +3046,7 @@ T6522_17
 
 @loop	and		(MBBase),y
 		beq		@error
-		sta		(MBBase),y			; clear T1 int
+		sta		(MBBase),y			; clear T1 int (and it'll immediately get set again)
 		inx
 		bpl		@loop
 
@@ -3056,8 +3062,8 @@ T6522_17
 	lda		#0
 	sta		isrFlag
 	cli
-	nop
-	nop
+	nop		; FIXME: required for AppleWin
+	nop		; FIXME: required for AppleWin
 	sei
 	lda		#0
 	sta		isrDisableIER
@@ -3083,6 +3089,47 @@ T6522_17
 	stx		zpTmp2					; expected
 	lda		#0						; actual
 	sec
+	rts
+
+;------------------------------------------------------------------------------
+
+T6522_18
+; Pre:
+; Post: C=0(OK), C=1(NG)
+;
+; Test#18
+; . Call multicard test #1, but for a single card using 6522s A & B (AppleWin-GH#1173)
+
+	; Require MB with 2x 6522s
+	lda		has6522
+	and		#HAS_6522B|HAS_6522A
+	cmp		#HAS_6522B|HAS_6522A
+	beq		+
+-		clc
+		rts
++
+	; Only do test for 6522-A (because this test uses both 6522s)
+	lda		MBBaseL
+	bne		-
+
+	lda		zpTmp1					; save as used by Test6522()
+	pha
+	lda		has6522
+	sta		zpTmp1
+
+	lda		#SY6522_B_BASE
+	sta		MBBase2L
+	lda		MBBaseH
+	sta		MBBase2H
+
+	jsr		MCT6522_1
+
+	lda		#0
+	sta		MBBaseL
+
+	pla
+	sta		zpTmp1					; restore
+
 	rts
 
 ;------------------------------------------------------------------------------
@@ -3476,6 +3523,8 @@ MCT6522_1
 		sta		isrFlag
 
 		cli
+		nop		; FIXME: required for AppleWin
+		nop		; FIXME: required for AppleWin
 		sei
 
 		lda		isrFlag
@@ -3486,10 +3535,23 @@ MCT6522_1
 		jsr		incSubTestNum
 		jmp		@loop
 
-+	clc
++	lda		MBBase2H
+	sta		MBBaseH
+	lda		MBBase2L				; required if called by T6522_18
+	sta		MBBaseL
+	jsr		WaitT1OneShotUnderflow	; cleanup
+
+	clc
 	rts
 
 @error	; Pre: A=actual
+	lda		MBBase2H
+	sta		MBBaseH
+	lda		MBBase2L				; required if called by T6522_18
+	sta		MBBaseL
+	jsr		WaitT1OneShotUnderflow	; cleanup
+
+	lda		#0
 	ldx		#1
 	stx		zpTmp2					; expected
 	sec								; C=1(NG)
