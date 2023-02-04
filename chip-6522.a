@@ -720,6 +720,7 @@ Check6522ISR
 ;	[T6522_13] Test Phasor can switch to Echo+
 ;	[T6522_14] Both 6522s: test T1 & T2 (from chips A&B) all running at the same time
 ;	[T6522_16] Check T1 & T2 ints occur the correct number of times over a longer interval
+;	[T6522_17] Check T1 int re-triggers every few opcodes when T1L=$0000
 ;	[Test6522MultiCard] 2 cards: Both 6522s: test T1 & T2 (from chips A&B) all running at the same time
 ;	[Test6522AfterReset] 6522 IRQ pending, CTRL+RESET should clear it
 ;
@@ -842,6 +843,7 @@ testTbl
 	!word	T6522_14	; 34
 	!word	T6522_15	; 35
 	!word	T6522_16	; 36
+	!word	T6522_17	; 37
 	!word	0
 
 ;------------------------------------------------------------------------------
@@ -2993,6 +2995,98 @@ T6522_16
 
 ;------------------------------------------------------------------------------
 
+T6522_17
+; Pre:
+; Post: C=0(OK), C=1(NG)
+;
+; Test#17
+; . Check T1 int re-triggers every few opcodes when T1L=$0000
+; Specifically check the case when T1C underflows and gets reloaded to $FFFF (GH#1175)
+
+	jsr		resetSubTest			; subTest #0
+	jsr		incTotalTests
+
+	sei
+
+	lda		#<Test6522ISR
+	ldx		#>Test6522ISR
+	jsr		SetIrqNmiVectors
+
+	lda		#ACR_FREERUNNING
+	ldy		#SY6522_A_BASE+SY6522_ACR
+	sta		(MBBase),y
+
+	lda		#IER_CLR|IxR_TIMER1
+	ldy		#SY6522_A_BASE+SY6522_IER
+	sta		(MBBase),y				; Disable T1 IRQ
+
+	lda		#$00					; T1C=T1L=$0000
+	ldy		#SY6522_A_BASE+SY6522_TIMER1L_COUNTER
+	sta		(MBBase),y
+	ldy		#SY6522_A_BASE+SY6522_TIMER1H_COUNTER
+	sta		(MBBase),y
+
+	; NB. T1 will immediately underflow on next opcode & IFR = TIMER1
+
+	; AppleWin (GH#1175): need an opcode to end on T1C=$FFFF (to check that AppleWin syncEvent gets reloaded with 0x00001, not 0x10001)
+	lda		0						; 3cy - post: T1C=$FFFF
+	; lda zp: cycle 1: T1C: 0000->FFFF
+	; lda zp: cycle 2: T1C: FFFF->(underflow)->0000
+	; lda zp: cycle 3: T1C: 0000->FFFF
+
+	ldx		#$00					; loop 128 times - each iteration is a subTest:[00..7f]
+	ldy		#SY6522_A_BASE+SY6522_IFR
+	lda		#IxR_TIMER1
+
+@loop	and		(MBBase),y
+		beq		@error
+		sta		(MBBase),y			; clear T1 int
+		inx
+		bpl		@loop
+
+	stx		subTestNum				; subTest #$80
+
+	lda		#IER_SET|IxR_TIMER1
+	ldy		#SY6522_A_BASE+SY6522_IER
+	sta		(MBBase),y				; Enable T1 IRQ
+
+	lda		#IER_CLR|IxR_TIMER1
+	sta		isrDisableIER			; ISR will disable T1 IRQ (need to do this due to very short T1L interval)
+
+	lda		#0
+	sta		isrFlag
+	cli
+	nop
+	nop
+	sei
+	lda		#0
+	sta		isrDisableIER
+	lda		isrFlag
+	beq		@error2
+
+	jsr		WaitT1OneShotUnderflow	; cleanup
+
+	clc
+	rts
+
+@error1
+	stx		subTestNum
+	jsr		WaitT1OneShotUnderflow	; cleanup
+	ldx		#IxR_TIMER1
+	beq		@error
+
+@error2
+	jsr		WaitT1OneShotUnderflow	; cleanup
+	ldx		#1
+
+@error
+	stx		zpTmp2					; expected
+	lda		#0						; actual
+	sec
+	rts
+
+;------------------------------------------------------------------------------
+
 Test6522MultiCard
 ; Pre: There are at least 2 MB cards
 ; Post: C=0(OK), C=1(NG)
@@ -3624,6 +3718,12 @@ Test6522ISR
 	lda		(MBBase),y
 	sta		(MBBase),y
 	sta		isrIFR
+
+	lda		isrDisableIER
+	beq		+
+		ldy		#SY6522_IER
+		sta		(MBBase),y	; NB. b7 must be zero to clear IER bits
++
 
 	lda		#1
 	sta		isrFlag

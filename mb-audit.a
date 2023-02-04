@@ -1510,6 +1510,7 @@ isrIFR_B		!byte 0
 isrIFR			!byte 0
 isrFlag			!byte 0
 isrCount		!byte 0
+isrDisableIER	!byte 0
 isrError		!byte 0,0
 isrCopyA		!byte 0
 
