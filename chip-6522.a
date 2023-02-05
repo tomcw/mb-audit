@@ -3062,8 +3062,7 @@ T6522_17
 	lda		#0
 	sta		isrFlag
 	cli
-	nop		; FIXME: required for AppleWin
-	nop		; FIXME: required for AppleWin
+	nop		; required if 6522 asserts IRQ on above 'cli' opcode
 	sei
 	lda		#0
 	sta		isrDisableIER
@@ -3523,8 +3522,6 @@ MCT6522_1
 		sta		isrFlag
 
 		cli
-		nop		; FIXME: required for AppleWin
-		nop		; FIXME: required for AppleWin
 		sei
 
 		lda		isrFlag
