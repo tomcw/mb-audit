@@ -289,16 +289,21 @@ TestAYs
 			lda		#0				; AY select ($00)
 			sta		zpTmp4
 
-			inc		testNum			; test #n+0, #n+4
+			inc		testNum			; test #n+0, #n+6
 			jsr		TestAYDatalines
 			bcs		+
 
-			inc		testNum			; test #n+1, #n+5
+			inc		testNum			; test #n+1, #n+7
 			jsr		TestAYAddrlines
 			bcs		+
 
-			inc		testNum			; test #n+2 - skip, as Phasor only
+			inc		testNum			; test #n+2, #n+8
+			jsr		TestAYWriteReadWithoutSelect
+			bcs		+
+
 			inc		testNum			; test #n+3 - skip, as Phasor only
+			inc		testNum			; test #n+4 - skip, as Phasor only
+			inc		testNum			; test #n+5 - skip, as Phasor only
 			bcc		++
 
 		;
@@ -306,22 +311,30 @@ TestAYs
 @ph			lda		#$40			; AY1 select ($40)
 			sta		zpTmp4
 
-			inc		testNum			; test #n+0, #n+4
+			inc		testNum			; test #n+0, #n+6
 			jsr		TestAYDatalines
 			bcs		+
 
-			inc		testNum			; test #n+1, #n+5
+			inc		testNum			; test #n+1, #n+7
 			jsr		TestAYAddrlines
+			bcs		+
+
+			inc		testNum			; test #n+2, #n+8
+			jsr		TestAYWriteReadWithoutSelect
 			bcs		+
 
 			asl		zpTmp4			; AY2 select ($80)
 
-			inc		testNum			; test #n+2, #n+6
+			inc		testNum			; test #n+3, #n+9
 			jsr		TestAYDatalines
 			bcs		+
 
-			inc		testNum			; test #n+3, #n+7
+			inc		testNum			; test #n+4, #n+A
 			jsr		TestAYAddrlines
+			bcs		+
+
+			inc		testNum			; test #n+5, #n+B
+			jsr		TestAYWriteReadWithoutSelect
 			bcs		+
 
 ++		lda		#SY6522_B_BASE
@@ -375,7 +388,6 @@ TestAYDatalines
 @ph2	jsr		AY2_WriteRegValue
 		ldx		#AY_AFINE
 		jsr		AY2_ReadRegValue
-		bne		+
 
 +		cmp		zpTmp2
 		beq		@resetPortA
@@ -488,6 +500,80 @@ WriteAYRegs
 		bne		@loop_w
 
 	rts
+
+;--------------------------------------
+
+TestAYWriteReadWithoutSelect
+; Similar to TestAYDatalines, just without the reg select each time (and reg#2 instead of reg#0)
+; Pre:
+;	zpTmp3 = SY6522_A_BASE or SY6522_A_PH_BASE or SY6522_B_BASE
+;	zpTmp4 = AY chip select: 0(MB), $40(Phasor-AY1), $80(Phasor-AY2)
+; Post: C=0(OK), C=1(NG)
+;	zpTmp2 = expected, A = actual
+
+	; Test the 8 data lines:
+	; . Write then read AY reg#2: {$01, $02, $03,... $FF}
+	; NB. Don't select AY reg using LATCH/INACTIVE - just write new value using WRITE/INACTIVE
+
+	jsr		resetSubTest
+	jsr		incTotalTests
+
+	lda		#SY6522_ORA
+	ora		zpTmp3
+	tay							; init Y for AY_WriteRegValue(), etc.
+
+	; Select reg#2
+
+	lda		#AY_BFINE			; reg#
+
+	bit		zpTmp4				; N=b7, V=b6
+	bvs		@s_ph1
+	bmi		@s_ph2
+
+@s_mb	jsr		SF_SelectReg
+		bne		+
+
+@s_ph1	jsr		AY1_SelectReg
+		bne		+
+
+@s_ph2	jsr		AY2_SelectReg
+
++	lda		#0					; data to test
+	sta		zpTmp2
+
+@loop	lda		zpTmp2			; value
+
+		bit		zpTmp4			; N=b7, V=b6
+		bvs		@ph1
+		bmi		@ph2
+
+@mb		jsr		SF_WriteReg
+		jsr		AY_SetPortAInput
+		jsr		AY_ReadReg
+		bne		+
+
+@ph1	jsr		AY1_WriteReg
+		jsr		AY_SetPortAInput
+		jsr		AY1_ReadReg
+		bne		+
+
+@ph2	jsr		AY2_WriteReg
+		jsr		AY_SetPortAInput
+		jsr		AY2_ReadReg
+
++		cmp		zpTmp2
+		bne		@error
+		jsr		AY_SetPortAOutput	; DDRA=0xFF
+
+		inc		zpTmp2
+		bne		@loop
+
+	clc
+	rts							; C=0(OK)
+
+@error
+	sec
+	rts						; C=1(NG)
 
 ;--------------------------------------
 
