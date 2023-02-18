@@ -17,6 +17,8 @@ DetectAY8913
 	lda		zpTmp1
 	sta		@smcPh+1
 
+;;;	jsr		DetectAY8913EchoPlus
+
 	lda		isPhasorCard
 	beq		+
 		lda		#PH_MOCKINGBOARD
@@ -149,6 +151,97 @@ DetectAY8913
 	;
 
 @ok	rts
+
+;------------------------------------------------------------------------------
+
+!if 0{
+DetectAY8913EchoPlus
+; Pre: zpTmp1 = 6522 bitmap in b1:0
+;	hasAY8913 = 0
+;	isPhasorCard, isMB4C, isEchoPlus
+; Post:
+
+	lda		isEchoPlus
+	bne		++
+
+		lda		isPhasorCard
+		bne		+
+			clc
+			rts
++
+
+		lda		#PH_ECHOPLUS
+		jsr		SetPhasorMode
+
+++	; Echo+ or Phasor in Echo+ mode
+
+	; TODO: maybe Echo+'s DDRB is different for AY chip-select?
+
+	lda		#SY6522_A_BASE
+	sta		zpTmp3
+	jsr		Init6522ForAY
+
+	lda		#%00000000			; Four MSB addr lines
+	sta		zpTmp2
+
+@loop	lda		#AY_AFINE
+		ora		zpTmp2
+		ldx		#$AA
+		jsr		AY_WriteRegValue
+
+		lda		#AY_BFINE
+		ora		zpTmp2
+		ldx		#$55
+		jsr		AY_WriteRegValue
+
+		lda		#AY_CFINE
+		ora		zpTmp2
+		ldx		#$69
+		jsr		AY_WriteRegValue
+
+		;
+
+		lda		#AY_AFINE
+		ora		zpTmp2
+		tax
+		jsr		AY_ReadRegValue
+		cmp		#$AA
+		bne		+
+
+		lda		#AY_BFINE
+		ora		zpTmp2
+		tax
+		jsr		AY_ReadRegValue
+		cmp		#$55
+		bne		+
+
+		lda		#AY_CFINE
+		ora		zpTmp2
+		tax
+		jsr		AY_ReadRegValue
+		cmp		#$69
+		bne		+
+
+		; Found!
+		beq		++
+
++		jsr		AY_SetPortAOutput
+
+		lda		zpTmp2
+		clc
+		adc		#$10
+		sta		zpTmp2
+		bne		@loop
+
+	; Not found
+	; ...
+
+++	lda		#PH_MOCKINGBOARD
+	jsr		SetPhasorMode
+
+	lda		zpTmp2		; A = AY address base (4 MSBs)
+	brk
+}
 
 ;------------------------------------------------------------------------------
 
@@ -788,6 +881,7 @@ TestAYTones
 	; Press 456 for AY8913-B1 ($Cn80) channels A,B,C
 	; Press QWE for AY8913-A2 ($Cn00) channels A,B,C (phasor only)
 	; Press RTY for AY8913-B2 ($Cn80) channels A,B,C (phasor only)
+	; Tab to cycle Phasor mode: MB > Phasor > Echo+ > MB > ... (phasor only)
 	; ESC to quit
 
 	sei
@@ -805,6 +899,29 @@ TestAYTones
 	sta		ayEna+1
 	sta		ayEna+2
 	sta		ayEna+3
+
+	lda		isPhasorCard
+	beq		+
+		; Switch to Echo+, to *actually* use 6522-B, since this is visible from all 3 Phasor modes
+		; ...and we need a way to access & clear the TIMER1 IRQ from AYTonesISR()
+		; (ie. we can't physically access 6522-A when in Echo+ mode)
+		lda		#PH_ECHOPLUS
+		jsr		SetPhasorMode
++
+
+	lda		#$ff
+	ldy		#SY6522_TIMER1L_COUNTER
+	sta		(MBBase),y
+	ldy		#SY6522_TIMER1H_COUNTER
+	sta		(MBBase),y
+
+	lda		#ACR_FREERUNNING
+	ldy		#SY6522_ACR
+	sta		(MBBase),y
+
+	lda		#IER_SET|IxR_TIMER1
+	ldy		#SY6522_IER
+	sta		(MBBase),y
 
 	lda		isPhasorCard
 	beq		+
@@ -830,20 +947,6 @@ TestAYTones
 		jsr		@InitAYRegs
 +
 
-	lda		#$ff
-	ldy		#SY6522_A_PH_BASE+SY6522_TIMER1L_COUNTER
-	sta		(MBBase),y
-	ldy		#SY6522_A_PH_BASE+SY6522_TIMER1H_COUNTER
-	sta		(MBBase),y
-
-	lda		#ACR_FREERUNNING
-	ldy		#SY6522_A_PH_BASE+SY6522_ACR
-	sta		(MBBase),y
-
-	lda		#IER_SET|IxR_TIMER1
-	ldy		#SY6522_A_PH_BASE+SY6522_IER
-	sta		(MBBase),y
-
 	cli
 
 	;
@@ -851,7 +954,16 @@ TestAYTones
 @loop	lda		KBD
 		bpl		@loop
 	bit		KBDSTRB
-	cmp		#$80+27
+	cmp		#$80+9					; Tab
+	bne		++
+		lda		isPhasorCard
+		beq		++
+			sei
+			jsr		IncPhasorMode	; Post: A = 'M', 'P' or 'E'; hasAY8913 reflects new mode
+			sta		$400			; FIXME: find better way to show Phasor mode
+			cli
+			jmp		@loop
+++	cmp		#$80+27					; ESC
 	bne		+
 	jmp		@done
 +
@@ -876,7 +988,7 @@ TestAYTones
 		sbc		#3
 		inx
 
-@ayEnaPre	; Pre: A=1,2,3
+@ayEnaPre	; Pre: A=1,2,3; X=0,1
 	tay
 	jmp		@ayEna
 
@@ -946,6 +1058,12 @@ TestAYTones
 		jsr		SetPhasorMode
 +
 
+	lda		#SY6522_B_BASE
+	sta		MBBase
+	jsr		WaitT1OneShotUnderflow	; clear & disable any T1 ints
+
+	lda		#SY6522_A_BASE
+	sta		MBBase
 	jsr		WaitT1OneShotUnderflow	; clear & disable any T1 ints
 
 	clc
@@ -1022,9 +1140,21 @@ AYTonesISR
 
 	;------
 
-	ldy		#SY6522_A_PH_BASE+SY6522_IFR
+	lda		isPhasorCard
+	beq		+
+		lda		#SY6522_B_BASE
+		sta		MBBase
++
+
+	ldy		#SY6522_IFR
 	lda		(MBBase),y
 	sta		(MBBase),y					; clear IRQ
+
+	lda		isPhasorCard
+	beq		+
+		lda		#SY6522_A_BASE
+		sta		MBBase
++
 
 	;------
 

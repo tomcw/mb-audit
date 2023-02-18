@@ -708,6 +708,43 @@ DetectSubunits
 
 ;------------------------------------------------------------------------------
 
+IncPhasorMode
+; MB -> Phasor -> Echo+ -> MB -> ...
+; Pre: SEI
+; Post: A = 'M', 'P' or 'E'
+;	hasAY8913 = %0011 or %1111
+
+	lda		phasorMode
+
+	cmp		#PH_MOCKINGBOARD
+	beq		@setPhasor
+	cmp		#PH_PHASOR
+	beq		@setEchoPlus
+
+	lda		#'M'
+	ldx		#PH_MOCKINGBOARD
+	bne		++
+
+@setPhasor
+	lda		#'P'
+	ldx		#PH_PHASOR
+	ldy		#%00001111
+	bne		+
+
+@setEchoPlus
+	lda		#'E'
+	ldx		#PH_ECHOPLUS
+++	ldy		#%00000011
+
++	sty		hasAY8913
+	pha
+	txa
+	jsr		SetPhasorMode
+	pla
+	rts
+
+;------------------
+
 SetPhasorMode
 ; Pre: A=phasorMode
 
