@@ -25,11 +25,11 @@ DetectAY8913
 		jsr		SetPhasorMode
 +
 
-	lda		isMB4C
-	ora		isEchoPlus
+	lda		isMB4C				; TODO: support MB4C (just like a regular Mockingboard?)
+	ora		isEchoPlus			; TODO: support Echo+ AY detection
 	beq		+
 		lda		#%00000011
-		sta		hasAY8913		; can't test them, so just assume they are all working
+		sta		hasAY8913		; For now just assume they are all working
 		rts
 +
 
@@ -158,7 +158,7 @@ DetectAY8913
 DetectAY8913EchoPlus
 ; Pre: zpTmp1 = 6522 bitmap in b1:0
 ;	hasAY8913 = 0
-;	isPhasorCard, isMB4C, isEchoPlus
+;	isPhasorCard, isEchoPlus
 ; Post:
 
 	lda		isEchoPlus
@@ -285,18 +285,17 @@ TestAY8913
 			bcc		@TestMB
 			bcs		@error
 
-+		lda		isMB4C
-		ora		isEchoPlus
++		lda		isEchoPlus
 		beq		@TestMB
 
-			; MB4C / Echo+
+			; Echo+
 			lda		#2
 			sta		testNum			; test #02
 			jsr		TestAYEchoPlus
 			bcc		@soak
 			bcs		@error
 
-@TestMB	; Mockingboard or Phasor(in PH_MOCKINGBOARD)
+@TestMB	; Mockingboard or Phasor(in PH_MOCKINGBOARD) or MB4C(assume we can read AY regs)
 
 		lda		#$0f
 		sta		testNum
@@ -349,7 +348,7 @@ TestAY8913
 
 ;--------------------------------------
 
-; 1) Test #10,... Called for Mockingboard or Phasor(phasorMode = PH_MOCKINGBOARD)
+; 1) Test #10,... Called for Mockingboard or Phasor(phasorMode = PH_MOCKINGBOARD) or MB4C
 ;		test AY: data & addr lines
 ; 2) Test #20,... Called for Phasor(phasorMode = PH_PHASOR)
 ;		test AY1: data & addr lines
@@ -671,14 +670,13 @@ TestAYWriteReadWithoutSelect
 ;--------------------------------------
 
 TestAYEchoPlus
-; Pre: isEcho==1 or isMB4C==1 or (isPhasorCard==1 && PH_ECHOPLUS)
+; Pre: isEcho==1 or (isPhasorCard==1 && PH_ECHOPLUS)
 ; Post: C=0(OK), C=1(NG)
 ;	zpTmp2 = expected, A = actual
 
 	; Test for 2 AYs
 	; . Write to each AY's reg#0 with values: $11,$33
 	; . then read back
-	; NB. *Assume* that MB4C doesn't support PortA input - so can't read the AY8913 regs
 
 	jsr		resetSubTest
 	jsr		incTotalTests
