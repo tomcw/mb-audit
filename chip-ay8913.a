@@ -738,6 +738,28 @@ TestAYPhasor
 	jsr		AY_ReadRegValue
 	ldx		#$33
 	cmp		#$33
+	bne		+
+
+	;
+	; Check that the 1st AY is correctly mapped between Phasor & Echo+ modes
+	;
+
+	jsr		incSubTestNum		; subTest #2
+	lda		#PH_ECHOPLUS
+	jsr		SetPhasorMode
+
+	ldx		#AY_ECHO_CS1|AY_LATCH
+	ldy		#AY_AFINE
+	jsr		AY_Echo_ReadRegValue
+	ldx		#$44
+	cmp		#$44
+	bne		+
+
+	ldx		#AY_ECHO_CS2|AY_LATCH
+	ldy		#AY_AFINE
+	jsr		AY_Echo_ReadRegValue
+	ldx		#$33
+	cmp		#$33
 ;	bne		+
 
 	;
