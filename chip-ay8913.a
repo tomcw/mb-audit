@@ -17,8 +17,6 @@ DetectAY8913
 	lda		zpTmp1
 	sta		@smcPh+1
 
-;;;	jsr		DetectAY8913EchoPlus
-
 	lda		isPhasorCard
 	beq		+
 		lda		#PH_MOCKINGBOARD
@@ -151,97 +149,6 @@ DetectAY8913
 	;
 
 @ok	rts
-
-;------------------------------------------------------------------------------
-
-!if 0{
-DetectAY8913EchoPlus
-; Pre: zpTmp1 = 6522 bitmap in b1:0
-;	hasAY8913 = 0
-;	isPhasorCard, isEchoPlus
-; Post:
-
-	lda		isEchoPlus
-	bne		++
-
-		lda		isPhasorCard
-		bne		+
-			clc
-			rts
-+
-
-		lda		#PH_ECHOPLUS
-		jsr		SetPhasorMode
-
-++	; Echo+ or Phasor in Echo+ mode
-
-	; TODO: maybe Echo+'s DDRB is different for AY chip-select?
-
-	lda		#SY6522_A_BASE
-	sta		zpTmp3
-	jsr		Init6522ForAY
-
-	lda		#%00000000			; Four MSB addr lines
-	sta		zpTmp2
-
-@loop	lda		#AY_AFINE
-		ora		zpTmp2
-		ldx		#$AA
-		jsr		AY_WriteRegValue
-
-		lda		#AY_BFINE
-		ora		zpTmp2
-		ldx		#$55
-		jsr		AY_WriteRegValue
-
-		lda		#AY_CFINE
-		ora		zpTmp2
-		ldx		#$69
-		jsr		AY_WriteRegValue
-
-		;
-
-		lda		#AY_AFINE
-		ora		zpTmp2
-		tax
-		jsr		AY_ReadRegValue
-		cmp		#$AA
-		bne		+
-
-		lda		#AY_BFINE
-		ora		zpTmp2
-		tax
-		jsr		AY_ReadRegValue
-		cmp		#$55
-		bne		+
-
-		lda		#AY_CFINE
-		ora		zpTmp2
-		tax
-		jsr		AY_ReadRegValue
-		cmp		#$69
-		bne		+
-
-		; Found!
-		beq		++
-
-+		jsr		AY_SetPortAOutput
-
-		lda		zpTmp2
-		clc
-		adc		#$10
-		sta		zpTmp2
-		bne		@loop
-
-	; Not found
-	; ...
-
-++	lda		#PH_MOCKINGBOARD
-	jsr		SetPhasorMode
-
-	lda		zpTmp2		; A = AY address base (4 MSBs)
-	brk
-}
 
 ;------------------------------------------------------------------------------
 
