@@ -124,7 +124,8 @@ DetectMB4CorEchoPlus
 ;	Z=1:  no MB4C/EchoPlus
 
 	; MB4C/Echo+ only has 1x 6522, but mapped to both $00 and $80
-	; . it'll use the 6522's b7 addr to determine which AY8913 to write to
+	; . MB4C: assume it'll use the 6522's b7 addr to determine which AY8913 to write to
+	; . Echo+ uses 6522's PORTB (bits 4 & 3) to chip-select each AY8913
 
 	ldy		#SY6522_A_BASE+SY6522_DDRB
 	lda		#$FF

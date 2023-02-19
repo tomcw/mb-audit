@@ -677,8 +677,8 @@ TestAYEchoPlus
 
 	; Test for 2 AYs
 	; . Write to each AY's reg#0 with values: $11,$33
-	; . then read back (all should be $FF)
-	; NB. *Assume* that Echo+/MB4C don't support PortA input - so can't read the AY8913 regs
+	; . then read back
+	; NB. *Assume* that MB4C doesn't support PortA input - so can't read the AY8913 regs
 
 	jsr		resetSubTest
 	jsr		incTotalTests
@@ -690,38 +690,31 @@ TestAYEchoPlus
 
 	jsr		Init6522ForAY
 
+	;
+
+	ldx		#AY_ECHO_CS1|AY_LATCH
 	lda		#AY_AFINE
+	ldy		#$11
+	jsr		AY_Echo_WriteRegValue
+
+	ldx		#AY_ECHO_CS2|AY_LATCH
+	lda		#AY_AFINE
+	ldy		#$33
+	jsr		AY_Echo_WriteRegValue
+
+	;
+
+	ldx		#AY_ECHO_CS1|AY_LATCH
+	ldy		#AY_AFINE
+	jsr		AY_Echo_ReadRegValue
 	ldx		#$11
-	jsr		AY_WriteRegValue
-
-	;
-
-	lda		#SY6522_B_BASE
-	sta		zpTmp3
-
-	jsr		Init6522ForAY
-
-	lda		#AY_AFINE
-	ldx		#$33
-	jsr		AY_WriteRegValue
-
-	;
-
-	ldy		#SY6522_A_BASE+SY6522_ORA
-
-	ldx		#AY_AFINE
-	jsr		AY_ReadRegValue
-	ldx		#$FF				; $11
-	cmp		#$FF
+	cmp		#$11
 	bne		+
 
-	;
-
-	ldy		#SY6522_B_BASE+SY6522_ORA
-
-	ldx		#AY_AFINE
-	jsr		AY_ReadRegValue
-	ldx		#$FF				; $33
+	ldx		#AY_ECHO_CS2|AY_LATCH
+	ldy		#AY_AFINE
+	jsr		AY_Echo_ReadRegValue
+	ldx		#$33
 
 +	stx		zpTmp2				; expected
 	sta		zpTmp1				; actual
@@ -1301,11 +1294,11 @@ Init6522ForAY
 	ora		zpTmp3
 	tay
 	lda		phasorMode
-	cmp		#PH_PHASOR
-	beq		+
-		lda		#$07
+	cmp		#PH_MOCKINGBOARD
+	bne		+
+		lda		#$07			; Mockingboard
 		bne		++
-+		lda		#$1f
++		lda		#$1f			; Phasor & Echo+
 ++	sta		(MBBase),y
 
 	lda		#SY6522_DDRA
@@ -1392,7 +1385,7 @@ SF_SelectReg
 ; Post: Y = SY6522_ORA for chip A or B
 	sta		(MBBase),y
 	lda		#AY_LATCH
-	bne		+
+	bne		SetModeAndInactive
 
 SF_WriteReg
 ; Pre: Y = SY6522_ORA for chip A or B
@@ -1402,20 +1395,28 @@ SF_WriteReg
 ;	Z = 0
 	sta		(MBBase),y
 	lda		#AY_WRITE
-	bne		+
+	bne		SetModeAndInactive
 
 SF_ChipReset
 ; NB. For native Phasor mode, reset both AY's, since cmd=AY_RESET|(%00<<3) - and CS is active low
 ; Pre: Y = SY6522_A_BASE or SY6522_A_PH_BASE or SY6522_B_BASE
+;	phasorMode
 ; Post: Y = SY6522_ORA for chip A or B
 ;	Z = 0
-	lda		#AY_RESET
+	lda		phasorMode
+	cmp		#PH_ECHOPLUS
+	bne		+
+	lda		#AY_RESET|AY_ECHO_CS1|AY_ECHO_CS2
+	bne		++
++	lda		#AY_RESET
 	beq		++
 
-+	dey		; Y = ORB (reg#0)
+SetModeAndInactive	; pre: Y = SY6522_ORA for chip A or B
+	dey		; Y = ORB (reg#0)
 
 ++	sta		(MBBase),y
-	lda		#AY_INACTIVE
+	and		#!(AY_LATCH)		; clear the 3 low mode bits
+	ora		#AY_INACTIVE		; A = A|AY_INACTIVE to preserve any chip-select bits
 	sta		(MBBase),y
 	iny		; Y = ORA (reg#1)
 	rts
@@ -1501,6 +1502,7 @@ AY1_WriteRegValue
 ; Pre: Y = SY6522_ORA for chip A or B
 ;	A=reg#
 ;	X=value
+; Post:
 ;	Z = 0
 	jsr		AY1_SelectReg
 	txa
@@ -1510,6 +1512,7 @@ AY2_WriteRegValue
 ; Pre: Y = SY6522_ORA for chip A or B
 ;	A=reg#
 ;	X=value
+; Post:
 ;	Z = 0
 	jsr		AY2_SelectReg
 	txa
@@ -1538,3 +1541,91 @@ AY2_ReadRegValue
 	jsr		AY2_SelectReg
 	jsr		AY_SetPortAInput
 	jmp		AY2_ReadReg
+
+;------------------------------------------------------------------------------
+; Echo+ routines:
+
+AY_Echo_SelectReg
+; Pre: X = [AY_ECHO_CS1|AY_ECHO_CS2]|AY_LATCH
+;	A = reg#
+; Post: X is preserved, Y trashed
+	ldy		#SY6522_A_BASE+SY6522_ORA
+	sta		(MBBase),y
+	dey						; Y = ORB (reg#0)
+	txa						; A = CS_ECHO_x|AY_LATCH
+	sta		(MBBase),y
+	and		#$1C			; A = CS_ECHO_x|AY_INACTIVE
+	sta		(MBBase),y
+	rts
+
+;
+
+AY_Echo_WriteReg
+; Pre: X = [AY_ECHO_CS1|AY_ECHO_CS2]|AY_LATCH
+;	6522.DDRA = $FF (Port-A direction = output)
+;	A = data
+; Post: X is preserved, Y trashed
+;	Z = 0
+	ldy		#SY6522_A_BASE+SY6522_ORA
+	sta		(MBBase),y
+	dey						; Y = ORB (reg#0)
+	txa
+	and		#$1E			; A = CS_ECHO_x|AY_WRITE
+	sta		(MBBase),y
+	and		#$1C			; A = CS_ECHO_x|AY_INACTIVE
+	sta		(MBBase),y
+	rts
+
+;
+
+AY_Echo_ReadReg
+; Pre: X = [AY_ECHO_CS1|AY_ECHO_CS2]|AY_LATCH
+;	6522.DDRA = $00 (Port-A direction = input)
+; Post: X is preserved, Y trashed
+;	A = data
+;	Z = 0
+	ldy		#SY6522_A_BASE+SY6522_ORB
+	txa
+	and		#$1D			; A = CS_ECHO_x|AY_READ
+	sta		(MBBase),y
+	iny						; Y = ORA (reg#1)
+	lda		(MBBase),y		; Read Port-A
+	pha
+	txa
+	and		#$1C			; A = CS_ECHO_x|AY_INACTIVE
+	dey						; Y = ORB (reg#0)
+	sta		(MBBase),y
+	pla
+	rts
+
+;--------------------------------------
+
+AY_Echo_WriteRegValue
+; Pre: X = [AY_ECHO_CS1|AY_ECHO_CS2]|AY_LATCH
+;	A=reg#
+;	Y=value
+; Post:
+;	X is preserved, Y trashed
+;	Z = 0
+;	zpTmp5 trashed
+	sty		zpTmp5			; save value
+	jsr		AY_Echo_SelectReg
+	lda		zpTmp5			; restore value
+	jmp		AY_Echo_WriteReg
+
+AY_Echo_ReadRegValue
+; Pre: X = [AY_ECHO_CS1|AY_ECHO_CS2]|AY_LATCH
+;	Y=reg#
+; Post:
+;	A=value
+;	X is preserved, Y trashed
+;	Z = 0
+	tya
+	pha						; save reg#
+	ldy		#SY6522_A_BASE+SY6522_ORA
+	jsr		AY_SetPortAOutput
+	pla						; restore reg#
+	jsr		AY_Echo_SelectReg
+	ldy		#SY6522_A_BASE+SY6522_ORA
+	jsr		AY_SetPortAInput
+	jmp		AY_Echo_ReadReg

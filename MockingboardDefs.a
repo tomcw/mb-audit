@@ -71,6 +71,9 @@ AY_NOT_CS1	= $10
 AY_NOT_CS2	= $08
 AY_CS1		= AY_NOT_CS2
 AY_CS2		= AY_NOT_CS1
+; Echo+ extra chip-select bits:
+AY_ECHO_CS1	= $10
+AY_ECHO_CS2	= $08
 
 ; SSI263:
 SSI_DURPHON = 0
