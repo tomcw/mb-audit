@@ -751,15 +751,15 @@ TestAYPhasor
 	ldx		#AY_ECHO_CS1|AY_LATCH
 	ldy		#AY_AFINE
 	jsr		AY_Echo_ReadRegValue
-	ldx		#$44
-	cmp		#$44
+	ldx		#$33
+	cmp		#$33
 	bne		+
 
 	ldx		#AY_ECHO_CS2|AY_LATCH
 	ldy		#AY_AFINE
 	jsr		AY_Echo_ReadRegValue
-	ldx		#$33
-	cmp		#$33
+	ldx		#$44
+	cmp		#$44
 ;	bne		+
 
 	;
