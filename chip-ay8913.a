@@ -582,8 +582,8 @@ TestAYEchoPlus
 ;	zpTmp2 = expected, A = actual
 
 	; Test for 2 AYs
-	; . Write to each AY's reg#0 with values: $11,$33
-	; . then read back
+	; 0) Write to each AY's reg#0 with values: $11,$33; then read back
+	; 1) (Remaining in Echo+ mode) reset the 2 AYs, and check all 2 AYs' reg#0 are $00
 
 	jsr		resetSubTest
 	jsr		incTotalTests
@@ -624,16 +624,38 @@ TestAYEchoPlus
 +	stx		zpTmp2				; expected
 	sta		zpTmp1				; actual
 
-++	jsr		Init6522ForAY		; Reset 6522's 2x AYs
+	jsr		Init6522ForAY		; Reset 6522's 2x AYs
 
 	lda		zpTmp1
 	cmp		zpTmp2
 	bne		@error
 
+	;
+	; Check that reset has cleared all 2 AYs' reg#0
+	;
+
+	jsr		incSubTestNum		; subTest #1
+	ldx		#0
+	stx		zpTmp2				; Expected
+
+	ldx		#AY_ECHO_CS1|AY_LATCH
+	ldy		#AY_AFINE
+	jsr		AY_Echo_ReadRegValue
+	tax
+	bne		@error
+
+	ldx		#AY_ECHO_CS2|AY_LATCH
+	ldy		#AY_AFINE
+	jsr		AY_Echo_ReadRegValue
+	tax
+	bne		@error
+
 	clc
 	rts							; C=0(OK)
 
-@error
+;
+
+@error	; Pre: zpTmp2 = expected, A = actual
 	sec
 	rts							; C=1(NG)
 
