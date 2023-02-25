@@ -2485,9 +2485,55 @@ T6522_13
 
 	jsr		DetectMB4CorEchoPlus
 	lda		isMB4C
-	bne		@error				; can't happen (sanity check)
+	bne		@error					; can't happen (sanity check)
 	lda		isEchoPlus
-	beq		@error				; if no Echo+, then bug in an emulator's Phasor support
+	beq		@error					; if no Echo+, then bug in an emulator's Phasor support
+
+	;
+	; Check that in Echo+ mode, 6522-A can generate IRQs (even though it's unmapped)
+	;
+
+	sei
+
+	lda		#<T6522_13_ISR
+	ldx		#>T6522_13_ISR
+	jsr		SetIrqNmiVectors
+
+	jsr		incSubTestNum			; subTest #1
+	lda		#PH_MOCKINGBOARD		; use PH_MOCKINGBOARD (not PH_PHASOR) as T6522_13_ISR() r/w's 6522 at $Cn00
+	jsr		SetPhasorMode
+
+	lda		#$01
+	ldy		#SY6522_TIMER1L_COUNTER
+	sta		(MBBase),y
+	ldy		#SY6522_TIMER1H_COUNTER
+	sta		(MBBase),y
+
+	lda		#ACR_ONESHOT
+	ldy		#SY6522_ACR
+	sta		(MBBase),y
+
+	lda		#IER_SET|IxR_TIMER1
+	ldy		#SY6522_IER
+	sta		(MBBase),y
+
+	lda		#0
+	sta		isrFlag
+
+	lda		#PH_ECHOPLUS
+	jsr		SetPhasorMode			; Post: only 6522-B is visible
+
+	cli
+
+	lda		#$8						; wait 0x119 cycles, and 6522-A has underflowed
+	jsr		myWAIT					; NB. ISR reverts to PH_MOCKINGBOARD mode
+
+	sei
+
+	lda		isrFlag
+	beq		@error
+
+	;
 
 	clc
 	bcc		+
@@ -2504,6 +2550,40 @@ T6522_13
 
 	plp
 	rts
+
+;
+
+T6522_13_ISR
+; Pre:
+;	6502 has pushed P
+;	Apple ROM has stored A to $45 (not Apple //e ROM!)
+;
+
+	txa
+	pha
+	tya
+	pha
+
+	;------
+
+	lda		#PH_MOCKINGBOARD
+	jsr		SetPhasorMode		; Map 6522-A back in
+
+	ldy		#SY6522_IFR
+	lda		(MBBase),y
+	sta		(MBBase),y
+	sta		isrFlag
+
+	;------
+
+	pla
+	tay
+	pla
+	tax
+
+	lda		$45		; for Apple II/II+
+	rti
+
 
 ;------------------------------------------------------------------------------
 

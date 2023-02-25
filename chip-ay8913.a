@@ -645,7 +645,7 @@ TestAYEchoPlus
 
 		;
 		; Check that the AYs are correctly mapped between Phasor & Echo+ modes
-		; Check that the Echo+ AY writes don't write to the 6522-A's AYs
+		; Check that the Echo+ AY writes don't write to the 6522-A's AYs (ie. these AYs' reg#0 should read back as 0x00)
 		;
 
 		jsr		incSubTestNum	; subTest #1 (*1)
