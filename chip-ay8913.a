@@ -733,12 +733,14 @@ TestAYPhasor
 ; Pre: isPhasorCard==1
 ; Post: C=0(OK), C=1(NG)
 ;	zpTmp2 = expected, A = actual
+;	phasorMode = PH_MOCKINGBOARD
 
 	; Test for 4 AYs (Phasor only)
 	; 0) Write to each AY's reg#0 with values: $11,$22,$33,$44; then read back
 	; 1) Switch to MB mode and check that the 1st AY is correctly mapped between Phasor & MB
 	; 2) Switch to Echo+ mode and check that the 1st AY is correctly mapped between Phasor & Echo+
 	; 3) Switch to Phasor mode, reset the 4 AYs, and check all 4 AYs' reg#0 are $00
+	; 4) Switch to MB mode, write to the 2 AYs. Then from Phasor mode check that 2nd-ary AYs weren't written to
 
 	jsr		resetSubTest		; subTest #0
 	jsr		incTotalTests
@@ -871,7 +873,9 @@ TestAYPhasor
 
 	lda		zpTmp1
 	cmp		zpTmp2
-	bne		@error
+	beq		+
+	jmp		@error
++
 
 	;
 	; Check that reset has cleared all 4 AYs' reg#0
@@ -908,6 +912,59 @@ TestAYPhasor
 	bne		@error
 
 	;
+	; Check that the MB AY writes don't write to the 2nd-ary AYs (ie. these AYs' reg#0 should read back as 0x00)
+	;
+
+	jsr		incSubTestNum		; subTest #4
+	lda		#PH_MOCKINGBOARD
+	jsr		SetPhasorMode
+
+	ldy		#SY6522_A_BASE+SY6522_ORA
+	jsr		AY_SetPortAOutput	; DDRA=0xFF
+	lda		#AY_AFINE
+	ldx		#$11
+	jsr		AY_WriteRegValue
+
+	ldy		#SY6522_B_BASE+SY6522_ORA
+	jsr		AY_SetPortAOutput	; DDRA=0xFF
+	lda		#AY_AFINE
+	ldx		#$33
+	jsr		AY_WriteRegValue
+
+	;
+
+	lda		#PH_PHASOR
+	jsr		SetPhasorMode
+
+	ldy		#SY6522_A_PH_BASE+SY6522_ORA
+
+	ldx		#AY_AFINE
+	jsr		AY1_ReadRegValue
+	ldx		#$11
+	cmp		#$11
+	bne		@errorXA
+
+	ldx		#AY_AFINE
+	jsr		AY2_ReadRegValue
+	ldx		#$00
+	cmp		#$00
+	bne		@errorXA
+
+	;
+
+	ldy		#SY6522_B_BASE+SY6522_ORA
+
+	ldx		#AY_AFINE
+	jsr		AY1_ReadRegValue
+	ldx		#$33
+	cmp		#$33
+	bne		@errorXA
+
+	ldx		#AY_AFINE
+	jsr		AY2_ReadRegValue
+	ldx		#$00
+	cmp		#$00
+	bne		@errorXA
 
 	lda		#PH_MOCKINGBOARD
 	jsr		SetPhasorMode
@@ -916,6 +973,9 @@ TestAYPhasor
 	rts							; C=0(OK)
 
 ;
+
+@errorXA	; Pre: X = expected, A = actual
+	stx		zpTmp2
 
 @error	; Pre: zpTmp2 = expected, A = actual
 	pha
