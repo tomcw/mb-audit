@@ -1155,6 +1155,12 @@ TestAYTones
 @done
 	sei
 
+	lda		isPhasorCard
+	beq		+
+		lda		#PH_PHASOR
+		jsr		SetPhasorMode
++
+
 	lda		hasAY8913
 	and		#1
 	beq		+
@@ -1167,6 +1173,7 @@ TestAYTones
 		ldy		#SY6522_B_BASE
 		jsr		SF_ChipReset		; NB. resets both AYs if in native Phasor mode
 +
+
 	lda		isPhasorCard
 	beq		+
 		lda		#PH_MOCKINGBOARD
@@ -1174,11 +1181,11 @@ TestAYTones
 +
 
 	lda		#SY6522_B_BASE
-	sta		MBBase
+	sta		MBBaseL
 	jsr		WaitT1OneShotUnderflow	; clear & disable any T1 ints
 
 	lda		#SY6522_A_BASE
-	sta		MBBase
+	sta		MBBaseL
 	jsr		WaitT1OneShotUnderflow	; clear & disable any T1 ints
 
 	clc
@@ -1246,6 +1253,8 @@ AYTonesISR
 ; Pre:
 ;	6502 has pushed P
 ;	Apple ROM has stored A to $45 (not Apple //e ROM!)
+; Uses:
+;	zpTmp1 (alias with StringH)
 ;
 
 	txa
@@ -1258,7 +1267,7 @@ AYTonesISR
 	lda		isPhasorCard
 	beq		+
 		lda		#SY6522_B_BASE
-		sta		MBBase
+		sta		MBBaseL
 +
 
 	ldy		#SY6522_IFR
@@ -1268,10 +1277,51 @@ AYTonesISR
 	lda		isPhasorCard
 	beq		+
 		lda		#SY6522_A_BASE
-		sta		MBBase
+		sta		MBBaseL
+
+		lda		phasorMode
+		cmp		#PH_ECHOPLUS
+		beq		@echoPlus
 +
 
+	lda		isEchoPlus
+	beq		@mbOrPhasor
+
 	;------
+
+@echoPlus
+
+	; Echo+
+	lda		hasAY8913
+	and		#1
+	beq		@echo_ay_b
+
+	ldx		#0
+	lda		#AY_ECHO_CS1|AY_LATCH
+@echo_ay_next
+			sta		zpTmp1
+			lda		ayEna,x
+			tay
+			ldx		zpTmp1
+			lda		#AY_ENABLE
+			jsr		AY_Echo_WriteRegValue
+
+@echo_ay_b
+		lda		hasAY8913
+		and		#2
+		beq		@echo_done
+
+		ldx		#1
+		lda		#AY_ECHO_CS2|AY_LATCH
+		cmp		zpTmp1
+		bne		@echo_ay_next
+
+@echo_done
+	jmp		@done
+
+	;------
+
+@mbOrPhasor
 
 	ldy		#SY6522_A_PH_BASE+SY6522_ORA
 
