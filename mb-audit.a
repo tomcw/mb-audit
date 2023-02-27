@@ -1142,14 +1142,14 @@ Display
 		lda		#$80+' '		; C-flag not affected
 		bcc		+
 		lda		#$80+'?'
-+		sta		LINE2+$12,x		; 'V' or ' '
++		sta		LINE2+$12,x		; '?' or ' '
 
 		pla
 		lsr
 		lda		#$80+' '		; C-flag not affected
 		bcc		+
 		lda		#$80+'?'
-+		sta		LINE3+$12,x		; 'V' or ' '
++		sta		LINE3+$12,x		; '?' or ' '
 
 		dex
 		dex
