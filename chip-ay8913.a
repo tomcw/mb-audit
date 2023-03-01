@@ -272,10 +272,10 @@ TestAYs
 -		lsr		zpTmp1
 		bcs		+
 			clc
-			lda		#4
+			lda		#8				; 8 tests per AY (**)
 			adc		testNum
 			sta		testNum
-			bne		++
+			jmp		++
 
 +		jsr		Init6522ForAY		; pre: zpTmp3 = SY6522_A_BASE or SY6522_A_PH_BASE or SY6522_B_BASE
 
@@ -286,21 +286,26 @@ TestAYs
 			lda		#0				; AY select ($00)
 			sta		zpTmp4
 
-			inc		testNum			; test #n+0, #n+6
+			inc		testNum			; test #n+0, #n+8 (**)
 			jsr		TestAYDatalines
 			bcs		+
 
-			inc		testNum			; test #n+1, #n+7
+			inc		testNum			; test #n+1, #n+9
 			jsr		TestAYAddrlines
 			bcs		+
 
-			inc		testNum			; test #n+2, #n+8
+			inc		testNum			; test #n+2, #n+A
 			jsr		TestAYWriteReadWithoutSelect
 			bcs		+
 
-			inc		testNum			; test #n+3 - skip, as Phasor only
+			inc		testNum			; test #n+3, #n+B
+			jsr		TestAYLatchAddress
+			bcs		+
+
 			inc		testNum			; test #n+4 - skip, as Phasor only
 			inc		testNum			; test #n+5 - skip, as Phasor only
+			inc		testNum			; test #n+6 - skip, as Phasor only
+			inc		testNum			; test #n+7 - skip, as Phasor only
 			bcc		++
 
 		;
@@ -308,37 +313,45 @@ TestAYs
 @ph			lda		#$40			; AY1 select ($40)
 			sta		zpTmp4
 
-			inc		testNum			; test #n+0, #n+6
+			inc		testNum			; test #n+0, #n+8 (**)
 			jsr		TestAYDatalines
 			bcs		+
 
-			inc		testNum			; test #n+1, #n+7
+			inc		testNum			; test #n+1, #n+9
 			jsr		TestAYAddrlines
 			bcs		+
 
-			inc		testNum			; test #n+2, #n+8
+			inc		testNum			; test #n+2, #n+A
 			jsr		TestAYWriteReadWithoutSelect
+			bcs		+
+
+			inc		testNum			; test #n+3, #n+B
+			jsr		TestAYLatchAddress
 			bcs		+
 
 			asl		zpTmp4			; AY2 select ($80)
 
-			inc		testNum			; test #n+3, #n+9
+			inc		testNum			; test #n+4, #n+C
 			jsr		TestAYDatalines
 			bcs		+
 
-			inc		testNum			; test #n+4, #n+A
+			inc		testNum			; test #n+5, #n+D
 			jsr		TestAYAddrlines
 			bcs		+
 
-			inc		testNum			; test #n+5, #n+B
+			inc		testNum			; test #n+6, #n+E
 			jsr		TestAYWriteReadWithoutSelect
+			bcs		+
+
+			inc		testNum			; test #n+7, #n+F
+			jsr		TestAYLatchAddress
 			bcs		+
 
 ++		lda		#SY6522_B_BASE
 		cmp		zpTmp3
 		beq		++
 		sta		zpTmp3
-		bne		-					; bra
+		jmp		-
 
 ++	clc
 +	rts
@@ -524,16 +537,16 @@ TestAYWriteReadWithoutSelect
 	lda		#AY_BFINE			; reg#
 
 	bit		zpTmp4				; N=b7, V=b6
-	bvs		@s_ph1
-	bmi		@s_ph2
+	bvs		@ph1_s
+	bmi		@ph2_s
 
-@s_mb	jsr		SF_SelectReg
+@mb_s	jsr		SF_SelectReg
 		bne		+
 
-@s_ph1	jsr		AY1_SelectReg
+@ph1_s	jsr		AY1_SelectReg
 		bne		+
 
-@s_ph2	jsr		AY2_SelectReg
+@ph2_s	jsr		AY2_SelectReg
 
 +	lda		#0					; data to test
 	sta		zpTmp2
@@ -570,7 +583,101 @@ TestAYWriteReadWithoutSelect
 
 @error
 	sec
-	rts						; C=1(NG)
+	rts							; C=1(NG)
+
+;--------------------------------------
+
+TestAYLatchAddress
+; Set AY's latch address, reset AY, then write (w/out latch) to reg#2 and check that write didn't occur to any reg!
+; Pre:
+;	zpTmp3 = SY6522_A_BASE or SY6522_A_PH_BASE or SY6522_B_BASE
+;	zpTmp4 = AY chip select: 0(MB), $40(Phasor-AY1), $80(Phasor-AY2)
+; Post: C=0(OK), C=1(NG)
+;	zpTmp2 = expected, A = actual
+;	zpTmp5 trashed
+
+	jsr		resetSubTest
+	jsr		incTotalTests
+
+	lda		#SY6522_ORA
+	ora		zpTmp3
+	tay							; init Y for AY_WriteRegValue(), etc.
+
+	; Select reg#2
+
+	lda		#AY_BFINE			; reg#
+
+	bit		zpTmp4				; N=b7, V=b6
+	bvs		@ph1_s
+	bmi		@ph2_s
+
+@mb_s	jsr		SF_SelectReg
+		bne		+
+
+@ph1_s	jsr		AY1_SelectReg
+		bne		+
+
+@ph2_s	jsr		AY2_SelectReg
+
++	jsr		Init6522ForAY		; Post: AY's latch address set to invalid
+
+	lda		#$00
+	sta		zpTmp2				; data to test (on read later)
+
+	lda		#$42
+
+	bit		zpTmp4				; N=b7, V=b6
+	bvs		@ph1
+	bmi		@ph2
+
+@mb		jsr		SF_WriteReg
+		bne		+
+
+@ph1	jsr		AY1_WriteReg
+		bne		+
+
+@ph2	jsr		AY2_WriteReg
+
++	; Check all regs = 0x00
+
+	ldx		#AY_AFINE			; reg#
+	stx		zpTmp5
+
+@loop	stx		subTestNum
+		bit		zpTmp4			; N=b7, V=b6
+		bvs		@ph1_r0
+		bmi		@ph2_r0
+
+@mb_r0	jsr		AY_ReadRegValue
+		bne		+
+
+@ph1_r0	jsr		AY1_ReadRegValue
+		bne		+
+
+@ph2_r0	jsr		AY2_ReadRegValue
+
++		cmp		zpTmp2
+		bne		@error
+
+		inc		zpTmp5
+		ldx		zpTmp5
+		cpx		#AY_PORTA
+		bne		@loop
+
+	clc							; C=0(OK)
+
+@done
+	php
+	pha
+	jsr		AY_SetPortAOutput	; DDRA=0xFF
+	pla
+	plp
+
+	rts
+
+@error
+	sec							; C=1(NG)
+	bcs		@done
 
 ;--------------------------------------
 
@@ -1571,22 +1678,27 @@ SF_WriteReg
 
 SF_ChipReset
 ; NB. For native Phasor mode, reset both AY's, since cmd=AY_RESET|(%00<<3) - and CS is active low
+; NB. For Echo+ & Phasor(Echo+ mode), reset both AY's.
 ; Pre: Y = SY6522_A_BASE or SY6522_A_PH_BASE or SY6522_B_BASE
 ;	phasorMode
 ; Post: Y = SY6522_ORA for chip A or B
 ;	Z = 0
+	lda		isEchoPlus
+	bne		@echo
+	lda		isPhasorCard
+	beq		@mb_ph
 	lda		phasorMode
 	cmp		#PH_ECHOPLUS
-	bne		+
-	lda		#AY_RESET|AY_ECHO_CS1|AY_ECHO_CS2
-	bne		++
-+	lda		#AY_RESET
-	beq		++
+	beq		@echo
+@mb_ph	lda		#AY_RESET
+		beq		+
+@echo	lda		#AY_RESET|AY_ECHO_CS1|AY_ECHO_CS2
+		bne		+
 
 SetModeAndInactive	; pre: Y = SY6522_ORA for chip A or B
 	dey		; Y = ORB (reg#0)
 
-++	sta		(MBBase),y
++	sta		(MBBase),y
 	and		#!(AY_LATCH)		; clear the 3 low mode bits
 	ora		#AY_INACTIVE		; A = A|AY_INACTIVE to preserve any chip-select bits
 	sta		(MBBase),y

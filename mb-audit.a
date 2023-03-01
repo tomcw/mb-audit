@@ -480,6 +480,9 @@ TestTones
 ;------------------------------------------------------------------------------
 
 DumpAYRegs
+; For each AY show 2 rows:
+; 1) current regs
+; 2) writes values {0,1,...,D}, then read back & show
 
 	lda		#<msg_DumpAYRegs
 	ldx		#>msg_DumpAYRegs
@@ -491,13 +494,13 @@ DumpAYRegs
 		jsr		SetPhasorMode
 +
 
-	lda		#SY6522_A_PH_BASE
-	sta		zpTmp3
-	jsr		Init6522ForAY		; ...and completes with SF_ChipReset
+	ldy		#SY6522_A_PH_BASE+SY6522_DDRB
+	lda		#$1f			; OK to use this for Mockingboard too
+	sta		(MBBase),y
 
-	lda		#SY6522_B_BASE
-	sta		zpTmp3
-	jsr		Init6522ForAY		; ...and completes with SF_ChipReset
+	ldy		#SY6522_B_BASE+SY6522_DDRB
+	lda		#$1f			; OK to use this for Mockingboard too
+	sta		(MBBase),y
 
 	;
 
