@@ -848,8 +848,8 @@ TestAYPhasor
 	; 2) Switch to Echo+ mode and check that the 1st AY is correctly mapped between Phasor & Echo+
 	; 3) Switch to Phasor mode, reset the 4 AYs, and check all 4 AYs' reg#0 are $00
 	; 4) Switch to MB mode, write to the 2 AYs. Then from Phasor mode check that 2nd-ary AYs weren't written to
-	; 5) Check that Phasor's 6522-A's AY1 regs & AY2 regs can be independently latched
-	; 6) Check that Phasor's 6522-B's AY1 regs & AY2 regs can be independently latched
+	; 5) Check that Phasor's 6522-A's AY1 regs & AY2 regs *cannot* be independently latched
+	; 6) Check that Phasor's 6522-B's AY1 regs & AY2 regs *cannot* be independently latched
 
 	jsr		resetSubTest		; subTest #0
 	jsr		incTotalTests
@@ -1059,7 +1059,9 @@ TestAYPhasor
 	jsr		AY1_ReadRegValue
 	ldx		#$11
 	cmp		#$11
-	bne		@errorXA
+	beq		+
+	jmp		@errorXA
++
 
 	ldx		#AY_AFINE
 	jsr		AY2_ReadRegValue
@@ -1084,8 +1086,8 @@ TestAYPhasor
 	bne		@errorXA
 
 	;
-	; 5) Check that Phasor's 6522-A's AY1 regs & AY2 regs can be independently latched
-	; 6) Check that Phasor's 6522-B's AY1 regs & AY2 regs can be independently latched
+	; 5) Check that Phasor's 6522-A's AY1 regs & AY2 regs *cannot* be independently latched
+	; 6) Check that Phasor's 6522-B's AY1 regs & AY2 regs *cannot* be independently latched
 	;
 
 	lda		#SY6522_A_PH_BASE
@@ -1099,19 +1101,33 @@ TestAYPhasor
 		ldx		#$55
 		jsr		AY1_WriteRegValue
 
-		lda		#AY_BFINE			; AY2:reg#2
+		lda		#AY_BFINE			; AY2:reg#2 (which also *surprisingly* sets AY1's latch addr=reg#2!)
 		ldx		#$66
 		jsr		AY2_WriteRegValue
 
 		lda		#$77
-		jsr		AY1_WriteReg		; AY1:reg#0 = $77 (no latch addr)
+		jsr		AY1_WriteReg		; AY1:reg#2 = $77 (no setting of latch addr)
 
 		lda		#$88
-		jsr		AY2_WriteReg		; AY2:reg#2 = $88 (no latch addr)
+		jsr		AY2_WriteReg		; AY2:reg#2 = $88 (no setting of latch addr)
 
 		ldx		#AY_AFINE			; AY1:reg#0
 		jsr		AY1_ReadRegValue
+		ldx		#$55
+		stx		zpTmp2
+		cmp		zpTmp2
+		bne		@error
+
+		ldx		#AY_BFINE			; AY1:reg#2
+		jsr		AY1_ReadRegValue
 		ldx		#$77
+		stx		zpTmp2
+		cmp		zpTmp2
+		bne		@error
+
+		ldx		#AY_AFINE			; AY2:reg#0
+		jsr		AY2_ReadRegValue
+		ldx		#$00
 		stx		zpTmp2
 		cmp		zpTmp2
 		bne		@error
