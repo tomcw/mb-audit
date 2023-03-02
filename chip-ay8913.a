@@ -186,16 +186,20 @@ TestAY8913
 			bcs		@error
 
 			inc		testNum			; test #01
-			jsr		TestAYPhasor	; only do this test once, since it covers both SY6522's
-			bcc		@TestMB
+			jsr		TestAYPhasor1	; only do this test once, since it covers both SY6522's
 			bcs		@error
+
+			inc		testNum			; test #02
+			jsr		TestAYPhasor2	; only do this test once, since it covers both SY6522's
+			bcs		@error
+			bcc		@TestMB
 
 +		lda		isEchoPlus
 		beq		@TestMB
 
 			; Echo+
-			lda		#2
-			sta		testNum			; test #02
+			lda		#8
+			sta		testNum			; test #08
 			jsr		TestAYEchoPlus
 			bcc		@soak
 			bcs		@error
@@ -836,7 +840,7 @@ TestAYEchoPlus
 
 ;--------------------------------------
 
-TestAYPhasor
+TestAYPhasor1
 ; Pre: isPhasorCard==1
 ; Post: C=0(OK), C=1(NG)
 ;	zpTmp2 = expected, A = actual
@@ -848,8 +852,6 @@ TestAYPhasor
 	; 2) Switch to Echo+ mode and check that the 1st AY is correctly mapped between Phasor & Echo+
 	; 3) Switch to Phasor mode, reset the 4 AYs, and check all 4 AYs' reg#0 are $00
 	; 4) Switch to MB mode, write to the 2 AYs. Then from Phasor mode check that 2nd-ary AYs weren't written to
-	; 5) Check that Phasor's 6522-A's AY1 regs & AY2 regs *cannot* be independently latched
-	; 6) Check that Phasor's 6522-B's AY1 regs & AY2 regs *cannot* be independently latched
 
 	jsr		resetSubTest		; subTest #0
 	jsr		incTotalTests
@@ -982,9 +984,7 @@ TestAYPhasor
 
 	lda		zpTmp1
 	cmp		zpTmp2
-	beq		+
-	jmp		@error
-+
+	bne		@error
 
 	;
 	; 3) Check that reset has cleared all 4 AYs' reg#0
@@ -999,16 +999,12 @@ TestAYPhasor
 	ldx		#AY_AFINE
 	jsr		AY1_ReadRegValue
 	tax
-	beq		+
-	jmp		@error
-+
+	bne		@error
 
 	ldx		#AY_AFINE
 	jsr		AY2_ReadRegValue
 	tax
-	beq		+
-	jmp		@error
-+
+	bne		@error
 
 	;
 
@@ -1017,16 +1013,12 @@ TestAYPhasor
 	ldx		#AY_AFINE
 	jsr		AY1_ReadRegValue
 	tax
-	beq		+
-	jmp		@error
-+
+	bne		@error
 
 	ldx		#AY_AFINE
 	jsr		AY2_ReadRegValue
 	tax
-	beq		+
-	jmp		@error
-+
+	bne		@error
 
 	;
 	; 4) Check that the MB AY writes don't write to the 2nd-ary AYs (ie. these AYs' reg#0 should read back as 0x00)
@@ -1059,9 +1051,7 @@ TestAYPhasor
 	jsr		AY1_ReadRegValue
 	ldx		#$11
 	cmp		#$11
-	beq		+
-	jmp		@errorXA
-+
+	bne		@errorXA
 
 	ldx		#AY_AFINE
 	jsr		AY2_ReadRegValue
@@ -1086,14 +1076,56 @@ TestAYPhasor
 	bne		@errorXA
 
 	;
-	; 5) Check that Phasor's 6522-A's AY1 regs & AY2 regs *cannot* be independently latched
-	; 6) Check that Phasor's 6522-B's AY1 regs & AY2 regs *cannot* be independently latched
+
+	lda		#PH_MOCKINGBOARD
+	jsr		SetPhasorMode
+
+	clc
+	rts							; C=0(OK)
+
+;
+
+@errorXA	; Pre: X = expected, A = actual
+	stx		zpTmp2
+
+@error	; Pre: zpTmp2 = expected, A = actual
+	pha
+	lda		#PH_MOCKINGBOARD
+	jsr		SetPhasorMode
+	pla
+
+	sec
+	rts							; C=1(NG)
+
+;--------------------------------------
+
+TestAYPhasor2
+; Pre: isPhasorCard==1
+; Post: C=0(OK), C=1(NG)
+;	zpTmp2 = expected, A = actual
+;	phasorMode = PH_MOCKINGBOARD
+
+	; Test for 4 AYs (Phasor only)
+	; 0) Check that Phasor's 6522-A's AY1 regs & AY2 regs *cannot* be independently latched
+	; 1) Check that Phasor's 6522-B's AY1 regs & AY2 regs *cannot* be independently latched
+
+	jsr		resetSubTestMinus1
+	jsr		incTotalTests
+
+	lda		#PH_PHASOR
+	jsr		SetPhasorMode
+
+	;
+
+	;
+	; 0) Check that Phasor's 6522-A's AY1 regs & AY2 regs *cannot* be independently latched
+	; 1) Check that Phasor's 6522-B's AY1 regs & AY2 regs *cannot* be independently latched
 	;
 
 	lda		#SY6522_A_PH_BASE
 	sta		zpTmp3
 
--		jsr		incSubTestNum		; subTest #5, #6
+-		jsr		incSubTestNum		; subTest #0, #1
 
 		jsr		Init6522ForAY
 
@@ -1114,30 +1146,26 @@ TestAYPhasor
 		ldx		#AY_AFINE			; AY1:reg#0
 		jsr		AY1_ReadRegValue
 		ldx		#$55
-		stx		zpTmp2
-		cmp		zpTmp2
-		bne		@error
+		cmp		#$55
+		bne		@errorXA
 
 		ldx		#AY_BFINE			; AY1:reg#2
 		jsr		AY1_ReadRegValue
 		ldx		#$77
-		stx		zpTmp2
-		cmp		zpTmp2
-		bne		@error
+		cmp		#$77
+		bne		@errorXA
 
 		ldx		#AY_AFINE			; AY2:reg#0
 		jsr		AY2_ReadRegValue
 		ldx		#$00
-		stx		zpTmp2
-		cmp		zpTmp2
-		bne		@error
+		cmp		#$00
+		bne		@errorXA
 
 		ldx		#AY_BFINE			; AY2:reg#2
 		jsr		AY2_ReadRegValue
 		ldx		#$88
-		stx		zpTmp2
-		cmp		zpTmp2
-		bne		@error
+		cmp		#$88
+		bne		@errorXA
 
 		lda		#SY6522_B_BASE
 		cmp		zpTmp3
