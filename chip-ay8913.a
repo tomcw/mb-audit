@@ -1036,13 +1036,13 @@ TestAYPhasor1
 	jsr		SetPhasorMode
 
 	ldy		#SY6522_A_BASE+SY6522_ORA
-	jsr		AY_SetPortAOutput	; DDRA=0xFF
+	jsr		AY_SetPortAOutput
 	lda		#AY_AFINE
 	ldx		#$11
 	jsr		AY_WriteRegValue
 
 	ldy		#SY6522_B_BASE+SY6522_ORA
-	jsr		AY_SetPortAOutput	; DDRA=0xFF
+	jsr		AY_SetPortAOutput
 	lda		#AY_AFINE
 	ldx		#$33
 	jsr		AY_WriteRegValue
@@ -1286,9 +1286,11 @@ TestAYPhasor3
 ;	zpTmp2 = expected, A = actual
 ;	phasorMode = PH_MOCKINGBOARD
 
-	; Phasor specific tests for AY1/AY2 to test discrete AY8913 LATCH & WRITE funcs
-	; 0) Test for setting independent latch addr's for AY1 & AY2
+	; Phasor specific tests for AY1/AY2 to test discrete AY8913 LATCH, WRITE & READ funcs
+	; 0) Test WRITE for setting independent latch addr's for AY1 & AY2
 	; 1) Test for AY2_SelectReg + AY1_WriteReg to write to both AY1 & AY2's same register
+	; 2) Test READ for setting independent latch addr's for AY1 & AY2
+	; 3) Test READ for setting independent latch addr's for AY1 & AY2
 
 	jsr		resetSubTestMinus1
 	jsr		incTotalTests
@@ -1314,6 +1316,7 @@ TestAYPhasor3
 	jsr		AY2_SelectReg		; selects AY2 and AY1; sets latch addr for AY2 and AY1
 	lda		#AY_AFINE
 	jsr		AY1_SelectReg		; selects AY1; sets latch addr for AY1 (and deselects AY2)
+
 	lda		#$22
 	jsr		AY2_WriteReg		; write ignored (as AY2 not selected)
 	lda		#$11
@@ -1355,6 +1358,58 @@ TestAYPhasor3
 	ldx		#$11
 	cmp		#$11
 	bne		@errorXA
+
+	jsr		AY_SetPortAOutput
+
+	;
+	; 2) Test READ for setting independent latch addr's for AY1 & AY2
+	;
+
+	jsr		incSubTestNum		; subTest #2
+
+	; NB. No Init6522ForAY() - re-use previous written values
+
+	lda		#AY_BFINE
+	jsr		AY2_SelectReg		; selects AY2 and AY1; sets latch addr for AY2 and AY1
+	lda		#AY_AFINE
+	jsr		AY1_SelectReg		; selects AY1; sets latch addr for AY1 (and deselects AY2)
+
+	jsr		AY_SetPortAInput
+	jsr		AY2_ReadReg			; read HiZ (as AY2 not selected)
+	ldx		#$ff
+	cmp		#$ff
+	bne		@errorXA
+
+	jsr		AY1_ReadReg			; read succeeds
+	ldx		#$00
+	cmp		#$00
+	bne		@errorXA
+
+	jsr		AY_SetPortAOutput
+
+	;
+	; 3) Test READ for setting independent latch addr's for AY1 & AY2
+	;
+
+	jsr		incSubTestNum		; subTest #3
+
+	; NB. No Init6522ForAY() - re-use previous written values
+
+	lda		#AY_BFINE
+	jsr		AY2_SelectReg		; selects AY2 and AY1; sets latch addr for AY2 and AY1
+
+	jsr		AY_SetPortAInput
+	jsr		AY1_ReadReg			; read succeeds
+	ldx		#$11
+	cmp		#$11
+	bne		@errorXA
+
+	jsr		AY2_ReadReg			; read succeeds
+	ldx		#$11
+	cmp		#$11
+	bne		@errorXA
+
+;	jsr		AY_SetPortAOutput
 
 	;
 
