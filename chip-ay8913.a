@@ -1288,6 +1288,7 @@ TestAYPhasor3
 
 	; Phasor specific tests for AY1/AY2 to test discrete AY8913 LATCH & WRITE funcs
 	; 0) Test for setting independent latch addr's for AY1 & AY2
+	; 1) Test for AY2_SelectReg + AY1_WriteReg to write to both AY1 & AY2's same register
 
 	jsr		resetSubTestMinus1
 	jsr		incTotalTests
@@ -1298,6 +1299,8 @@ TestAYPhasor3
 	;
 	; AY2 LATCH func selects AY2 and AY1; sets latch addr for AY2 and AY1
 	; AY1 LATCH func selects AY1; sets latch addr for AY1 (and deselects AY2)
+	; AY2 WRITE func writes AY2 if it's selected
+	; AY1 WRITE func writes AY1; writes AY2 if it's selected
 	;
 
 	lda		#SY6522_A_PH_BASE
@@ -1323,6 +1326,31 @@ TestAYPhasor3
 	bne		@errorXA
 
 	ldx		#AY_AFINE
+	jsr		AY1_ReadRegValue
+	ldx		#$11
+	cmp		#$11
+	bne		@errorXA
+
+	;
+	; 1) Test for AY2_SelectReg + AY1_WriteReg to write to both AY1 & AY2's same register
+	;
+
+	jsr		incSubTestNum		; subTest #1
+
+	jsr		Init6522ForAY
+
+	lda		#AY_BFINE
+	jsr		AY2_SelectReg		; selects AY2 and AY1; sets latch addr for AY2 and AY1
+	lda		#$11
+	jsr		AY1_WriteReg		; write to both AY1 & AY2
+
+	ldx		#AY_BFINE
+	jsr		AY2_ReadRegValue
+	ldx		#$11
+	cmp		#$11
+	bne		@errorXA
+
+	ldx		#AY_BFINE
 	jsr		AY1_ReadRegValue
 	ldx		#$11
 	cmp		#$11
