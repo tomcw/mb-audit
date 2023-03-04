@@ -1108,8 +1108,12 @@ TestAYPhasor2
 ;	zpTmp2 = expected, A = actual
 ;	phasorMode = PH_MOCKINGBOARD
 
-	; 0) Check that Phasor's 6522-A's AY1 regs & AY2 regs *cannot* be independently latched
-	; 1) Check that Phasor's 6522-B's AY1 regs & AY2 regs *cannot* be independently latched
+	; Phasor specific tests for AY1/AY2 to test discrete AY8913 LATCH & WRITE funcs
+	; 0) Test for Phasor's 6522-A: show that AY2_WriteRegValue() sets both AY2 *and* AY1 latch addr
+	; 1) Same as 0, expect for 6522-B
+	; 2) Show that Phasor's 6522-A's AY1 regs & AY2 regs can have independent latch addr values (just after a reset)
+	; 3) Test for Phasor's 6522-A: show that AY1_WriteReg() writes to both AY1 & AY2
+	; 4) Same as 3, expect calls AY1_WriteRegValue() not AY1_WriteReg()
 
 	jsr		resetSubTestMinus1
 	jsr		incTotalTests
@@ -1119,11 +1123,6 @@ TestAYPhasor2
 
 	;
 
-	;
-	; 0) Check that Phasor's 6522-A's AY1 regs & AY2 regs *cannot* be independently latched
-	; 1) Check that Phasor's 6522-B's AY1 regs & AY2 regs *cannot* be independently latched
-	;
-
 	lda		#SY6522_A_PH_BASE
 	sta		zpTmp3
 
@@ -1131,29 +1130,9 @@ TestAYPhasor2
 
 		jsr		Init6522ForAY
 
-!if 0 {		; no effect
-		dey							; ORB
-		lda		#AY_INACTIVE|AY_NO_CS	; de-select both chips
-		sta		(MBBase),y
-		iny							; ORA
-
-		lda		#$78
-		jsr		myWAIT				; WAIT $9301cy
-}
-
 		lda		#AY_AFINE			; AY1:reg#0
 		ldx		#$55
 		jsr		AY1_WriteRegValue
-
-!if 0 {		; no effect
-		dey							; ORB
-		lda		#AY_INACTIVE|AY_NO_CS	; de-select both chips
-		sta		(MBBase),y
-		iny							; ORA
-
-		lda		#$78
-		jsr		myWAIT				; WAIT $9301cy
-}
 
 		lda		#AY_BFINE			; AY2:reg#2 (which also *surprisingly* sets AY1's latch addr=reg#2!)
 		ldx		#$66
@@ -1205,13 +1184,12 @@ TestAYPhasor2
 	sta		zpTmp3
 
 	;
-	; 2) Show that Phasor's 6522-A's AY1 regs & AY2 regs can have independently latch addr values
+	; 2) Show that Phasor's 6522-A's AY1 regs & AY2 regs can have independent latch addr values (just after a reset)
 	; . EG: AY1 = AY_BFINE, AY2 = invalid
 	;
 
 	jsr		incSubTestNum		; subTest #2
 
-!if 1 {		; Exclude for now, since doesn't work in emulator
 	jsr		Init6522ForAY		; AY1's & AY2's latch address set to invalid
 
 	lda		#AY_BFINE
@@ -1232,10 +1210,9 @@ TestAYPhasor2
 	ldx		#$00
 	cmp		#$00
 	bne		@errorXA
-}
 
 	;
-	; 3) Check that Phasor's 6522-A's AY1 regs & AY2 regs *cannot* be independently latched
+	; 3) Test for Phasor's 6522-A: show that AY1_WriteReg() writes to both AY1 & AY2
 	; 4) Same as 3, expect calls AY1_WriteRegValue() not AY1_WriteReg()
 	;
 
@@ -1910,8 +1887,8 @@ SetModeAndInactive	; pre: Y = SY6522_ORA for chip A or B
 	rts
 
 ;------------------------------------------------------------------------------
-DBG_SET_INACTIVE = 1	; no effect
-DBG_DESELECT_BOTH = 1	; no effect
+DBG_SET_INACTIVE = 0	; no effect
+DBG_DESELECT_BOTH = 0	; no effect
 
 ; Phasor (native mode) routines:
 
