@@ -692,7 +692,8 @@ TestAYEchoPlus
 
 	; Test for 2 AYs
 	; 0) Write to each AY's reg#0 with values: $11,$33; then read back
-	; 1) (Remaining in Echo+ mode) reset the 2 AYs, and check all 2 AYs' reg#0 are $00
+	; 1) Check that the AYs are correctly mapped between Phasor & Echo+ modes
+	; 2) (Remaining in Echo+ mode) reset the 2 AYs, and check all 2 AYs' reg#0 are $00
 
 	jsr		resetSubTest		; subTest #0
 	jsr		incTotalTests
@@ -755,7 +756,7 @@ TestAYEchoPlus
 	beq		+
 
 		;
-		; Check that the AYs are correctly mapped between Phasor & Echo+ modes
+		; 1) Check that the AYs are correctly mapped between Phasor & Echo+ modes
 		; Check that the Echo+ AY writes don't write to the 6522-A's AYs (ie. these AYs' reg#0 should read back as 0x00)
 		;
 
@@ -810,7 +811,7 @@ TestAYEchoPlus
 	bne		@error
 
 	;
-	; Check that reset has cleared all 2 AYs' reg#0
+	; 2) Check that reset has cleared all 2 AYs' reg#0
 	;
 
 	jsr		incSubTestNum		; subTest #2
@@ -984,7 +985,9 @@ TestAYPhasor1
 
 	lda		zpTmp1
 	cmp		zpTmp2
-	bne		@error
+	beq		+
+	jmp		@error
++
 
 	;
 	; 3) Check that reset has cleared all 4 AYs' reg#0
@@ -1105,7 +1108,6 @@ TestAYPhasor2
 ;	zpTmp2 = expected, A = actual
 ;	phasorMode = PH_MOCKINGBOARD
 
-	; Test for 4 AYs (Phasor only)
 	; 0) Check that Phasor's 6522-A's AY1 regs & AY2 regs *cannot* be independently latched
 	; 1) Check that Phasor's 6522-B's AY1 regs & AY2 regs *cannot* be independently latched
 
@@ -1129,9 +1131,29 @@ TestAYPhasor2
 
 		jsr		Init6522ForAY
 
+!if 0 {		; no effect
+		dey							; ORB
+		lda		#AY_INACTIVE|AY_NO_CS	; de-select both chips
+		sta		(MBBase),y
+		iny							; ORA
+
+		lda		#$78
+		jsr		myWAIT				; WAIT $9301cy
+}
+
 		lda		#AY_AFINE			; AY1:reg#0
 		ldx		#$55
 		jsr		AY1_WriteRegValue
+
+!if 0 {		; no effect
+		dey							; ORB
+		lda		#AY_INACTIVE|AY_NO_CS	; de-select both chips
+		sta		(MBBase),y
+		iny							; ORA
+
+		lda		#$78
+		jsr		myWAIT				; WAIT $9301cy
+}
 
 		lda		#AY_BFINE			; AY2:reg#2 (which also *surprisingly* sets AY1's latch addr=reg#2!)
 		ldx		#$66
@@ -1147,19 +1169,25 @@ TestAYPhasor2
 		jsr		AY1_ReadRegValue
 		ldx		#$55
 		cmp		#$55
-		bne		@errorXA
+		beq		+
+		jmp		@errorXA
++
 
 		ldx		#AY_BFINE			; AY1:reg#2
 		jsr		AY1_ReadRegValue
 		ldx		#$77
 		cmp		#$77
-		bne		@errorXA
+		beq		+
+		jmp		@errorXA
++
 
 		ldx		#AY_AFINE			; AY2:reg#0
 		jsr		AY2_ReadRegValue
 		ldx		#$00
 		cmp		#$00
-		bne		@errorXA
+		beq		+
+		jmp		@errorXA
++
 
 		ldx		#AY_BFINE			; AY2:reg#2
 		jsr		AY2_ReadRegValue
@@ -1173,7 +1201,79 @@ TestAYPhasor2
 		sta		zpTmp3
 		bne		-
 
-+
++	lda		#SY6522_A_PH_BASE
+	sta		zpTmp3
+
+	;
+	; 2) Show that Phasor's 6522-A's AY1 regs & AY2 regs can have independently latch addr values
+	; . EG: AY1 = AY_BFINE, AY2 = invalid
+	;
+
+	jsr		incSubTestNum		; subTest #2
+
+!if 1 {		; Exclude for now, since doesn't work in emulator
+	jsr		Init6522ForAY		; AY1's & AY2's latch address set to invalid
+
+	lda		#AY_BFINE
+	ldx		#$99
+	jsr		AY1_WriteRegValue
+
+	lda		#$69
+	jsr		AY2_WriteReg		; (don't set latch addr) AY2:latch_addr=invalid, so write is ignored. First time AY_CS2 is asserted.
+
+	ldx		#AY_BFINE
+	jsr		AY1_ReadRegValue	; AY1:reg#2 = $99
+	ldx		#$99
+	cmp		#$99
+	bne		@errorXA
+
+	ldx		#AY_BFINE
+	jsr		AY2_ReadRegValue	; AY2:reg#2 = $00
+	ldx		#$00
+	cmp		#$00
+	bne		@errorXA
+}
+
+	;
+	; 3) Check that Phasor's 6522-A's AY1 regs & AY2 regs *cannot* be independently latched
+	; 4) Same as 3, expect calls AY1_WriteRegValue() not AY1_WriteReg()
+	;
+
+@loop	jsr		incSubTestNum		; subTest #3, #4
+
+		jsr		Init6522ForAY		; AY1's & AY2's latch address set to invalid
+
+		lda		#AY_BFINE
+		ldx		#$11
+		stx		zpTmp2				; (setup expected value for AY2_ReadRegValue() below)
+		jsr		AY2_WriteRegValue	; AY1:reg#2 (still = 00, latch=reg#2) & AY2:reg#2 = 11
+
+		ldx		#$42
+		lda		#1
+		and		subTestNum
+		beq		+
+			stx		zpTmp2				; (setup expected value for AY2_ReadRegValue() below)
+			txa							; pre: A=value
+			jsr		AY1_WriteReg		; subTest #3: (don't set latch addr) - this writes to both AY1:reg#2 & AY2:reg#2!
+			bne		++
++			lda		#AY_BFINE			; pre: A=reg#, X=value
+			jsr		AY1_WriteRegValue	; subTest #4: Latch & writes to just AY1:reg#2
+++
+
+		ldx		#AY_BFINE
+		jsr		AY1_ReadRegValue
+		ldx		#$42
+		cmp		#$42
+		bne		@errorXA
+
+		ldx		#AY_BFINE
+		jsr		AY2_ReadRegValue	; expect $11, but for subTest #3: actually get $42! / subTest #4: correctly get $11
+		cmp		zpTmp2
+		bne		@error
+
+		lda		#1
+		and		subTestNum
+		bne		@loop
 
 	;
 
@@ -1803,13 +1903,16 @@ SetModeAndInactive	; pre: Y = SY6522_ORA for chip A or B
 	dey		; Y = ORB (reg#0)
 
 +	sta		(MBBase),y
-	and		#!(AY_LATCH)		; clear the 3 low mode bits
+	and		#!(AY_FUNC_MASK)	; clear the 3 low mode bits
 	ora		#AY_INACTIVE		; A = A|AY_INACTIVE to preserve any chip-select bits
 	sta		(MBBase),y
 	iny		; Y = ORA (reg#1)
 	rts
 
 ;------------------------------------------------------------------------------
+DBG_SET_INACTIVE = 1	; no effect
+DBG_DESELECT_BOTH = 1	; no effect
+
 ; Phasor (native mode) routines:
 
 AY1_ReadReg
@@ -1848,10 +1951,26 @@ AY1_SelectReg
 ; Pre: Y = SY6522_ORA for chip A or B
 ;	A = reg#
 ; Post: Y = SY6522_ORA for chip A or B
+!if DBG_SET_INACTIVE {
+	dey		; Y = ORB (reg#0)
+	pha
+	lda		#AY_INACTIVE|AY_CS1
+	sta		(MBBase),y
+	pla
+	iny		; Y = ORA (reg#1)
+}
 	sta		(MBBase),y
 	lda		#AY_LATCH|AY_CS1
 	bne		+
 AY2_SelectReg
+!if DBG_SET_INACTIVE {
+	dey		; Y = ORB (reg#0)
+	pha
+	lda		#AY_INACTIVE|AY_CS2
+	sta		(MBBase),y
+	pla
+	iny		; Y = ORA (reg#1)
+}
 	sta		(MBBase),y
 	lda		#AY_LATCH|AY_CS2
 	bne		++
@@ -1862,10 +1981,26 @@ AY1_WriteReg
 ;	A = data
 ; Post: Y = SY6522_ORA for chip A or B
 ;	Z = 0
+!if DBG_SET_INACTIVE {
+	dey		; Y = ORB (reg#0)
+	pha
+	lda		#AY_INACTIVE|AY_CS1
+	sta		(MBBase),y
+	pla
+	iny		; Y = ORA (reg#1)
+}
 	sta		(MBBase),y
 	lda		#AY_WRITE|AY_CS1
 	bne		+
 AY2_WriteReg
+!if DBG_SET_INACTIVE {
+	dey		; Y = ORB (reg#0)
+	pha
+	lda		#AY_INACTIVE|AY_CS2
+	sta		(MBBase),y
+	pla
+	iny		; Y = ORA (reg#1)
+}
 	sta		(MBBase),y
 	lda		#AY_WRITE|AY_CS2
 	bne		++
@@ -1874,6 +2009,10 @@ AY2_WriteReg
 	sta		(MBBase),y
 	lda		#AY_INACTIVE|AY_CS1
 	sta		(MBBase),y
+!if DBG_DESELECT_BOTH {
+	lda		#AY_INACTIVE|AY_NO_CS	; de-select both chips
+	sta		(MBBase),y
+}
 	iny		; Y = ORA (reg#1)
 	rts
 
@@ -1881,6 +2020,10 @@ AY2_WriteReg
 	sta		(MBBase),y
 	lda		#AY_INACTIVE|AY_CS2
 	sta		(MBBase),y
+!if DBG_DESELECT_BOTH {
+	lda		#AY_INACTIVE|AY_NO_CS	; de-select both chips
+	sta		(MBBase),y
+}
 	iny		; Y = ORA (reg#1)
 	rts
 
