@@ -1106,6 +1106,15 @@ TestAYPhasor1
 
 ;--------------------------------------
 
+; For TestAYPhasor2 & TestAYPhasor3:
+;
+; Phasor's GAL Logic (GH#1192)
+; . AY2 LATCH func selects AY2 and AY1; sets latch addr for AY2 and AY1
+; . AY1 LATCH func selects AY1; deselects AY2; sets latch addr for AY1
+; . AY2 WRITE func writes AY2 if it's selected
+; . AY1 WRITE func writes AY1; writes AY2 if it's selected
+;
+
 TestAYPhasor2
 ; Pre: isPhasorCard==1
 ; Post: C=0(OK), C=1(NG)
@@ -1114,10 +1123,10 @@ TestAYPhasor2
 
 	; Phasor specific tests for AY1/AY2 to test discrete AY8913 LATCH & WRITE funcs
 	; 0) Test for Phasor's 6522-A: show that AY2_WriteRegValue() sets both AY2 *and* AY1 latch addr
-	; 1) Same as 0, expect for 6522-B
+	; 1) Same as 0, except for 6522-B
 	; 2) Show that Phasor's 6522-A's AY1 regs & AY2 regs can have independent latch addr values (just after a reset)
 	; 3) Test for Phasor's 6522-A: show that AY1_WriteReg() writes to both AY1 & AY2
-	; 4) Same as 3, expect calls AY1_WriteRegValue() not AY1_WriteReg()
+	; 4) Same as 3, except it calls AY1_WriteRegValue() not AY1_WriteReg()
 
 	jsr		resetSubTestMinus1
 	jsr		incTotalTests
@@ -1297,13 +1306,6 @@ TestAYPhasor3
 
 	lda		#PH_PHASOR
 	jsr		SetPhasorMode
-
-	;
-	; AY2 LATCH func selects AY2 and AY1; sets latch addr for AY2 and AY1
-	; AY1 LATCH func selects AY1; sets latch addr for AY1 (and deselects AY2)
-	; AY2 WRITE func writes AY2 if it's selected
-	; AY1 WRITE func writes AY1; writes AY2 if it's selected
-	;
 
 	lda		#SY6522_A_PH_BASE
 	sta		zpTmp3
