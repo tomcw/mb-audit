@@ -1312,7 +1312,7 @@ TestAYPhasor3
 	; 0) Test WRITE for setting independent latch addr's for AY1 & AY2
 	; 1) Test for AY2_SelectReg + AY1_WriteReg to write to both AY1 & AY2's same register
 	; 2) Test READ for setting independent latch addr's for AY1 & AY2
-	; 3) Test READ for setting independent latch addr's for AY1 & AY2
+	; 3) Test READ for setting the same latch addr's for AY1 & AY2
 
 	jsr		resetSubTestMinus1
 	jsr		incTotalTests
@@ -1346,7 +1346,9 @@ TestAYPhasor3
 	jsr		AY2_ReadRegValue
 	ldx		#$00
 	cmp		#$00
-	bne		@errorXA
+	beq		+
+	jmp		@errorXA
++
 
 	ldx		#AY_AFINE
 	jsr		AY1_ReadRegValue
@@ -1374,12 +1376,16 @@ TestAYPhasor3
 	bne		@errorXA
 
 	ldx		#AY_BFINE
-	jsr		AY1_ReadRegValue
+	jsr		AY1_ReadRegValue	; selects AY1; deselects AY2; sets latch addr for AY1 & read AY1
 	ldx		#$11
 	cmp		#$11
 	bne		@errorXA
 
 	jsr		AY_SetPortAOutput
+
+	lda		#$22
+	jsr		AY1_WriteReg		; write to both AY1 - NB. this is to setup for subTest #3, so that AY1:reg2 != AY2:reg2
+	; Post: AY1:reg2 = $22, AY2:reg2 = $11
 
 	;
 	; 2) Test READ for setting independent latch addr's for AY1 & AY2
@@ -1408,7 +1414,8 @@ TestAYPhasor3
 	jsr		AY_SetPortAOutput
 
 	;
-	; 3) Test READ for setting independent latch addr's for AY1 & AY2
+	; 3) Test READ for setting the same latch addr's for AY1 & AY2
+	; [Sequence F / AppleWin-GH#1192]
 	;
 
 	jsr		incSubTestNum		; subTest #3
@@ -1419,12 +1426,12 @@ TestAYPhasor3
 	jsr		AY2_SelectReg		; selects AY2 and AY1; sets latch addr for AY2 and AY1
 
 	jsr		AY_SetPortAInput
-	jsr		AY1_ReadReg			; read succeeds
-	ldx		#$11
-	cmp		#$11
+	jsr		AY1_ReadReg			; read succeeds = AY2 OR AY1
+	ldx		#$33
+	cmp		#$33
 	bne		@errorXA
 
-	jsr		AY2_ReadReg			; read succeeds -- TODO: can we be sure this is AY2's reg2? change written value to be different to AY1's reg2
+	jsr		AY2_ReadReg			; read succeeds
 	ldx		#$11
 	cmp		#$11
 	bne		@errorXA
@@ -1462,8 +1469,8 @@ TestAYPhasor4
 ;	phasorMode = PH_MOCKINGBOARD
 
 	; Phasor specific tests for AY1/AY2 to test discrete AY8913 LATCH, WRITE & READ funcs
-	; 0) Test that AY1 stays selected after a 2nd WRITE
-	; 1) Test that AY2 stays selected after a 2nd WRITE
+	; 0) Test that AY1 stays selected after 1st WRITE, by doing a 2nd WRITE
+	; 1) Test that AY2 stays selected after 1st WRITE, by doing a 2nd WRITE
 
 	jsr		resetSubTestMinus1
 	jsr		incTotalTests
