@@ -1108,7 +1108,7 @@ TestAYPhasor1
 
 ; For TestAYPhasor2 & TestAYPhasor3:
 ;
-; Phasor's GAL Logic (GH#1192)
+; Phasor's GAL Logic (AppleWin-GH#1192)
 ; . AY2 LATCH func selects AY2 and AY1; sets latch addr for AY2 and AY1
 ; . AY1 LATCH func selects AY1; deselects AY2; sets latch addr for AY1
 ; . AY2 WRITE func writes AY2 if it's selected
@@ -1124,9 +1124,9 @@ TestAYPhasor2
 	; Phasor specific tests for AY1/AY2 to test discrete AY8913 LATCH & WRITE funcs
 	; 0) Test for Phasor's 6522-A: show that AY2_WriteRegValue() sets both AY2 *and* AY1 latch addr
 	; 1) Same as 0, except for 6522-B
-	; 2) Show that Phasor's 6522-A's AY1 regs & AY2 regs can have independent latch addr values (just after a reset)
-	; 3) Test for Phasor's 6522-A: show that AY1_WriteReg() writes to both AY1 & AY2
-	; 4) Same as 3, except it calls AY1_WriteRegValue() not AY1_WriteReg()
+	; 2) Test for Phasor's 6522-A: show that AY1_WriteReg() writes to both AY1 & AY2
+	; 3) Same as 3, except it calls AY1_WriteRegValue() not AY1_WriteReg()
+	; 4) Show that Phasor's 6522-A's AY1 regs & AY2 regs can have independent latch addr values (just after a reset)
 
 	jsr		resetSubTestMinus1
 	jsr		incTotalTests
@@ -1134,6 +1134,10 @@ TestAYPhasor2
 	lda		#PH_PHASOR
 	jsr		SetPhasorMode
 
+	;
+	; 0) Test for Phasor's 6522-A: show that AY2_WriteRegValue() sets both AY2 *and* AY1 latch addr
+	; 1) Same as 0, except for 6522-B
+	; [Sequence A / AppleWin-GH#1192]
 	;
 
 	lda		#SY6522_A_PH_BASE
@@ -1197,36 +1201,10 @@ TestAYPhasor2
 	sta		zpTmp3
 
 	;
-	; 2) Show that Phasor's 6522-A's AY1 regs & AY2 regs can have independent latch addr values (just after a reset)
-	; . EG: AY1 = AY_BFINE, AY2 = invalid
-	;
-
-	jsr		incSubTestNum		; subTest #2
-
-	jsr		Init6522ForAY		; AY1's & AY2's latch address set to invalid
-
-	lda		#AY_BFINE
-	ldx		#$99
-	jsr		AY1_WriteRegValue
-
-	lda		#$69
-	jsr		AY2_WriteReg		; (don't set latch addr) AY2:latch_addr=invalid, so write is ignored. First time AY_CS2 is asserted.
-
-	ldx		#AY_BFINE
-	jsr		AY1_ReadRegValue	; AY1:reg#2 = $99
-	ldx		#$99
-	cmp		#$99
-	bne		@errorXA
-
-	ldx		#AY_BFINE
-	jsr		AY2_ReadRegValue	; AY2:reg#2 = $00
-	ldx		#$00
-	cmp		#$00
-	bne		@errorXA
-
-	;
-	; 3) Test for Phasor's 6522-A: show that AY1_WriteReg() writes to both AY1 & AY2
-	; 4) Same as 3, expect calls AY1_WriteRegValue() not AY1_WriteReg()
+	; 2) Test for Phasor's 6522-A: show that AY1_WriteReg() writes to both AY1 & AY2
+	; [Sequence B / AppleWin-GH#1192]
+	; 3) Same as 3, expect calls AY1_WriteRegValue() not AY1_WriteReg()
+	; [Sequence C / AppleWin-GH#1192]
 	;
 
 @loop	jsr		incSubTestNum		; subTest #3, #4
@@ -1264,6 +1242,35 @@ TestAYPhasor2
 		lda		#1
 		and		subTestNum
 		bne		@loop
+
+	;
+	; 4) Show that Phasor's 6522-A's AY1 regs & AY2 regs can have independent latch addr values (just after a reset)
+	; . EG: AY1 = AY_BFINE, AY2 = invalid
+	; [Sequence D / AppleWin-GH#1192]
+	;
+
+	jsr		incSubTestNum		; subTest #2
+
+	jsr		Init6522ForAY		; AY1's & AY2's latch address set to invalid
+
+	lda		#AY_BFINE
+	ldx		#$99
+	jsr		AY1_WriteRegValue
+
+	lda		#$69
+	jsr		AY2_WriteReg		; (don't set latch addr) AY2:latch_addr=invalid, so write is ignored. First time AY_CS2 is asserted.
+
+	ldx		#AY_BFINE
+	jsr		AY1_ReadRegValue	; AY1:reg#2 = $99
+	ldx		#$99
+	cmp		#$99
+	bne		@errorXA
+
+	ldx		#AY_BFINE
+	jsr		AY2_ReadRegValue	; AY2:reg#2 = $00
+	ldx		#$00
+	cmp		#$00
+	bne		@errorXA
 
 	;
 
@@ -1306,6 +1313,11 @@ TestAYPhasor3
 
 	lda		#PH_PHASOR
 	jsr		SetPhasorMode
+
+	;
+	; 0) Test WRITE for setting independent latch addr's for AY1 & AY2
+	; [Sequence E / AppleWin-GH#1192]
+	;
 
 	lda		#SY6522_A_PH_BASE
 	sta		zpTmp3
