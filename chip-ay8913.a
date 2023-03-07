@@ -267,11 +267,13 @@ TestAY8913
 
 ;--------------------------------------
 
+NUM_AY_TESTS = 5
+
 ; 1) Test #10,... Called for Mockingboard or Phasor(phasorMode = PH_MOCKINGBOARD) or MB4C
-;		test AY: data & addr lines
+;		test AY: data lines, addr lines, etc
 ; 2) Test #20,... Called for Phasor(phasorMode = PH_PHASOR)
-;		test AY1: data & addr lines
-;		test AY2: data & addr lines
+;		test AY1: data lines, addr lines, etc
+;		test AY2: data lines, addr lines, etc
 
 TestAYs
 ; Pre:
@@ -286,7 +288,7 @@ TestAYs
 -		lsr		zpTmp1
 		bcs		+
 			clc
-			lda		#8				; 8 tests per AY (**)
+			lda		#NUM_AY_TESTS*2	; # tests x 2 AYs (**)
 			adc		testNum
 			sta		testNum
 			jmp		++
@@ -297,69 +299,67 @@ TestAYs
 		cmp		#PH_PHASOR
 		beq		@ph
 
+		; Mockingboard
+
 			lda		#0				; AY select ($00)
 			sta		zpTmp4
 
-			inc		testNum			; test #n+0, #n+8 (**)
+			inc		testNum			; test #n+0, #n+5 (**)
 			jsr		TestAYDatalines
 			bcs		+
 
-			inc		testNum			; test #n+1, #n+9
+			inc		testNum			; test #n+1, #n+6
 			jsr		TestAYAddrlines
 			bcs		+
 
-			inc		testNum			; test #n+2, #n+A
+			inc		testNum			; test #n+2, #n+7
 			jsr		TestAYWriteReadWithoutSelect
 			bcs		+
 
-			inc		testNum			; test #n+3, #n+B
+			inc		testNum			; test #n+3, #n+8
 			jsr		TestAYLatchAddress
 			bcs		+
 
-			inc		testNum			; test #n+4 - skip, as Phasor only
-			inc		testNum			; test #n+5 - skip, as Phasor only
-			inc		testNum			; test #n+6 - skip, as Phasor only
-			inc		testNum			; test #n+7 - skip, as Phasor only
+			inc		testNum			; test #n+4, #n+9
+			jsr		TestAYReadHiZ
+			bcs		+
+
+			clc
+			lda		#NUM_AY_TESTS	; skip the Phasor-only tests for 2nd AY
+			adc		testNum
+			sta		testNum
 			bcc		++
 
-		;
+		; Phasor
 
 @ph			lda		#$40			; AY1 select ($40)
 			sta		zpTmp4
+                                        ; test   6522-A   ;  6522-B
+                                        ; test  AY1,  AY2 ; AY1,  AY2
+@ph_next_ay		inc		testNum			; test #n+0, #n+5, #n+A, #n+0F (**)
+				jsr		TestAYDatalines
+				bcs		+
 
-			inc		testNum			; test #n+0, #n+8 (**)
-			jsr		TestAYDatalines
-			bcs		+
+				inc		testNum			; test #n+1, #n+6, #n+B, #n+10
+				jsr		TestAYAddrlines
+				bcs		+
 
-			inc		testNum			; test #n+1, #n+9
-			jsr		TestAYAddrlines
-			bcs		+
+				inc		testNum			; test #n+2, #n+7, #n+C, #n+11
+				jsr		TestAYWriteReadWithoutSelect
+				bcs		+
 
-			inc		testNum			; test #n+2, #n+A
-			jsr		TestAYWriteReadWithoutSelect
-			bcs		+
+				inc		testNum			; test #n+3, #n+8, #n+D, #n+12
+				jsr		TestAYLatchAddress
+				bcs		+
 
-			inc		testNum			; test #n+3, #n+B
-			jsr		TestAYLatchAddress
-			bcs		+
+				inc		testNum			; test #n+4, #n+9, #n+E, #n+13
+				jsr		TestAYReadHiZ
+				bcs		+
 
+			lda		zpTmp4
+			bmi		++
 			asl		zpTmp4			; AY2 select ($80)
-
-			inc		testNum			; test #n+4, #n+C
-			jsr		TestAYDatalines
-			bcs		+
-
-			inc		testNum			; test #n+5, #n+D
-			jsr		TestAYAddrlines
-			bcs		+
-
-			inc		testNum			; test #n+6, #n+E
-			jsr		TestAYWriteReadWithoutSelect
-			bcs		+
-
-			inc		testNum			; test #n+7, #n+F
-			jsr		TestAYLatchAddress
-			bcs		+
+			bne		@ph_next_ay
 
 ++		lda		#SY6522_B_BASE
 		cmp		zpTmp3
@@ -692,6 +692,85 @@ TestAYLatchAddress
 @error
 	sec							; C=1(NG)
 	bcs		@done
+
+;--------------------------------------
+
+HiZ_TEST_VALUE = %01010101			; Value with a mix of 0s and 1s
+
+TestAYReadHiZ
+; Read AY reg *after* READ/INACTIVE funcs - 6522/AY8913 bus is in high impedance
+; Pre:
+;	zpTmp3 = SY6522_A_BASE or SY6522_A_PH_BASE or SY6522_B_BASE
+;	zpTmp4 = AY chip select: 0(MB), $40(Phasor-AY1), $80(Phasor-AY2)
+; Post: C=0(OK), C=1(NG)
+;	zpTmp2 = expected, A = actual
+
+	jsr		resetSubTest			; subTest #0
+	jsr		incTotalTests
+
+	jsr		Init6522ForAY
+
+	lda		#AY_AFINE
+	ldx		#HiZ_TEST_VALUE
+	jsr		AY_WriteRegValue		; NB. For Phasor: CS=AY1+AY2
+
+	ldx		#AY_AFINE
+
+	bit		zpTmp4					; N=b7, V=b6
+	bvs		@ph1
+	bmi		@ph2
+
+@mb		lda		isPhasorCard
+		bne		@mb_ph
+
+		jsr		AY_ReadRegValue		; Original MB can read reg from Port-A immediately after INACTIVE
+		lda		(MBBase),y			; Read Port-A
+		ldx		#HiZ_TEST_VALUE
+		cmp		#HiZ_TEST_VALUE
+		bne		@errorXA
+
+		jsr		incSubTestNum		; subTest #1
+		lda		#$ff				; WAIT $28882 cy - bus doesn't float
+		jsr		myWAIT
+		lda		(MBBase),y			; Read Port-A
+		ldx		#HiZ_TEST_VALUE
+		cmp		#HiZ_TEST_VALUE
+		bne		@errorXA
+		beq		+
+
+@mb_ph	jsr		AY_ReadRegValue		; Phasor/AY8913 bus floats high immediately (even in Mockingboard mode)
+		lda		(MBBase),y			; Read Port-A
+		jmp		++
+
+@ph1	jsr		AY1_ReadRegValue	; Phasor/AY8913 bus floats high immediately
+		lda		(MBBase),y			; Read Port-A
+		jmp		++
+
+@ph2	jsr		AY2_ReadRegValue	; Phasor/AY8913 bus floats high immediately
+		lda		(MBBase),y			; Read Port-A
+++		ldx		#$ff
+		cmp		#$ff
+		bne		@errorXA
+;		beq		+
+
++	clc							; C=0(OK)
+
+@done
+	php
+	pha
+	jsr		AY_SetPortAOutput	; DDRA=0xFF
+	pla
+	plp
+
+	rts
+
+@errorXA
+	stx		zpTmp2
+
+@error
+	sec							; C=1(NG)
+	bcs		@done
+
 
 ;--------------------------------------
 
