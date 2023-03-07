@@ -1473,6 +1473,7 @@ TestAYPhasor4
 	; 0) Test that AY1 stays selected after 1st WRITE, by doing a 2nd WRITE
 	; 1) Test that AY2 stays selected after 1st WRITE, by doing a 2nd WRITE
 	; 2) Test for when both AY1 & AY2 are selected via PortB
+	; 3) Test for when both AY1 & AY2 are written via PortB
 
 	jsr		resetSubTestMinus1
 	jsr		incTotalTests
@@ -1502,13 +1503,17 @@ TestAYPhasor4
 	jsr		AY1_ReadRegValue
 	ldx		#$22
 	cmp		#$22
-	bne		@errorXA
+	beq		+
+	jmp		@errorXA
++
 
 	ldx		#AY_BFINE
 	jsr		AY2_ReadRegValue	; check AY2 reg2
 	ldx		#$00
 	cmp		#$00
-	bne		@errorXA
+	beq		+
+	jmp		@errorXA
++
 
 	;
 	; 1) Test that AY2 stays selected after 1st WRITE, by doing a 2nd WRITE
@@ -1547,12 +1552,12 @@ TestAYPhasor4
 	lda		#0
 	sta		zpTmp2
 
-@loop	jsr		Init6522ForAY
+@loop2	jsr		Init6522ForAY
 
 		; GAL logic:
 		; . AY2 & AY1 LATCH func selects AY2 and AY1; sets latch addr for AY2 and AY1
 		lda		#AY_BFINE
-		jsr		SF_SelectReg		;  (*4.2) selects AY1, selects AY2
+		jsr		SF_SelectReg		; (*4.2) selects AY1 & AY2 via PortB
 
 		lda		zpTmp2
 		jsr		AY1_WriteReg		; writes AY1; writes AY2 since also selected
@@ -1568,7 +1573,39 @@ TestAYPhasor4
 		bne		@error
 
 		inc		zpTmp2
-		bne		@loop
+		bne		@loop2
+
+	;
+	; 3) Test for when both AY1 & AY2 are written via PortB
+	; Since CS is active low, then just use the regular Mockingboard SF_WriteReg() function (*4.3)
+	;
+
+	jsr		incSubTestNum		; subTest #3
+
+	lda		#0
+	sta		zpTmp2
+
+@loop3	jsr		Init6522ForAY
+
+		lda		#AY_BFINE
+		ldx		#$11
+		jsr		AY1_WriteRegValue	; select AY1; deselect AY2; sets latch addr for AY1 & write AY1
+
+		lda		zpTmp2
+		jsr		SF_WriteReg			; (*4.3) selects AY1 & AY2 via PortB; only writes AY1
+
+		ldx		#AY_BFINE
+		jsr		AY2_ReadRegValue	; check write to AY2 didn't occur
+		cmp		#$00
+		bne		@error
+
+		ldx		#AY_BFINE
+		jsr		AY1_ReadRegValue
+		cmp		zpTmp2
+		bne		@error
+
+		inc		zpTmp2
+		bne		@loop3
 
 ;	jsr		AY_SetPortAOutput
 
