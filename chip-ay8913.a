@@ -11,7 +11,7 @@ DetectAY8913
 ;	hasAY8913 = 0
 ;	isPhasorCard, isMB4C, isEchoPlus
 ; Post:
-;	hasAY8913 = %0000,%0001,%0010,%0011 - for Mockingboard
+;	hasAY8913 = %0000,%0001,%0010,%0011 - for Mockingboard or Echo+ or MB4C
 ;	hasAY8913 = %0000,%0001,%0010,%0011,%0100,...,%1111 - for Phasor
 
 	lda		zpTmp1
@@ -24,12 +24,64 @@ DetectAY8913
 +
 
 	lda		isMB4C				; TODO: support MB4C (just like a regular Mockingboard?)
-	ora		isEchoPlus			; TODO: support Echo+ AY detection
 	beq		+
 		lda		#%00000011
 		sta		hasAY8913		; For now just assume they are all working
 		rts
 +
+
+	lda		isEchoPlus			; Echo+ AY detection
+	beq		@mb
+
+	lda		#SY6522_A_BASE		; only one 6522, but use zpTmp3 (6522-A or 6522-B) to config chip-select
+	sta		zpTmp3
+	lda		#1					; hasAY8913 mask
+	sta		zpTmp2
+
+-		jsr		Init6522ForAY
+
+		lda		#AY_AFINE
+		ldy		#$AA
+		jsr		AY_Echo_WriteRegValueEx
+
+		lda		#AY_BFINE
+		ldy		#$55
+		jsr		AY_Echo_WriteRegValueEx
+
+		lda		#AY_CFINE
+		ldy		#$69
+		jsr		AY_Echo_WriteRegValueEx
+
+		;
+
+		ldy		#AY_AFINE
+		jsr		AY_Echo_ReadRegValueEx
+		cmp		#$AA
+		bne		+
+
+		ldy		#AY_BFINE
+		jsr		AY_Echo_ReadRegValueEx
+		cmp		#$55
+		bne		+
+
+		ldy		#AY_CFINE
+		jsr		AY_Echo_ReadRegValueEx
+		cmp		#$69
+		bne		+
+
+			lda		hasAY8913
+			ora		zpTmp2
+			sta		hasAY8913
+
++		asl		zpTmp2			; AY mask <<= 1
+		lda		zpTmp3
+		eor		#$80
+		sta		zpTmp3
+		bne		-
+
+		rts
+
+@mb	; Mockingboard
 
 	lda		#SY6522_A_BASE
 	sta		zpTmp3
@@ -74,7 +126,7 @@ DetectAY8913
 			ora		zpTmp2
 			sta		hasAY8913
 
-+		asl		zpTmp2			; mask <<= 1
++		asl		zpTmp2			; AY mask <<= 1
 		lda		zpTmp3
 		eor		#$80
 		sta		zpTmp3
@@ -136,7 +188,7 @@ DetectAY8913
 			ora		zpTmp2
 			sta		hasAY8913
 
-+		asl		zpTmp2			; mask <<= 1
++		asl		zpTmp2			; AY mask <<= 1
 		lda		#SY6522_B_BASE
 		cmp		zpTmp3
 		beq		+
@@ -146,9 +198,7 @@ DetectAY8913
 +	lda		#PH_MOCKINGBOARD
 	jsr		SetPhasorMode
 
-	;
-
-@ok	rts
+	rts
 
 ;------------------------------------------------------------------------------
 
@@ -2530,6 +2580,15 @@ AY_Echo_ReadReg
 
 ;--------------------------------------
 
+AY_Echo_WriteRegValueEx
+; Pre: zpTmp3 = SY6522_A_BASE, SY6522_B_BASE - used to config chip-select
+	ldx		zpTmp3
+	bne		+
+	ldx		#AY_ECHO_CS1|AY_LATCH
+	bne		AY_Echo_WriteRegValue
++	ldx		#AY_ECHO_CS2|AY_LATCH
+	; fall through...
+
 AY_Echo_WriteRegValue
 ; Pre: X = [AY_ECHO_CS1|AY_ECHO_CS2]|AY_LATCH
 ;	A=reg#
@@ -2542,6 +2601,17 @@ AY_Echo_WriteRegValue
 	jsr		AY_Echo_SelectReg
 	lda		zpTmp5			; restore value
 	jmp		AY_Echo_WriteReg
+
+;
+
+AY_Echo_ReadRegValueEx
+; Pre: zpTmp3 = SY6522_A_BASE, SY6522_B_BASE - used to config chip-select
+	ldx		zpTmp3
+	bne		+
+	ldx		#AY_ECHO_CS1|AY_LATCH
+	bne		AY_Echo_ReadRegValue
++	ldx		#AY_ECHO_CS2|AY_LATCH
+	; fall through...
 
 AY_Echo_ReadRegValue
 ; Pre: X = [AY_ECHO_CS1|AY_ECHO_CS2]|AY_LATCH
