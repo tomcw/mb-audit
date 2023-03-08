@@ -47,6 +47,9 @@ ZP_BASE = $f0
 zpTmpPtr2 = $f2
 zpTmpPtr2L = zpTmpPtr2
 zpTmpPtr2H = zpTmpPtr2+1
+zpTmpSrc = $f4
+zpTmpSrcL = zpTmpSrc
+zpTmpSrcH = zpTmpSrc+1
 MBTimer = $f4
 MBTimerL = MBTimer
 MBTimerH = MBTimer+1
@@ -197,6 +200,7 @@ entrypoint
 	sta		totalTests+0
 	sta		totalTests+1
 	sta		totalTests+2
+	sta		warningCount
 
 	lda		#7
 	sta		slotUnderTest
@@ -230,7 +234,7 @@ entrypoint
 				bne		+++
 					jsr		DumpAYRegs	; if AY8913 failed then dump all AY regs
 +++				jmp		exit
-++
+++			jsr		PrintWarning	; if there's a warning then print it. Reset warningCount to 0.
 			;
 +		dec		slotUnderTest
 		bne		@nextSlot
@@ -840,6 +844,88 @@ incTotalTests
 	bne		+
 	inc		totalTests+2
 +	rts
+
+;------------------------------------------------------------------------------
+
+setWarning
+; Pre: X = expected; A = actual
+; Post: warningCount++
+;	only set the warningXxx vars for 1st warning
+; Trashes: zpTmpPtr2L/H; zpTmpSrcL/H
+
+	stx		errorExpected
+	sta		errorActual
+
+	lda		warningCount
+	bne		+
+
+		; src
+		lda		#<testComponentNum
+		sta		zpTmpSrcL
+		lda		#>testComponentNum
+		sta		zpTmpSrcH
+
+		; dst
+		lda		#<warningTestComponentNum
+		sta		zpTmpPtr2L
+		lda		#>warningTestComponentNum
+		sta		zpTmpPtr2H
+
+		ldy		#4
+-			lda		(zpTmpSrc),y
+			sta		(zpTmpPtr2),y
+			dey
+			bpl		-
+
+	;
+
++	inc		warningCount
+	rts
+
+;--------------------------------------
+
+PrintWarning
+; if warningCount>0 then print a single line warning
+; Pre:
+; Post: warningCount = 0
+
+	lda		warningCount
+	beq		+
+
+		; single line warning:
+		; .0123456789012345678901234567890123456789
+		; "Slot #n :Test warning:CC TT SS XX AA"	; Component Test Subtest eXpected Actual
+
+		jsr		PrintSlotNum
+
+		lda		#<msg_TestWarning
+		ldx		#>msg_TestWarning
+		jsr		Print
+
+		ldx		warningTestComponentNum
+		jsr		PRNTX_SPACE
+		ldx		warningTestNum
+		jsr		PRNTX_SPACE
+		ldx		warningSubTestNum
+		jsr		PRNTX_SPACE
+		ldx		warningExpected
+		jsr		PRNTX_SPACE
+		ldx		warningActual
+		jsr		PRNTX
+
+		lda		#$80+$0d
+		jsr		COUT
+
++	lda		#0
+	sta		warningCount
+	rts
+
+;
+
+PRNTX_SPACE
+	jsr		PRNTX
+	lda		#$80+' '
+	jmp		COUT
 
 ;------------------------------------------------------------------------------
 
@@ -1514,11 +1600,22 @@ is65C02or65816	!byte 0
 
 slotUnderTest	!byte 0
 
+; NB. Keep these 5 vars consecutive so we can just do a copy to warningtestComponentNum,...,warningActual
 testComponentNum	!byte COMPONENT_CARD
 testNum			!byte 0
 subTestNum		!byte 0
+errorExpected	!byte 0
+errorActual		!byte 0
+
 totalTests		!byte 0,0,0
 soakTestNum		!byte 0
+
+warningCount	!byte 0
+warningTestComponentNum	!byte 0	; these are only set for the 1st warning
+warningTestNum			!byte 0
+warningSubTestNum		!byte 0
+warningExpected			!byte 0
+warningActual			!byte 0
 
 isMegaAudioCard	!byte 0
 isMB4C			!byte 0
@@ -1554,9 +1651,6 @@ saveNMI			!byte 0,0,0
 saveRESETL		!byte 0
 saveRESETH		!byte 0
 savePWREDUP		!byte 0
-
-errorExpected	!byte 0
-errorActual		!byte 0
 
 hasBeenReset	!byte 0
 userlandSP		!byte 0
@@ -1594,6 +1688,9 @@ msg_SlotEnd !text 0
             ;Slot #? :9012345678901234567890123456789
 msg_TestFailed !text "Mockingboard failed test:"	; [Card|6522|AY8913|SC01|SSI263]
 msg_TestFailedEnd !text 0
+
+msg_TestWarning !text "Test warning:"
+msg_TestWarningEnd !text 0
 
 ; NB. These sub-strings must be exactly 6 chars
 msg_componentCard	!text " Card ",0

@@ -230,13 +230,13 @@ TestAY8913
 		lda		#PH_PHASOR
 		jsr		SetPhasorMode
 
-		lda		#$1f
+		lda		#$2f
 		sta		testNum
 
 		lda		#SY6522_A_PH_BASE
 		sta		zpTmp3				; 6522-A base addr *for Phasor*
 
-		jsr		TestAYs				; test #20,...
+		jsr		TestAYs				; test #30,...
 
 		php
 		pha
@@ -271,7 +271,7 @@ NUM_AY_TESTS = 5
 
 ; 1) Test #10,... Called for Mockingboard or Phasor(phasorMode = PH_MOCKINGBOARD) or MB4C
 ;		test AY: data lines, addr lines, etc
-; 2) Test #20,... Called for Phasor(phasorMode = PH_PHASOR)
+; 2) Test #30,... Called for Phasor(phasorMode = PH_PHASOR)
 ;		test AY1: data lines, addr lines, etc
 ;		test AY2: data lines, addr lines, etc
 
@@ -304,23 +304,24 @@ TestAYs
 			lda		#0				; AY select ($00)
 			sta		zpTmp4
 
-			inc		testNum			; test #n+0, #n+5 (**)
+                                    ; test 6522-A; 6522-B
+			inc		testNum			; test #n+0, #n+A (**)
 			jsr		TestAYDatalines
 			bcs		+
 
-			inc		testNum			; test #n+1, #n+6
+			inc		testNum			; test #n+1, #n+B
 			jsr		TestAYAddrlines
 			bcs		+
 
-			inc		testNum			; test #n+2, #n+7
+			inc		testNum			; test #n+2, #n+C
 			jsr		TestAYWriteReadWithoutSelect
 			bcs		+
 
-			inc		testNum			; test #n+3, #n+8
+			inc		testNum			; test #n+3, #n+D
 			jsr		TestAYLatchAddress
 			bcs		+
 
-			inc		testNum			; test #n+4, #n+9
+			inc		testNum			; test #n+4, #n+E
 			jsr		TestAYReadHiZ
 			bcs		+
 
@@ -704,6 +705,7 @@ TestAYReadHiZ
 ;	zpTmp4 = AY chip select: 0(MB), $40(Phasor-AY1), $80(Phasor-AY2)
 ; Post: C=0(OK), C=1(NG)
 ;	zpTmp2 = expected, A = actual
+;	can set: warningCount + warnings vars
 
 	jsr		resetSubTest			; subTest #0
 	jsr		incTotalTests
@@ -736,7 +738,7 @@ TestAYReadHiZ
 		ldx		#HiZ_TEST_VALUE
 		cmp		#HiZ_TEST_VALUE
 		bne		@errorXA
-		beq		+
+		beq		@done
 
 @mb_ph	jsr		AY_ReadRegValue		; Phasor/AY8913 bus floats high immediately (even in Mockingboard mode)
 		lda		(MBBase),y			; Read Port-A
@@ -750,27 +752,14 @@ TestAYReadHiZ
 		lda		(MBBase),y			; Read Port-A
 ++		ldx		#$ff
 		cmp		#$ff
-		bne		@errorXA
-;		beq		+
-
-+	clc							; C=0(OK)
-
-@done
-	php
-	pha
-	jsr		AY_SetPortAOutput	; DDRA=0xFF
-	pla
-	plp
-
-	rts
+		beq		@done
 
 @errorXA
-	stx		zpTmp2
+	jsr		setWarning			; pre: X = expected; A = actual
 
-@error
-	sec							; C=1(NG)
-	bcs		@done
-
+@done
+	clc							; C=0(OK / WARNING)
+	jmp		AY_SetPortAOutput	; DDRA=0xFF
 
 ;--------------------------------------
 
