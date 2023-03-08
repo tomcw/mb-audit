@@ -480,6 +480,7 @@ TestTones
 ;------------------------------------------------------------------------------
 
 DumpAYRegs
+; Dump order is: 6522-A AY1 (and AY2), 6522-B AY1 (and AY2)
 ; For each AY show 2 rows:
 ; 1) current regs
 ; 2) writes values {0,1,...,D}, then read back & show
@@ -504,26 +505,14 @@ DumpAYRegs
 
 	;
 
-	lda		isPhasorCard
-	bne		@ph
+	lda		#SY6522_A_PH_BASE		; 6522 A (OK for Mockingboard too)
+	jsr		@ReadRegsAndOutputForAY12
 
-		; Mockingboard
-
-		lda		#0			; AY select ($00)
-		jsr		@ReadRegsAndOutputForChipsAB
-		beq		@done
-
-		; Phasor
-
-@ph		lda		#$40		; AY1 select ($40)
-		jsr		@ReadRegsAndOutputForChipsAB
-
-		lda		#$80		; AY2 select ($80)
-		jsr		@ReadRegsAndOutputForChipsAB
+	lda		#SY6522_B_BASE			; 6522 B
+	jsr		@ReadRegsAndOutputForAY12
 
 	;
 
-@done
 	lda		isPhasorCard
 	beq		+
 		lda		#PH_MOCKINGBOARD
@@ -533,36 +522,34 @@ DumpAYRegs
 
 ;
 
-@ReadRegsAndOutputForChipsAB
-; Pre: A = AY chip select: 0(MB), $40(Phasor-AY1), $80(Phasor-AY2)
+@ReadRegsAndOutputForAY12
+; Pre: A = 6522 chip select: SY6522_A_BASE, SY6522_A_PH_BASE, SY6522_B_BASE
 ; Post: Z = 1
 
-	sta		zpTmp4
-
-	lda		#SY6522_A_PH_BASE
 	sta		zpTmp3
 
--		jsr		AYReadRegs
+	lda		isPhasorCard
+	beq		+				; $00: Mockingboard's AY
+
+	lda		#$40			; $40: Phasor's AY1
++	sta		zpTmp4
+
+
+-		jsr		AYReadRegs			; Post: zpTmpPtr2L,H = &ayRegs
 		jsr		@OutputAYRegs
 
-		jsr		AYSetAndReadRegs
+		jsr		AYSetAndReadRegs	; Post: zpTmpPtr2L,H = &ayRegs
 		jsr		@OutputAYRegs
 
-		lda		#SY6522_B_BASE
-		cmp		zpTmp3
-		beq		+
-		sta		zpTmp3
-		bne		-			; bra
+		asl		zpTmp4
+		bne		-			; $80: branch only to do Phasor's AY2
 
-+	rts
+	rts
 
 ;
 
 @OutputAYRegs
-	lda		#<ayRegs
-	sta		zpTmpPtr2L
-	lda		#>ayRegs
-	sta		zpTmpPtr2H
+; Pre: zpTmpPtr2L,H = &ayRegs
 
 	lda		#0
 	sta		zpTmp2
