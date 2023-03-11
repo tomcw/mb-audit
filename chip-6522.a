@@ -73,6 +73,7 @@ SF_GetTimerL				; Based on Skyfox's detection code (but uses T2 instead of T1)
 DetectMegaAudioCard
 ; Pre:
 ; Post: isMegaAudioCard
+;	Z=1:  no MegaAudio
 
 	sei
 	lda		#<Check6522ISR
@@ -3215,8 +3216,12 @@ T6522_18
 ;------------------------------------------------------------------------------
 
 Test6522MultiCard
-; Pre: There are at least 2 MB cards
+; Pre: There are at least 2 MB cards each with 2x 6522s(*)
 ; Post: C=0(OK), C=1(NG)
+;
+; (*) 2x 6522 required, as the ISR can't correctly handle a single 6522 mapped to $Cn00 and $Cn80, eg:
+; . Card #2 is Echo+ (single 6522)
+; . End up with an isrError, eg. expected(intsRemaining) = $CF, actual = $10(for an IRQ from card #2, TIMER2)
 ;
 
 	lda		#COMPONENT_6522+2	; test component $12
@@ -3252,7 +3257,7 @@ FindMultiCards
 ; Pre:
 ; Post: (MBBase) = card #1 at higher I/O addr
 ;		(MBBase2) = card #2 at lower I/O addr
-;		zpTmp1 = has6522 for card #2
+;		zpTmp1 = "has6522" for card #2
 ;
 
 	ldx		#7
@@ -3272,7 +3277,7 @@ FindMultiCards
 		dex
 		bne		@findCard2
 
-+	sta		zpTmp1					; has6522 for card #2
++	sta		zpTmp1					; "has6522" for card #2
 	txa
 	ora		#$c0
 	sta		MBBase2H
@@ -3285,7 +3290,8 @@ FindMultiCards
 
 MCT6522_0
 ; Pre: MBBase & MBase2 setup
-;	zpTmp1 = has6522 for card #2
+;	has6522 for card #1
+;	zpTmp1 = equivalent "has6522" for card #2
 ; Post: C=0(OK), C=1(NG)
 ;
 ; MultiCard Test#0
@@ -3324,10 +3330,9 @@ MCT6522_0
 		sta		zpTmp2				; mask (also used by ISR, but OK since we have SEI)
 
 @6522_A		lda		has6522
-			pha
 			and		#HAS_6522A
 			beq		@6522_B
-			pla
+			lda		has6522
 			and		#NMI_FOR_6522A
 			bne		@6522_B
 
@@ -3367,10 +3372,9 @@ MCT6522_0
 			asl		zpTmp2
 
 			lda		has6522
-			pha
 			and		#HAS_6522B
 			beq		@nextCard
-			pla
+			lda		has6522
 			and		#NMI_FOR_6522B
 			bne		@nextCard
 
@@ -3908,7 +3912,7 @@ Setup6522ForReset
 		sta		MBBaseL
 +
 
-	lda		#COMPONENT_6522+2		; test component $12
+	lda		#COMPONENT_6522+2		; test component $13
 	sta		testComponentNum
 	lda		#$f0
 	sta		testNum					; test #f0

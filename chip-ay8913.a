@@ -881,6 +881,7 @@ TestAYEchoPlus
 	bne		+
 
 	lda		isPhasorCard
+	tax							; A==X (don't care about value)
 	beq		+
 
 		;
@@ -2225,18 +2226,21 @@ Init6522ForAY
 	lda		#SY6522_DDRB
 	ora		zpTmp3
 	tay
+
+	lda		isEchoPlus
+	bne		@ph_ep
+	lda		isPhasorCard
+	beq		@mb
 	lda		phasorMode
 	cmp		#PH_MOCKINGBOARD
-	bne		+
-		lda		#$07			; Mockingboard
-		bne		++
-+		lda		#$1f			; Phasor & Echo+
-++	sta		(MBBase),y
+	bne		@ph_ep
+@mb		lda		#$07			; Mockingboard
+		bne		+
+@ph_ep	lda		#$1f			; Phasor & Echo+
++	sta		(MBBase),y
 
-	lda		#SY6522_DDRA
-	ora		zpTmp3
-	tay
-	lda		#$ff	; output
+	iny							; Y = DDRA
+	lda		#$ff				; output
 	sta		(MBBase),y
 
 	ldy		zpTmp3

@@ -34,7 +34,7 @@
 ; . MEGA Audio (a2heaven)	MB-C					MB-C				6522 & AY8913 implemented in FPGA, supports 2x MB-C's
 ; Phasor
 ; . MB-C					6522-A/AY8913			6522-B/AY8913 +[1|2x SSI263]
-; . Echo+					6522-A/AY8913			6522-A/AY8913		Same 6522 mapped to both $00 & $80
+; . Echo+					6522-B/AY8913			6522-B/AY8913		Same 6522 mapped to both $00 & $80
 ; . Phasor native			6522-A/AY8913x2			6522-B/AY8913x2 +[1|2x SSI263]
 ; . Phasor (AppleWin)		Phasor +SC01			Phasor +[1|2x SSI263]
 ; Mockingboard 4c (Ian Kim)	6522-A/AY8913			6522-A/AY8913		Same 6522 mapped to both $00 & $80
@@ -239,7 +239,8 @@ entrypoint
 +		dec		slotUnderTest
 		bne		@nextSlot
 
-	lda		numMockingboards
+	jsr		GetNumMBsForMCT			; calc numMockingboardsForMCT
+	lda		numMockingboardsForMCT
 	cmp		#2
 	bcc		+						; (branch if A < 2)
 		jsr		Test6522MultiCard
@@ -412,7 +413,7 @@ TestTones
 		beq		@nextSlot
 
 			pha
-			and		#3
+			and		#HAS_6522B|HAS_6522A
 			sta		has6522
 			pla
 			lsr
@@ -424,6 +425,12 @@ TestTones
 			beq		+
 			lda		#0
 +			sta		isPhasorCard
+
+			lda		has6522
+			cmp		#HAS_6522B
+			beq		+
+			lda		#0
++			sta		isEchoPlus
 
 			jsr		PrintSlotNum
 			lda		#<msg_ToneKeys
@@ -477,8 +484,10 @@ TestTones
 
 @nextSlot
 		dec		slotUnderTest
-		bne		@loop
+		beq		@done
+		jmp		@loop
 
+@done
 	rts
 
 ;------------------------------------------------------------------------------
@@ -593,6 +602,26 @@ GetSlotInfo
 
 ;------------------------------------------------------------------------------
 
+GetNumMBsForMCT
+; Post: Z=1 (BEQ) if nothing found
+
+	lda		#0
+	sta		numMockingboardsForMCT
+
+	ldx		#7
+-		lda		slotInfo,x
+		beq		+
+			and		#HAS_6522B|HAS_6522A
+			cmp		#HAS_6522B|HAS_6522A
+			bne		+
+				inc		numMockingboardsForMCT
++		dex
+		bne		-
+
+	rts
+
+;------------------------------------------------------------------------------
+
 SetMBBase
 ; Pre: X=slot#
 ; Post: X=slot#
@@ -622,12 +651,32 @@ DetectSubunits
 	lda		#PH_MOCKINGBOARD
 	sta		phasorMode
 
-	; Determine if this is a Mockingboard or Phasor card
-
 	lda		zpTmp1
 	and		#HAS_6522B|HAS_6522A
 	cmp		#HAS_6522B|HAS_6522A
-	bne		@donePhasor
+	bne		@doneCardDetection
+
+	; Determine if this is a MegaAudio
+
+	jsr		DetectMegaAudioCard		; Post: Z=1 if no MegaAudio
+	bne		@doneCardDetection
+
+	; Determine if this is a MB4C or Echo+ card
+	; NB. if Phasor(Echo+ mode), then don't do the Phasor check - want to preserve the Echo+ mode for user
+
+	jsr		DetectMB4CorEchoPlus	; Post: Z=1 if no MB4C/EchoPlus
+	beq		+
+		; Indicate there's only a 6522 at $Cn80, otherwise some 6522 tests will fail
+		; NB. For Phasor(Echo+ mode), CTRL+RESET will switch back to MB mode, so need to use 6522-B
+		ldx		slotUnderTest
+		lda		#HAS_6522B
+		sta		slotInfo,x
+		sta		has6522
+		sta		zpTmp1
+		bne		@doneCardDetection
++
+
+	; Determine if this is a Mockingboard or Phasor card
 
 	lda		#$55
 	ldy		#SY6522_DDRB
@@ -639,7 +688,7 @@ DetectSubunits
 	lda		#PH_PHASOR
 	jsr		SetPhasorMode
 
-	; Phasor card in Phasor mode has floating-bus at $Cn00-$Cn0F
+	; Phasor card in Phasor-native mode has floating-bus at $Cn00-$Cn0F
 	ldy		#SY6522_DDRB
 	lda		#$55
 	cmp		(MBBase),y
@@ -655,23 +704,7 @@ DetectSubunits
 ++	lda		#PH_MOCKINGBOARD
 	jsr		SetPhasorMode
 
-@donePhasor
-
-	lda		zpTmp1
-	and		#HAS_6522B|HAS_6522A
-	cmp		#HAS_6522B|HAS_6522A
-	bne		+
-		jsr		DetectMegaAudioCard
-		jsr		DetectMB4CorEchoPlus	; Post: Z=1 if no MB4C/EchoPlus
-		beq		+
-			; Indicate there's only a 6522 at $Cn00, otherwise some 6522 tests will fail
-			ldx		slotUnderTest
-			lda		#HAS_6522A
-			sta		slotInfo,x
-			sta		has6522
-			sta		zpTmp1
-
-+
+@doneCardDetection
 
 	;
 
@@ -1592,7 +1625,8 @@ HAS_6522B		= %00000010	;   b1:    6522 at $80
 HAS_6522A		= %00000001	;   b0:    6522 at $00
 slotInfo		!fill 8,0	; slot[0..7]
 
-numMockingboards	!byte 0
+numMockingboards		!byte 0
+numMockingboardsForMCT	!byte 0		; num of Mockingboards for multi-card tests: need 2x 6522 per card
 
 is65C02			!byte 0
 is65816			!byte 0
