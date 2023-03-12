@@ -127,15 +127,16 @@ Where:
 
 AY-3-8913 tests
 - Try to write then read back the AY registers.
-  - NB. Not all cards support reading the AY registers (eg. Phasor in Echo+ mode).
 - Test address lines and data lines.
 - Test cards which have a single 6522, but 2x AY-3-8913s (eg. Echo+, MB4C).
+- Test Phasor's GAL logic for mixing the PSG AY1/AY2 LATCH & WRITE/READ functions (Phasor "native" mode).
 - Manual tone tests:
   - Keys: 1,2,3 for AY-3-8913 (chip-A) at $Cn00
   - Keys: 4,5,6 for AY-3-8913 (chip-B) at $Cn80
   - Keys: Q,W,E for 2nd AY-3-8913 (chip-A2) at $Cn00 (Phasor only)
   - Keys: R,T,Y for 2nd AY-3-8913 (chip-B2) at $Cn80 (Phasor only)
   - ESC to quit
+  - TAB to cycle Phasor -> Echo+ -> Mockingboard mode (Phasor card)
 
 SSI263 tests
 - Support a single or both socketed SSI263's.
