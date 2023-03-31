@@ -16,17 +16,40 @@ Detect6522
 	; . Due to floating bus (and the visible TEXT screen being mainly $A0 values), then empty slots will likely pass this IER.b7 check
 	ldy		#SY6522_A_BASE+SY6522_IER
 	lda		(MBBase),y
-	bmi		@check_A
+	bmi		@checkT2_A
+
+	;
+	; Could still be MegaAudio, so use TIMER1 (IER.b7 reads as 0, and TIMER2 isn't supported!)
+	;
+
+	ldy		#SY6522_A_BASE+SY6522_TIMER1L_COUNTER
+	jsr		@Check6522
+	bne		+
+		inc		slotInfo,x	; bit0=1
++
+
+@checkT1_B
+	ldy		#SY6522_B_BASE+SY6522_TIMER1L_COUNTER
+	jsr		@Check6522
+	bne		+
+		inc		slotInfo,x
+		inc		slotInfo,x	; bit1=1
++
+
 	rts
 
-@check_A
+	;
+	; For a regular Mockingboard, use TIMER2
+	;
+
+@checkT2_A
 	ldy		#SY6522_A_BASE+SY6522_TIMER2L_COUNTER
 	jsr		@Check6522
 	bne		+
 		inc		slotInfo,x	; bit0=1
 +
 
-@check_B
+@checkT2_B
 	ldy		#SY6522_B_BASE+SY6522_TIMER2L_COUNTER
 	jsr		@Check6522
 	bne		+
@@ -39,12 +62,12 @@ Detect6522
 	;
 
 @Check6522
-; Pre: Y = SY6522_TIMER2L_COUNTER for chip A or B
-; 	NB. Checking with T2 is more robust than with T1, as there's no latch
+; Pre: Y = SY6522_TIMER1L_COUNTER or SY6522_TIMER2L_COUNTER for chip A or B
+; 	NB. Checking with T2 is more robust than with T1, as there's no latch for T2
 ; Post: Z=1(OK), Z=0(NG)
 	lda		#4				; try 4 checks (avoid floating bus giving a false-positive)
 	sta		zpTmp1
-	lda		#1				; failures (can have 1 failure)
+	lda		#1				; failures (can have 1 failure - eg. for that flaky card that works most of the time)
 	sta		zpTmp2
 -		jsr		SF_GetTimerL
 		beq		+
@@ -56,8 +79,8 @@ Detect6522
 
 	;
 
-SF_GetTimerL				; Based on Skyfox's detection code (but uses T2 instead of T1)
-; Pre: Y = SY6522_TIMER2L_COUNTER for chip A or B
+SF_GetTimerL				; Based on Skyfox's detection code
+; Pre: Y = SY6522_TIMER1L_COUNTER or SY6522_TIMER2L_COUNTER for chip A or B
 ;	MBBaseL=$00 (whether checking chip A or B)
 ; Post: Z=1(OK), Z=0(NG)
 	lda		(MBBase),y
@@ -191,6 +214,9 @@ Check6522
 	lda		slotInfo,x
 	and		#3							; just 6522's
 	sta		zpTmp1
+
+	; Temporarily set isMegaAudioCard for Check6522Addrlines()
+	jsr		DetectMegaAudioCard
 
 	lda		#COMPONENT_6522+0			; test component $10
 	sta		testComponentNum
@@ -493,9 +519,13 @@ Check6522Addrlines
 		ldy		#SY6522_TIMER1H_LATCH	; %0111 (a2)
 		jsr		@check
 		bne		@6522_err
-		lda		#IER_SET|IxR_TIMER1|IxR_TIMER2	; $E0
-		ldy		#SY6522_IER				; %1110 (a3)
-		jsr		@check					; NB. Reading IER always returns b7=1
+		lda		isMegaAudioCard
+		beq		+
+			lda		#IER_CLR|IxR_TIMER1|IxR_TIMER2	; $60 - MegaAudio always returns 6522.IER.b7=0
+			bne		++
++			lda		#IER_SET|IxR_TIMER1|IxR_TIMER2	; $E0 - Real 6522 always returns 6522.IER.b7=1
+++		ldy		#SY6522_IER				; %1110 (a3)
+		jsr		@check
 		bne		@6522_err
 		lda		#$7f
 		sta		(MBBase),y				; IER=0
