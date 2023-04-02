@@ -3979,8 +3979,7 @@ RESET_T1L_l = $34
 RESET_T1L_h = $02
 
 Setup6522ForReset
-; Pre: X=slot#
-;	has6522, isMegaAudioCard
+; Pre: has6522, isMegaAudioCard
 ; Post: C=0(OK), C=1(NG)
 ;	NG: zpTmp2 = expected value; A = actual value
 ;
@@ -3992,8 +3991,6 @@ Setup6522ForReset
 ;
 
 	sei
-
-	jsr		SetMBBase
 
 	lda		has6522
 	lsr

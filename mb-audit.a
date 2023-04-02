@@ -331,10 +331,8 @@ nextSlot
 		beq		+
 			and		#3
 			sta		has6522
-			sta		zpTmp1
-			jsr		SetMBBase			; Pre: X=slot#
-			jsr		DetectMegaAudioCard	; Pre: zpTmp1; Post: isMegaAudioCard
-			ldx		slotUnderTest
+			jsr		SetMBBase				; pre: X=slot#
+			jsr		RestoreFromSlotInfo2	; pre: X=slot#
 			jsr		Setup6522ForReset
 			bcs		++
 			jsr		DisplaySlotUpdate
@@ -743,6 +741,73 @@ DetectSubunits
 +
 
 	sta		slotInfo,x				; slotInfo[slot] |= (hasAY8913 << 4)
+
+	;
+	; set slotInfo2
+	;
+
+	ldy		#CARDTYPE_MEGAAUDIO
+	lda		isMegaAudioCard
+	bne		@setSlotInfo2
+
+	dey
+	lda		isMB4C
+	bne		@setSlotInfo2
+
+	dey
+	lda		isEchoPlus
+	bne		@setSlotInfo2
+
+	dey
+	lda		isPhasorCard
+	bne		@setSlotInfo2
+
+	dey		; CARDTYPE_UNKNOWN
+
+@setSlotInfo2
+	tya
+	sta		slotInfo2,x
+
+	rts
+
+;------------------------------------------------------------------------------
+
+RestoreFromSlotInfo2
+; pre: X=slot#
+; post: isMegaAudioCard, isMB4C, isEchoPlus, isPhasorCard
+
+	lda		#0
+	sta		isMegaAudioCard
+	sta		isMB4C
+	sta		isEchoPlus
+	sta		isPhasorCard
+
+	lda		slotInfo2,x
+	ldx		#1
+	and		#CARDTYPE_MASK
+	tay
+
+	beq		@done	; unknown
+	dey
+	beq		@phasor
+	dey
+	beq		@echoplus
+	dey
+	beq		@mb4c
+	; fall through...
+
+;@megaaudio
+	stx		isMegaAudioCard
+	rts
+@mb4c
+	stx		isMB4C
+	rts
+@echoplus
+	stx		isEchoPlus
+	rts
+@phasor
+	stx		isPhasorCard
+@done
 	rts
 
 ;------------------------------------------------------------------------------
@@ -1636,6 +1701,15 @@ NMI_FOR_6522A	= %00000100	;   b2:    NMI for 6522 at $00
 HAS_6522B		= %00000010	;   b1:    6522 at $80
 HAS_6522A		= %00000001	;   b0:    6522 at $00
 slotInfo		!fill 8,0	; slot[0..7]
+
+; slotInfo2 bitfield:
+CARDTYPE_MASK		= %00001111
+CARDTYPE_MEGAAUDIO	= 4
+CARDTYPE_MB4C		= 3
+CARDTYPE_ECHOPLUS	= 2
+CARDTYPE_PHASOR		= 1
+CARDTYPE_UNKNOWN	= 0
+slotInfo2		!fill 8,0	; slot[0..7]
 
 numMockingboards		!byte 0
 numMockingboardsForMCT	!byte 0		; num of Mockingboards for multi-card tests: need 2x 6522 per card
