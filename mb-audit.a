@@ -201,6 +201,7 @@ entrypoint
 	sta		totalTests+1
 	sta		totalTests+2
 	sta		warningCount
+	sta		numMegaAudioCards
 
 	lda		#7
 	sta		slotUnderTest
@@ -243,11 +244,15 @@ entrypoint
 	lda		numMockingboardsForMCT
 	cmp		#2
 	bcc		+						; (branch if A < 2)
-		jsr		Test6522MultiCard
-		bcs		@error				; NB. slotUnderTest=0
-		lda		#<msg_MultiCardOK
-		ldx		#>msg_MultiCardOK
-		jsr		Print
+		lda		#<msg_MultiCardSkipped
+		ldx		#>msg_MultiCardSkipped
+		ldy		numMegaAudioCards		; skip if any MegaAudio cards
+		bne		++
+			jsr		Test6522MultiCard
+			bcs		@error				; NB. slotUnderTest=0
+			lda		#<msg_MultiCardOK
+			ldx		#>msg_MultiCardOK
+++		jsr		Print
 +
 
 	jsr		TestReset
@@ -326,6 +331,10 @@ nextSlot
 		beq		+
 			and		#3
 			sta		has6522
+			sta		zpTmp1
+			jsr		SetMBBase			; Pre: X=slot#
+			jsr		DetectMegaAudioCard	; Pre: zpTmp1; Post: isMegaAudioCard
+			ldx		slotUnderTest
 			jsr		Setup6522ForReset
 			bcs		++
 			jsr		DisplaySlotUpdate
@@ -659,7 +668,10 @@ DetectSubunits
 	; Determine if this is a MegaAudio
 
 	jsr		DetectMegaAudioCard		; Post: Z=1 if no MegaAudio
-	bne		@doneCardDetection
+	beq		+
+		inc		numMegaAudioCards
+		bne		@doneCardDetection
++
 
 	; Determine if this is a MB4C or Echo+ card
 	; NB. if Phasor(Echo+ mode), then don't do the Phasor check - want to preserve the Echo+ mode for user
@@ -1627,6 +1639,7 @@ slotInfo		!fill 8,0	; slot[0..7]
 
 numMockingboards		!byte 0
 numMockingboardsForMCT	!byte 0		; num of Mockingboards for multi-card tests: need 2x 6522 per card
+numMegaAudioCards		!byte 0
 
 is65C02			!byte 0
 is65816			!byte 0
@@ -1752,6 +1765,9 @@ msg_ResetOKEnd !text 0
 
 msg_MultiCardOK !text "Multi-card tests passed",0xd
 msg_MultiCardOKEnd !text 0
+
+msg_MultiCardSkipped !text "(Multi-card tests skipped)",0xd
+msg_MultiCardSkippedEnd !text 0
 
 msg_ToneKeys !text "Tone: "
 msg_ToneKeysEnd !text 0

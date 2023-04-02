@@ -94,9 +94,17 @@ SF_GetTimerL				; Based on Skyfox's detection code
 ;------------------------------------------------------------------------------
 
 DetectMegaAudioCard
-; Pre:
+; Pre: zpTmp1 = slotInfo[slot]
 ; Post: isMegaAudioCard
 ;	Z=1:  no MegaAudio
+
+	lda		#0
+	sta		isMegaAudioCard
+
+	lda		zpTmp1
+	and		#HAS_6522B|HAS_6522A
+	cmp		#HAS_6522B|HAS_6522A
+	bne		@done
 
 	sei
 	lda		#<Check6522ISR
@@ -138,6 +146,7 @@ DetectMegaAudioCard
 	and		#1
 	sta		isMegaAudioCard
 
+@done
 	rts
 
 ;------------------------------------------------------------------------------
@@ -216,7 +225,7 @@ Check6522
 	sta		zpTmp1
 
 	; Temporarily set isMegaAudioCard for Check6522Addrlines()
-	jsr		DetectMegaAudioCard
+	jsr		DetectMegaAudioCard			; Pre: zpTmp1; Post: isMegaAudioCard
 
 	lda		#COMPONENT_6522+0			; test component $10
 	sta		testComponentNum
@@ -739,15 +748,13 @@ Check6522ISR
 ;	. [T6522_3, T6522_5] 6502|65C02 addr modes access of 6522 T1C
 ;	. [T6522_7, T6522_9, T6522_A, T6522_C] oneshot|continuous underflow, then T1L -> T1C
 ;	. [T6522_B] T1L=$0000, can only read T1C values of $00 and $FF
-;	. [T6522_A, T6522_E] 6522 period is N+2 cycles
-;	. [T6522_F] Alt test that 6522 period is N+2 cycles - currently disabled
+;	. [T6522_A, T6522_E] 6522 T1 period is N+2 cycles
+;	. [T6522_F] Alt test that 6522 T1 period is N+2 cycles
 ;	. [T6522_15] T1 int cleared/not cleared by certain register r/w's
 ;	T2:
 ;	. [T6522_2] oneshot x IRQ|poll
 ;	. [T6522_4, T6522_6] 6502|65C02 addr modes access of 6522 T2C
 ;	. [T6522_8, T6522_9, T6522_D] oneshot underflow, then T1L -> T1C
-;	. [T6522_E] 6522 period is N+2 cycles
-;	. [T6522_F] Alt test that 6522 period is N+2 cycles
 ;	[T6522_10, T6522_11] Test sub-opcode accuracy for reading IFR
 ;	[T6522_12] Test 6522s at $Cn10 and $Cn90
 ;	[T6522_13] Test Phasor can switch to Echo+
@@ -769,6 +776,18 @@ Test6522
 ; Uses: zpTmp1 (so don't use in sub-funcs)
 
 	sei
+
+	lda		isMegaAudioCard
+	bne		+
+		lda		#<testTbl
+		ldx		#>testTbl
+		bne		++
++		lda		#<testTbl_MegaAudio
+		ldx		#>testTbl_MegaAudio
+++	sta		@testTblX1+1
+	sta		@testTblX2+1
+	stx		@testTblX1+2
+	stx		@testTblX2+2
 
 	lda		#<Test6522ISR
 	ldx		#>Test6522ISR
@@ -794,10 +813,10 @@ Test6522
 @nextTest	jsr		incSoakDisplayTest
 
 			ldx		testTblIdx
-			lda		testTbl,x
+@testTblX1	lda		testTbl,x	; smc
 			sta		@jmpTest+1
 			inx
-			lda		testTbl,x
+@testTblX2	lda		testTbl,x	; smc
 			sta		@jmpTest+2
 			inx
 			stx		testTblIdx
@@ -882,6 +901,39 @@ testTbl
 	!word	T6522_17	; 37
 	!word	T6522_18	; 38
 	!word	0
+
+testTbl_MegaAudio
+	; MBBaseL = $00 and $80
+	!word	T6522_0		; 20
+	!word	T6522_1		; 21
+	!word	T6522_skip	; 22
+	!word	T6522_3		; 23
+	!word	T6522_skip	; 24
+	!word	T6522_5		; 25
+	!word	T6522_skip	; 26
+	!word	T6522_7		; 27
+	!word	T6522_skip	; 28
+	!word	T6522_skip	; 29
+	!word	T6522_A		; 2A
+	!word	T6522_B		; 2B
+	!word	T6522_C		; 2C
+	!word	T6522_skip	; 2D
+	!word	T6522_skip	; 2E
+	!word	T6522_skip	; 2F
+	!word	T6522_skip	; 30	; Emulation test error: 11:10:12 / Expected:12 Actual:13
+	!word	T6522_skip	; 31
+	!word	T6522_12	; 32
+	!word	T6522_13	; 33	; Phasor test - so test just returns 'OK'
+	!word	T6522_skip	; 34
+	!word	T6522_15	; 35
+	!word	T6522_skip	; 36
+	!word	T6522_17	; 37
+	!word	T6522_18	; 38
+	!word	0
+
+T6522_skip
+	clc
+	rts
 
 ;------------------------------------------------------------------------------
 
@@ -2135,6 +2187,7 @@ T6522_E
 ; . Test 6522 T1 period is N+2 cycles
 ;	use IRQ to trigger at start of opcode
 ;	NB. 6522 connected to NMI isn't supported
+; . Assume this won't work on Mega Audio - TODO: confirm this.
 ;
 
 	lda		MBBaseL
@@ -2227,8 +2280,9 @@ T6522_F
 ; Post: C=0(OK), C=1(NG)
 ;
 ; Test#F
-; . Test 6522 period is N+2 cycles
-;	alt version: just read IFR, not using IRQ - emulators must support sub-opcode accuracy for reading IFR
+; . Test 6522 T1 period is N+2 cycles
+;	alt version (cf. Test#E): just read IFR, not using IRQ - emulators must support sub-opcode accuracy for reading IFR
+; . Assume this won't work on Mega Audio - TODO: confirm this.
 ;
 
 	jsr		resetSubTest			; subTest #0
@@ -3866,6 +3920,11 @@ WaitT2OneShotUnderflow
 	rts
 
 WaitT2Underflow
+	lda		isMegaAudioCard
+	beq		+
+		rts							; Assume Mega Audio doesn't support Timer2!
++
+
 	ldy		#SY6522_TIMER2H_COUNTER
 -		lda		(MBBase),y			; wait $00nn
 		bne		-
@@ -3921,7 +3980,7 @@ RESET_T1L_h = $02
 
 Setup6522ForReset
 ; Pre: X=slot#
-;	has6522
+;	has6522, isMegaAudioCard
 ; Post: C=0(OK), C=1(NG)
 ;	NG: zpTmp2 = expected value; A = actual value
 ;
@@ -3929,6 +3988,7 @@ Setup6522ForReset
 ; 6522 regs that persist across reset: T1L_l ,T1L_h
 ; 6522 state that is cleared on reset: IRQ, ACR.T1_RUNMODE
 ; TODO: test 6522-B too; test that for Phasor card its mode reverts to PH_MOCKINGBOARD
+; . NB. isPhasorCard may not be correct is there are multiple MB cards
 ;
 
 	sei
@@ -3942,7 +4002,7 @@ Setup6522ForReset
 		sta		MBBaseL
 +
 
-	lda		#COMPONENT_6522+2		; test component $13
+	lda		#COMPONENT_6522+3		; test component $13
 	sta		testComponentNum
 	lda		#$f0
 	sta		testNum					; test #f0
@@ -3968,16 +4028,24 @@ Setup6522ForReset
 	ldy		#SY6522_TIMER2L_COUNTER
 	sta		(MBBase),y
 	ldy		#SY6522_TIMER2H_COUNTER
-	sta		(MBBase),y				; will underflow immediately & assert T2 IRQ
+	sta		(MBBase),y				; will underflow immediately & assert T2 IRQ (not for MegaAudio, since assume T2 isn't supported)
 
 	jsr		WaitT1Underflow			; Post: T1 IRQ asserted
 
 	ldy		#SY6522_IFR
 	lda		(MBBase),y
-	ldx		#IER_SET|IxR_TIMER1|IxR_TIMER2	; expected
-	and		#IER_SET|IxR_TIMER1|IxR_TIMER2
-	cmp		#IER_SET|IxR_TIMER1|IxR_TIMER2
-	bne		@error
+	and		#IER_SET|IxR_TIMER1|IxR_TIMER2		; NB. use 'IxR_TIMER2' in the bit-mask even for MegaAudio
+	ldx		isMegaAudioCard
+	bne		+
+		ldx		#IER_SET|IxR_TIMER1|IxR_TIMER2	; expected
+		cmp		#IER_SET|IxR_TIMER1|IxR_TIMER2
+		bne		@error
+		beq		++
++		; MegaAudio
+		ldx		#IER_SET|IxR_TIMER1				; expected
+		cmp		#IER_SET|IxR_TIMER1
+		bne		@error
+++
 
 	clc
 	rts								; C=0(OK)
@@ -3999,7 +4067,7 @@ Skip6522ForReset
 ;------------------------------------------------------------------------------
 
 Test6522AfterReset
-; Pre: has6522
+; Pre: has6522, isMegaAudioCard
 ; Post: C=0(OK), C=1(NG)
 ;	NG: zpTmp2 = expected value; A = actual value
 ;
@@ -4040,9 +4108,17 @@ Test6522AfterReset
 	jsr		incSubTestNum			; subTest #2
 	ldy		#SY6522_IER
 	lda		(MBBase),y
-	ldx		#$80					; expected
-	cmp		#$80
-	bne		@error
+	ldx		isMegaAudioCard
+	bne		+
+		ldx		#IER_SET			; expected
+		cmp		#IER_SET
+		bne		@error
+		beq		++
++		; MegaAudio
+		ldx		#IER_CLR			; expected
+		cmp		#IER_CLR
+		bne		@error
+++
 
 	; Test that T1 & T2 IRQs are now de-asserted
 	jsr		incSubTestNum			; subTest #3
