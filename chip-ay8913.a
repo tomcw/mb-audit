@@ -9,7 +9,7 @@
 DetectAY8913
 ; Pre: zpTmp1 = 6522 bitmap in b1:0
 ;	hasAY8913 = 0
-;	isPhasorCard, isMB4C, isEchoPlus
+;	isPhasorCard, isMegaAudioCard, isMB4C, isEchoPlus
 ; Post:
 ;	hasAY8913 = %0000,%0001,%0010,%0011 - for Mockingboard or Echo+ or MB4C
 ;	hasAY8913 = %0000,%0001,%0010,%0011,%0100,...,%1111 - for Phasor
@@ -23,7 +23,8 @@ DetectAY8913
 		jsr		SetPhasorMode
 +
 
-	lda		isMB4C				; TODO: support MB4C (just like a regular Mockingboard?)
+	lda		isMegaAudioCard		; Doesn't support AY register reads
+	ora		isMB4C				; TODO: support MB4C (just like a regular Mockingboard?)
 	beq		+
 		lda		#%00000011
 		sta		hasAY8913		; For now just assume they are all working
@@ -318,6 +319,7 @@ TestAY8913
 ;--------------------------------------
 
 NUM_AY_TESTS = 5
+HiZ_TEST = 4
 
 ; 1) Test #10,... Called for Mockingboard or Phasor(phasorMode = PH_MOCKINGBOARD) or MB4C
 ;		test AY: data lines, addr lines, etc
@@ -354,8 +356,18 @@ TestAYs
 			lda		#0				; AY select ($00)
 			sta		zpTmp4
 
+			lda		isMegaAudioCard
+			beq		@t0
+
+				; MegaAudio
+				clc
+				lda		#HiZ_TEST	; skip to TestAYReadHiZ
+				adc		testNum
+				sta		testNum
+				bne		@t_HiZ
+
                                     ; test 6522-A; 6522-B
-			inc		testNum			; test #n+0, #n+A (**)
+@t0			inc		testNum			; test #n+0, #n+A (**)
 			jsr		TestAYDatalines
 			bcs		+
 
@@ -371,7 +383,7 @@ TestAYs
 			jsr		TestAYLatchAddress
 			bcs		+
 
-			inc		testNum			; test #n+4, #n+E
+@t_HiZ		inc		testNum			; test #n+4, #n+E
 			jsr		TestAYReadHiZ
 			bcs		+
 

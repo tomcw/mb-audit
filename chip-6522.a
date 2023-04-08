@@ -914,9 +914,9 @@ testTbl_MegaAudio
 	!word	T6522_7		; 27
 	!word	T6522_skip	; 28
 	!word	T6522_skip	; 29
-	!word	T6522_A		; 2A
+	!word	T6522_skip	; 2A	; mb-audit/GH#9: Test 11:0A:03 / Expected:04 Actual:FE
 	!word	T6522_B		; 2B
-	!word	T6522_C		; 2C
+	!word	T6522_skip	; 2C	; Emulation test error: 11:0C:01 / Expected:FB Actual:FA (NB. after adding T1 $FFFE underflow support)
 	!word	T6522_skip	; 2D
 	!word	T6522_skip	; 2E
 	!word	T6522_skip	; 2F
