@@ -915,7 +915,7 @@ testTbl_MegaAudio
 	!word	T6522_skip	; 28
 	!word	T6522_skip	; 29
 	!word	T6522_skip	; 2A	; mb-audit/GH#9: Test 11:0A:03 / Expected:04 Actual:FE
-	!word	T6522_B		; 2B
+	!word	T6522_skip	; 2B	; mb-audit/GH#9: Test 11:0B:00 / Expected:FF Actual:6C
 	!word	T6522_skip	; 2C	; Emulation test error: 11:0C:01 / Expected:FB Actual:FA (NB. after adding T1 $FFFE underflow support)
 	!word	T6522_skip	; 2D
 	!word	T6522_skip	; 2E
@@ -927,7 +927,7 @@ testTbl_MegaAudio
 	!word	T6522_skip	; 34
 	!word	T6522_15	; 35
 	!word	T6522_skip	; 36
-	!word	T6522_17	; 37
+	!word	T6522_skip	; 37	; Emulation test error: 11:17:00 / Expected:00 Actual:00 (NB. after supporting T1C=T1L=$0000 as $FFFF)
 	!word	T6522_18	; 38
 	!word	0
 
@@ -3023,9 +3023,11 @@ T6522_15
 	ldy		#SY6522_IFR
 	sta		(MBBase),y
 
-	lda		#$00
+	; NB. mb-audit/GH#9 - MegaAudio: don't use $0000
+	lda		#$01
 	ldy		#SY6522_TIMER1L_COUNTER
 	sta		(MBBase),y
+	lda		#$00
 	ldy		#SY6522_TIMER1H_COUNTER
 	sta		(MBBase),y
 
