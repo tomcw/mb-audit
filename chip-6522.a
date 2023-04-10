@@ -914,8 +914,8 @@ testTbl_MegaAudio
 	!word	T6522_7		; 27
 	!word	T6522_skip	; 28
 	!word	T6522_skip	; 29
-	!word	T6522_skip	; 2A	; mb-audit/GH#9: Test 11:0A:03 / Expected:04 Actual:FE
-	!word	T6522_skip	; 2B	; mb-audit/GH#9: Test 11:0B:00 / Expected:FF Actual:6C
+	!word	T6522_A_MA	; 2A
+	!word	T6522_B_MA	; 2B
 	!word	T6522_skip	; 2C	; Emulation test error: 11:0C:01 / Expected:FB Actual:FA (NB. after adding T1 $FFFE underflow support)
 	!word	T6522_skip	; 2D
 	!word	T6522_skip	; 2E
@@ -1929,6 +1929,25 @@ T6522_A
 	sec
 	rts								; C=0(OK), C=1(NG)
 
+;--------------------------------------
+
+; Wrap T6522_A for MegaAudio
+; mb-audit/GH#9: Test 11:0A:03 / Expected:04 Actual:FE
+; Test MegaAudio's T1 counter underflows to $FFFE (not $FFFF as it does for a real Mockingboard)
+T6522_A_MA
+	jsr		T6522_A
+	bcc		@error
+	cmp		#$FE
+	bne		@error
+	ldx		#$04
+	cpx		zpTmp2
+	bne		@error
+	clc
+	rts
+@error
+	sec
+	rts
+
 ;------------------------------------------------------------------------------
 
 T6522_B
@@ -2008,6 +2027,25 @@ T6522_B
 	pla
 	sec
 	rts								; C=1(NG)
+
+;--------------------------------------
+
+; Wrap T6522_B for MegaAudio
+; mb-audit/GH#9: Test 11:0B:00 / Expected:FF Actual:6C
+; Test MegaAudio interprets T1 latch of $0000 as $10000 (or $FFFF)
+T6522_B_MA
+	jsr		T6522_B
+	bcc		@error
+	cmp		#$6C
+	bne		@error
+	ldx		#$FF
+	cpx		zpTmp2
+	bne		@error
+	clc
+	rts
+@error
+	sec
+	rts
 
 ;------------------------------------------------------------------------------
 
