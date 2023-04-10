@@ -2187,7 +2187,7 @@ T6522_E
 ; . Test 6522 T1 period is N+2 cycles
 ;	use IRQ to trigger at start of opcode
 ;	NB. 6522 connected to NMI isn't supported
-; . Assume this won't work on Mega Audio - TODO: confirm this.
+; . Assume this won't work on MegaAudio - TODO: confirm this.
 ;
 
 	lda		MBBaseL
@@ -2282,7 +2282,7 @@ T6522_F
 ; Test#F
 ; . Test 6522 T1 period is N+2 cycles
 ;	alt version (cf. Test#E): just read IFR, not using IRQ - emulators must support sub-opcode accuracy for reading IFR
-; . Assume this won't work on Mega Audio - TODO: confirm this.
+; . Assume this won't work on MegaAudio - TODO: confirm this.
 ;
 
 	jsr		resetSubTest			; subTest #0
@@ -3023,7 +3023,7 @@ T6522_15
 	ldy		#SY6522_IFR
 	sta		(MBBase),y
 
-	; NB. mb-audit/GH#9 - MegaAudio: don't use $0000
+	; NB. mb-audit/GH#9 - MegaAudio: don't use $0000 for TIMER1
 	lda		#$01
 	ldy		#SY6522_TIMER1L_COUNTER
 	sta		(MBBase),y
@@ -3924,7 +3924,8 @@ WaitT2OneShotUnderflow
 WaitT2Underflow
 	lda		isMegaAudioCard
 	beq		+
-		rts							; Assume Mega Audio doesn't support Timer2!
+		lda		#$8					; wait 0x119 cycles - MegaAudio can't read Timer2!
+		jmp		myWAIT
 +
 
 	ldy		#SY6522_TIMER2H_COUNTER
@@ -4027,24 +4028,16 @@ Setup6522ForReset
 	ldy		#SY6522_TIMER2L_COUNTER
 	sta		(MBBase),y
 	ldy		#SY6522_TIMER2H_COUNTER
-	sta		(MBBase),y				; will underflow immediately & assert T2 IRQ (not for MegaAudio, since assume T2 isn't supported)
+	sta		(MBBase),y				; will underflow immediately & assert T2 IRQ (even for MegaAudio)
 
 	jsr		WaitT1Underflow			; Post: T1 IRQ asserted
 
 	ldy		#SY6522_IFR
 	lda		(MBBase),y
-	and		#IER_SET|IxR_TIMER1|IxR_TIMER2		; NB. use 'IxR_TIMER2' in the bit-mask even for MegaAudio
-	ldx		isMegaAudioCard
-	bne		+
-		ldx		#IER_SET|IxR_TIMER1|IxR_TIMER2	; expected
-		cmp		#IER_SET|IxR_TIMER1|IxR_TIMER2
-		bne		@error
-		beq		++
-+		; MegaAudio
-		ldx		#IER_SET|IxR_TIMER1				; expected
-		cmp		#IER_SET|IxR_TIMER1
-		bne		@error
-++
+	and		#IER_SET|IxR_TIMER1|IxR_TIMER2		; NB. use 'IxR_TIMER2' in the bit-mask (even for MegaAudio)
+	ldx		#IER_SET|IxR_TIMER1|IxR_TIMER2		; expected
+	cmp		#IER_SET|IxR_TIMER1|IxR_TIMER2
+	bne		@error
 
 	clc
 	rts								; C=0(OK)
