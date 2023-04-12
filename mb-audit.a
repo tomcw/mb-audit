@@ -39,6 +39,8 @@
 ; . Phasor (AppleWin)		Phasor +SC01			Phasor +[1|2x SSI263]
 ; Mockingboard 4c (Ian Kim)	6522-A/AY8913			6522-A/AY8913		Same 6522 mapped to both $00 & $80
 ; Echo+						6522-A/AY8913			6522-A/AY8913 + TMS5220 (at DEVICE SELECT)	NB. Same 6522 mapped to both $00 & $80
+; SD Music (Ian Kim)		6522-A/AY8913			6522-A/AY8913		Same 6522 mapped to both $00 & $80
+; SD Music Deluxe (Ian Kim)	6522-A/AY8913			6522-A/AY8913		Same 6522 mapped to both $00 & $80
 
 ;------------------------------------------------------------------------------
 
@@ -419,25 +421,18 @@ TestTones
 		lda		slotInfo,x
 		beq		@nextSlot
 
+!if 0 {		; has6522 not needed by TestAYTones or AYTonesISR
 			pha
 			and		#HAS_6522B|HAS_6522A
 			sta		has6522
 			pla
+}
 			lsr
 			lsr
 			lsr
 			lsr
 			sta		hasAY8913
-			cmp		#$f
-			beq		+
-			lda		#0
-+			sta		isPhasorCard
-
-			lda		has6522
-			cmp		#HAS_6522B
-			beq		+
-			lda		#0
-+			sta		isEchoPlus
+			jsr		RestoreFromSlotInfo2	; pre: X=slot#
 
 			jsr		PrintSlotNum
 			lda		#<msg_ToneKeys
@@ -647,6 +642,7 @@ DetectSubunits
 ; Pre: zpTmp1 = slotInfo[slot]
 
 	lda		#0
+	sta		isSDMusic
 	sta		isMegaAudioCard
 	sta		isMB4C
 	sta		isEchoPlus
@@ -671,10 +667,10 @@ DetectSubunits
 		bne		@doneCardDetection
 +
 
-	; Determine if this is a MB4C or Echo+ card
+	; Determine if this is a MB4C or Echo+ or SD Music card
 	; NB. if Phasor(Echo+ mode), then don't do the Phasor check - want to preserve the Echo+ mode for user
 
-	jsr		DetectMB4CorEchoPlus	; Post: Z=1 if no MB4C/EchoPlus
+	jsr		DetectMB4CorEchoPlusorSDM	; Post: Z=1 if no MB4C/EchoPlus/SD Music
 	beq		+
 		; Indicate there's only a 6522 at $Cn80, otherwise some 6522 tests will fail
 		; NB. For Phasor(Echo+ mode), CTRL+RESET will switch back to MB mode, so need to use 6522-B
@@ -746,7 +742,11 @@ DetectSubunits
 	; set slotInfo2
 	;
 
-	ldy		#CARDTYPE_MEGAAUDIO
+	ldy		#CARDTYPE_SDMUSIC
+	lda		isSDMusic
+	bne		@setSlotInfo2
+
+	dey
 	lda		isMegaAudioCard
 	bne		@setSlotInfo2
 
@@ -774,9 +774,10 @@ DetectSubunits
 
 RestoreFromSlotInfo2
 ; pre: X=slot#
-; post: isMegaAudioCard, isMB4C, isEchoPlus, isPhasorCard
+; post: isSDMusic, isMegaAudioCard, isMB4C, isEchoPlus, isPhasorCard
 
 	lda		#0
+	sta		isSDMusic
 	sta		isMegaAudioCard
 	sta		isMB4C
 	sta		isEchoPlus
@@ -794,9 +795,14 @@ RestoreFromSlotInfo2
 	beq		@echoplus
 	dey
 	beq		@mb4c
+	dey
+	beq		@megaaudio
 	; fall through...
 
-;@megaaudio
+@sdmusic
+	stx		isSDMusic
+	rts
+@megaaudio
 	stx		isMegaAudioCard
 	rts
 @mb4c
@@ -1265,7 +1271,7 @@ SLOT1POS = $13					; pos left of '1'
 Display
 ;(blank)
 ;         SLOT: 1  2  3  4  5  6  7
-;          $00: ?     1 S/S C  P       ; ?=6522(VIA), 1=Sound-I(or Speech-I), S/S=Sound/Speech-I, M=MegaAudio, M4C=MB4C, E=Echo+, C=MB-C(or MB-A or Sound-II), P=Phasor
+;          $00: ?     1 S/S C  P       ; ?=6522(VIA), 1=Sound-I(or Speech-I), S/S=Sound/Speech-I, M=MegaAudio, M4C=MB4C, E=Echo+, C=MB-C(or MB-A or Sound-II), P=Phasor, SDM=SD Music (Deluxe)
 ;          $80:    ?    S/S C  P
 ;           SP:           VABV B       ; A=SSI263(socket-A), B=SSI263(socket-B), V=Votrax/SC01
 
@@ -1492,6 +1498,14 @@ DisplayCardUpdate
 		beq		+
 			lda		#$80+'E'
 			bne		@out
++		lda		isSDMusic
+		beq		+
+			lda		#$80+'S'	; 'SDM'
+			sta		zpTmp1
+			lda		#$80+'M'
+			sta		zpTmp2
+			lda		#$80+'D'
+			bne		@out
 +			lda		#$80+'C'	; MB-C or MB-Sound II (has 2x 6522/AY8913, but no SC01 nor SSI263)
 			bne		@out
 
@@ -1704,6 +1718,7 @@ slotInfo		!fill 8,0	; slot[0..7]
 
 ; slotInfo2 bitfield:
 CARDTYPE_MASK		= %00001111
+CARDTYPE_SDMUSIC	= 5
 CARDTYPE_MEGAAUDIO	= 4
 CARDTYPE_MB4C		= 3
 CARDTYPE_ECHOPLUS	= 2
@@ -1738,6 +1753,7 @@ warningSubTestNum		!byte 0
 warningExpected			!byte 0
 warningActual			!byte 0
 
+isSDMusic		!byte 0
 isMegaAudioCard	!byte 0
 isMB4C			!byte 0
 isEchoPlus		!byte 0
@@ -1783,7 +1799,7 @@ cfgDoSoakTest	!byte NO_SOAK_TEST
 
 ayRegs			!fill 16,0
 
-msg_mbaudit	!text "mb-audit v1.4D,Tom Charlesworth, 2021,23",0xd
+msg_mbaudit	!text "mb-audit v1.41,Tom Charlesworth, 2021,23",0xd
 msg_mbauditEnd !text 0
 
 msg_cpu6502Detected !text "6502 detected",0xd

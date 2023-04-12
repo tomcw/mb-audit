@@ -445,7 +445,7 @@ T263_1
 		jsr		incSubTestNum		; subTest #3, 7, B
 
 		ldy		#8					; reg8 (only 3 addr bits for SSI263, so wraps to SSI_DURPHON)
-		jsr		@FalseRead			; write to 6522.T1C_l & the write does a false read from 6522.T1C_l to clear the IRQ!
+		jsr		@FalseRead			; write to 6522.T2C_l & the write does a false read from 6522.T2C_l to clear the IRQ!
 
 		lda		zpTmp2
 		bne		+

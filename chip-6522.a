@@ -151,14 +151,20 @@ DetectMegaAudioCard
 
 ;------------------------------------------------------------------------------
 
-DetectMB4CorEchoPlus
+DetectMB4CorEchoPlusorSDM
 ; Pre:
-; Post: isMB4C, isEchoPlus
-;	Z=1:  no MB4C/EchoPlus
+; Post: isMB4C, isEchoPlus, isSDMusic
+;	Z=1:  no MB4C/EchoPlus/SD Music
 
 	; MB4C/Echo+ only has 1x 6522, but mapped to both $00 and $80
 	; . MB4C: assume it'll use the 6522's b7 addr to determine which AY8913 to write to
 	; . Echo+ uses 6522's PORTB (bits 4 & 3) to chip-select each AY8913
+	; . SD Music / SD Music Deluxe: like MB4C for selecting AY8913
+
+	lda		#0
+	sta		isMB4C
+	sta		isEchoPlus
+	sta		isSDMusic
 
 	ldy		#SY6522_A_BASE+SY6522_DDRB
 	lda		#$FF
@@ -189,26 +195,22 @@ DetectMB4CorEchoPlus
 
 +	; MB4C is only in a //c, and Echo+ is never in a //c
 	jsr		isIIc
-	bne		@EchoPlus
+	bne		@EchoPlusOrSDMusic
 
 ;@MB4C
 		lda		#1
-		ldx		#0
-		beq		@done
+		sta		isMB4C
+		rts
 
-@EchoPlus
-		lda		#0
-		ldx		#1
-		bne		@done
+@EchoPlusOrSDMusic
+		jsr		IsEchoPlus				; post: isEchoPlus
+		lda		#1						; Z=0: detected something
+		bcc		+						; C=0 => Echo+ detected
+		sta		isSDMusic
++		rts
 
 @notDetected
 	lda		#0
-	tax
-
-@done
-	sta		isMB4C
-	stx		isEchoPlus
-	ora		isEchoPlus					; set Z
 	rts
 
 ;------------------------------------------------------------------------------
@@ -279,7 +281,7 @@ Check6522Datalines
 ; Uses: zpTmp2, zpTmp3
 
 	; Just return OK if same 6522 is mapped to both $00 and $80
-	jsr		DetectMB4CorEchoPlus
+	jsr		DetectMB4CorEchoPlusorSDM
 	beq		+
 		clc
 		rts
@@ -2606,8 +2608,9 @@ T6522_13
 	lda		#PH_ECHOPLUS
 	jsr		SetPhasorMode
 
-	jsr		DetectMB4CorEchoPlus
+	jsr		DetectMB4CorEchoPlusorSDM
 	lda		isMB4C
+	ora		isSDMusic
 	bne		@error					; can't happen (sanity check)
 	lda		isEchoPlus
 	beq		@error					; if no Echo+, then bug in an emulator's Phasor support
