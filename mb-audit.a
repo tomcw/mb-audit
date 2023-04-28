@@ -242,14 +242,18 @@ entrypoint
 +		dec		slotUnderTest
 		bne		@nextSlot
 
-	jsr		GetNumMBsForMCT			; calc numMockingboardsForMCT
-	lda		numMockingboardsForMCT
+	; Mult-card Test (MCT)
+	lda		numMockingboards
 	cmp		#2
 	bcc		+						; (branch if A < 2)
+		jsr		GetNumMBsForMCT			; calc numMockingboardsForMCT
 		lda		#<msg_MultiCardSkipped
 		ldx		#>msg_MultiCardSkipped
-		ldy		numMegaAudioCards		; skip if any MegaAudio cards
+		ldy		numMegaAudioCards		; skip MCT if any MegaAudio cards
 		bne		++
+		ldy		numMockingboardsForMCT
+		cpy		#2
+		bcc		++						; (branch if A < 2)
 			jsr		Test6522MultiCard
 			bcs		@error				; NB. slotUnderTest=0
 			lda		#<msg_MultiCardOK
