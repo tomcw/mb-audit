@@ -308,21 +308,21 @@ T263_0
 	jsr		PlaySSI263
 
 	ldy		#10	; delay of 0x19555F cycles = 1,660,255 = ~1.623s
--		lda #$ff
-		jsr WAIT
+-		lda		#$ff
+		jsr		WAIT
+		lda		doingSpeech			; done? (or user hit ESC to skip)
+		beq		@ok
 		dey
 		bne		-
 
-	lda		doingSpeech
-	bne		@error
+	beq		@error
 
-	clc								; C=0(OK)
+@ok	clc								; C=0(OK)
 	bcc		@done
 
 @error
 	; Error: phrase not complete
--		lda		doingSpeech
-		bne		-
+	lda		#0
 	sta		zpTmp2					; expected
 	sec								; C=1(NG)
 
@@ -937,6 +937,17 @@ TestSSI263ISR
 
 	;------
 
+	lda		KBD
+	bpl		+
+		bit		KBDSTRB
+		cmp		#$80+27				; ESC?
+		bne		+
+			lda		#0
+			beq		@endSpeech
++
+
+	;------
+
 	lda		#0
 	ldy		#SSI_FILFREQ			; start with reg4
 -		ora		(SpeechData),y
@@ -946,6 +957,7 @@ TestSSI263ISR
 	bne		+
 
 	; last phoneme complete, so finalise with PAUSE phoneme + disable SSI263 IRQ + disable 6522 T1 IRQ
+@endSpeech
 	sta		doingSpeech				; =0
 	jsr		DisableSSI263
 	lda		#IER_CLR|IxR_TIMER1

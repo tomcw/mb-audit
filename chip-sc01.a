@@ -181,7 +181,7 @@ TSC01_0
 	ldy		#0						; delay of ~41.95s
 -		lda		#$ff
 		jsr		WAIT
-		lda		doingSpeechSC01
+		lda		doingSpeechSC01		; done? (or user hit ESC to skip)
 		beq		@ok
 		dey
 		bne		-
@@ -280,6 +280,17 @@ TestSC01ISR
 
 	;------
 
+	lda		KBD
+	bpl		+
+		bit		KBDSTRB
+		cmp		#$80+27				; ESC?
+		bne		+
+			lda		#0
+			beq		@endSpeech
++
+
+	;------
+
 	lda		#0
 	ldy		#4
 -		ora		(SpeechData),y
@@ -289,6 +300,7 @@ TestSC01ISR
 	bne		+
 
 	; last phoneme complete, disable SC01 IRQ + disable 6522 T1 IRQ
+@endSpeech
 	sta		doingSpeechSC01			; =0
 	jsr		DisableSC01
 	lda		#IER_CLR|IxR_TIMER1
