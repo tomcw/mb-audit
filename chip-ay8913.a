@@ -124,6 +124,8 @@ DetectAY8913
 
 		rts
 
+		;------------------------------
+
 @mb	; Mockingboard
 
 	lda		#SY6522_A_BASE
@@ -176,7 +178,7 @@ DetectAY8913
 		bne		-
 
 	lda		isPhasorCard
-	beq		+
+	beq		@done
 
 	;
 	; Phasor: detect any 2nd-ary AYs
@@ -241,6 +243,9 @@ DetectAY8913
 +	lda		#PH_MOCKINGBOARD
 	jsr		SetPhasorMode
 
+	;
+
+@done
 	rts
 
 ;------------------------------------------------------------------------------
