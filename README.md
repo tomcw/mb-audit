@@ -64,13 +64,14 @@ Key:
   - S/S = Sound/Speech-I
   - M = MEGA Audio
   - M4C = MB4C
-  - E=Echo+
-  - C=MB-C (or MB-A or Sound-II)
-  - P=Phasor
+  - E = Echo+
+  - C = MB-C (or MB-A or Sound-II)
+  - P = Phasor
+  - SDM = SD Music (and other clones with a single-6522)
 - For the 'SP' row (Speech chips):
-  - A=SSI263(socket-A)
-  - B=SSI263(socket-B)
-  - V=Votrax/SC01
+  - A = SSI263(socket-A)
+  - B = SSI263(socket-B)
+  - V = Votrax/SC01
 
 Continuing for each card found:
 - Do 6522 tests
