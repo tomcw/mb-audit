@@ -2119,8 +2119,8 @@ AYTonesISR
 	lda		#AY_ECHO_CS1|AY_LATCH
 @echo_ay_next
 			sta		zpTmp1
-			tax
 			lda		ayEna,x
+			ldx		zpTmp1
 			ldy		#AY_ENABLE
 			jsr		AY_Echo_WriteRegValue
 
