@@ -46,7 +46,7 @@ mb-audit v0.1-beta, 2021
 Then for each card found:
 - Do basic 6522 hardware checks (address lines, data lines, and IRQ)
 - Detect connected sub-units: SSI263s, SC-01, AY-3-8913s
-- Determine if the card is a Phasor or MEGA Audio(*1) or MB4C(*1) or Echo+(*1)
+- Determine if the card is a Phasor or MEGA Audio or MB4C(*1) or Echo+(*1)
   - (*1) Untested on real hardware
 - Display a more detailed summary of what has been detected, eg:
 ```
