@@ -9,7 +9,6 @@
 IsEchoPlus
 ; Pre: Detected a single, but dual-mapped 6522 at $00 and $80; not //c
 ; Post: isEchoPlus, C=0(Echo+), C=1(Not Echo+)
-; Trashes: zpTmp5
 
 	lda		#SY6522_A_BASE
 	sta		zpTmp3
@@ -18,14 +17,14 @@ IsEchoPlus
 	jsr		Init6522ForAY			; pre: zpTmp3, isEchoPlus=1
 
 	ldx		#AY_ECHO_CS1|AY_LATCH
-	lda		#AY_AFINE
-	ldy		#$11
-	jsr		AY_Echo_WriteRegValue	; post: trashes zpTmp5
+	ldy		#AY_AFINE
+	lda		#$11
+	jsr		AY_Echo_WriteRegValue
 
 	ldx		#AY_ECHO_CS2|AY_LATCH
-	lda		#AY_AFINE
-	ldy		#$33
-	jsr		AY_Echo_WriteRegValue	; post: trashes zpTmp5
+	ldy		#AY_AFINE
+	lda		#$33
+	jsr		AY_Echo_WriteRegValue
 
 	ldx		#AY_ECHO_CS1|AY_LATCH
 	ldy		#AY_AFINE
@@ -83,16 +82,16 @@ DetectAY8913
 
 -		jsr		Init6522ForAY
 
-		lda		#AY_AFINE
-		ldy		#$AA
+		ldy		#AY_AFINE
+		lda		#$AA
 		jsr		AY_Echo_WriteRegValueEx
 
-		lda		#AY_BFINE
-		ldy		#$55
+		ldy		#AY_BFINE
+		lda		#$55
 		jsr		AY_Echo_WriteRegValueEx
 
-		lda		#AY_CFINE
-		ldy		#$69
+		ldy		#AY_CFINE
+		lda		#$69
 		jsr		AY_Echo_WriteRegValueEx
 
 		;
@@ -914,13 +913,13 @@ TestAYEchoPlus
 	;
 
 	ldx		#AY_ECHO_CS1|AY_LATCH
-	lda		#AY_AFINE
-	ldy		#$11
+	ldy		#AY_AFINE
+	lda		#$11
 	jsr		AY_Echo_WriteRegValue
 
 	ldx		#AY_ECHO_CS2|AY_LATCH
-	lda		#AY_AFINE
-	ldy		#$33
+	ldy		#AY_AFINE
+	lda		#$33
 	jsr		AY_Echo_WriteRegValue
 
 	;
@@ -2075,7 +2074,6 @@ AYTonesISR
 ;	Apple ROM has stored A to $45 (not Apple //e ROM!)
 ; Uses:
 ;	zpTmp1 (alias with StringH)
-;	zpTmp5 (alias with SpeechDataH)
 ;
 
 	txa
@@ -2121,11 +2119,10 @@ AYTonesISR
 	lda		#AY_ECHO_CS1|AY_LATCH
 @echo_ay_next
 			sta		zpTmp1
+			tax
 			lda		ayEna,x
-			tay
-			ldx		zpTmp1
-			lda		#AY_ENABLE
-			jsr		AY_Echo_WriteRegValue	; post: trashes zpTmp5
+			ldy		#AY_ENABLE
+			jsr		AY_Echo_WriteRegValue
 
 @echo_ay_b
 		lda		hasAY8913
@@ -2646,6 +2643,8 @@ AY_Echo_ReadReg
 
 AY_Echo_WriteRegValueEx
 ; Pre: zpTmp3 = SY6522_A_BASE, SY6522_B_BASE - used to config chip-select
+;	Y=reg#
+;	A=value
 	ldx		zpTmp3
 	bne		+
 	ldx		#AY_ECHO_CS1|AY_LATCH
@@ -2655,21 +2654,22 @@ AY_Echo_WriteRegValueEx
 
 AY_Echo_WriteRegValue
 ; Pre: X = [AY_ECHO_CS1|AY_ECHO_CS2]|AY_LATCH
-;	A=reg#
-;	Y=value
+;	Y=reg#
+;	A=value
 ; Post:
 ;	X is preserved, Y trashed
 ;	Z = 0
-;	zpTmp5 trashed
-	sty		zpTmp5			; save value
+	pha						; save value
+	tya
 	jsr		AY_Echo_SelectReg
-	lda		zpTmp5			; restore value
+	pla						; restore value
 	jmp		AY_Echo_WriteReg
 
 ;
 
 AY_Echo_ReadRegValueEx
 ; Pre: zpTmp3 = SY6522_A_BASE, SY6522_B_BASE - used to config chip-select
+;	Y=reg#
 	ldx		zpTmp3
 	bne		+
 	ldx		#AY_ECHO_CS1|AY_LATCH
