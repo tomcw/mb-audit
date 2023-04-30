@@ -22,6 +22,7 @@ Current test matrix for real hardware:
 - Applied Engineering's Phasor, non-enhanced //e, 65C02, SSI263(socket-A), mb-audit v0.2-beta
 - SMS's Sound/Speech I, mb-audit v0.4-beta
 - Ian Kim's SD Music Deluxe, mb-audit v0.9
+- MEGA Audio, mb-audit v1.4x
 
 ![DSC00534-s](https://user-images.githubusercontent.com/6696896/117582673-188b6300-b0fb-11eb-9baf-4ba27d112542.png)
 
@@ -163,3 +164,7 @@ Running on a IIgs
 - add more tests
   - eg. 6522: write to IFR.T1/2 on same cycle as underflow, resulting in IFR.T1/2=0 in the ISR
   - eg. Mockingboard: check INACTIVE state is emulated
+
+### Acknowledgements
+
+Thanks to Andrew Roughan for his help with testing against his MEGA Audio and single-6522 clone cards.
