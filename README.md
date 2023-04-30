@@ -128,6 +128,7 @@ Where:
 
 AY-3-8913 tests
 - Try to write then read back the AY registers.
+  - NB. Not all cards support reading the AY registers (eg. MEGA Audio).
 - Test address lines and data lines.
 - Test cards which have a single 6522, but 2x AY-3-8913s (eg. Echo+, MB4C).
 - Test Phasor's GAL logic for mixing the PSG AY1/AY2 LATCH & WRITE/READ functions (Phasor "native" mode).
