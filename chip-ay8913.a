@@ -297,6 +297,10 @@ TestAY8913
 			inc		testNum			; test #04
 			jsr		TestAYPhasor4	; only do this test once, since it covers both SY6522's
 			bcs		@error
+
+			inc		testNum			; test #05
+			jsr		TestAYPhasor5	; only do this test once, since it covers both SY6522's
+			bcs		@error
 			bcc		@TestMB
 
 +		lda		isEchoPlus
@@ -1807,6 +1811,241 @@ TestAYPhasor4
 
 ;------------------------------------------------------------------------------
 
+TestAYPhasor5
+; Pre: isPhasorCard==1
+; Post: C=0(OK), C=1(NG)
+;	zpTmp2 = expected, A = actual
+;	phasorMode = PH_MOCKINGBOARD
+
+	; Phasor specific tests for AY RESET
+	; Writing a 6522's ORB(PortB).bit2=0 will reset both AY1 & AY2
+	; . regardless of CS bits & regardless of mode (MB,PH,E+)
+	; . basically ORB.b2 is wired directly to both AY's /RESET pin
+	; NB. 6522-A's AY1/AY2 are independent of 6522-B's AY1/AY2
+
+	jsr		resetSubTestMinus1
+	jsr		incTotalTests
+
+	lda		#PH_PHASOR
+	jsr		SetPhasorMode
+
+	; Reset AYs on 6522A (from PH mode)
+
+	jsr		PhasorWriteAllAFINE				; subTest #0
+	ldy		#SY6522_A_PH_BASE+SY6522_ORA
+	lda		#AY_RESET|AY_BOTH_CS
+	jsr		SetModeAndInactive
+	jsr		Check6522A_AYs
+	bcs		@done
+
+	jsr		PhasorWriteAllAFINE				; subTest #1
+	ldy		#SY6522_A_PH_BASE+SY6522_ORA
+	lda		#AY_RESET|AY_NO_CS
+	jsr		SetModeAndInactive
+	jsr		Check6522A_AYs
+	bcs		@done
+
+	; Reset AYs on 6522B (from PH mode)
+
+	jsr		PhasorWriteAllAFINE				; subTest #2
+	ldy		#SY6522_B_BASE+SY6522_ORA
+	lda		#AY_RESET|AY_BOTH_CS
+	jsr		SetModeAndInactive
+	jsr		Check6522B_AYs
+	bcs		@done
+
+	jsr		PhasorWriteAllAFINE				; subTest #3
+	ldy		#SY6522_B_BASE+SY6522_ORA
+	lda		#AY_RESET|AY_NO_CS
+	jsr		SetModeAndInactive
+	jsr		Check6522B_AYs
+	bcs		@done
+
+	; Reset AYs on 6522A from MB mode
+
+	jsr		PhasorWriteAllAFINE				; subTest #4
+	lda		#PH_MOCKINGBOARD
+	jsr		SetPhasorMode
+	ldy		#SY6522_A_BASE+SY6522_ORA
+	lda		#AY_RESET
+	jsr		SetModeAndInactive
+	jsr		Check6522A_AYs
+	bcs		@done
+
+	jsr		PhasorWriteAllAFINE				; subTest #5
+	lda		#PH_MOCKINGBOARD
+	jsr		SetPhasorMode
+	ldy		#SY6522_B_BASE+SY6522_ORA
+	lda		#AY_RESET
+	jsr		SetModeAndInactive
+	jsr		Check6522B_AYs
+	bcs		@done
+
+	; Reset AYs on 6522A from E+ mode
+
+	jsr		PhasorWriteAllAFINE				; subTest #6
+	lda		#PH_ECHOPLUS
+	jsr		SetPhasorMode
+	ldy		#SY6522_A_BASE+SY6522_ORA		; E+ can use any base addr
+	lda		#AY_RESET|AY_ECHO_BOTH_CS
+	jsr		SetModeAndInactive
+	jsr		Check6522B_AYs					; E+ only uses 6522B
+	bcs		@done
+
+	jsr		PhasorWriteAllAFINE				; subTest #7
+	lda		#PH_ECHOPLUS
+	jsr		SetPhasorMode
+	ldy		#SY6522_A_BASE+SY6522_ORA		; E+ can use any base addr
+	lda		#AY_RESET|AY_ECHO_NO_CS
+	jsr		SetModeAndInactive
+	jsr		Check6522B_AYs					; E+ only uses 6522B
+
+@done
+	php
+	pha
+	lda		#PH_MOCKINGBOARD
+	jsr		SetPhasorMode
+	pla
+	plp
+	rts
+
+;------------------
+
+Check6522A_AYs
+; Pre:
+; Post: C=0(OK), C=1(NG)
+;	zpTmp2 = expected, A = actual
+
+	lda		#PH_PHASOR
+	jsr		SetPhasorMode
+
+	ldy		#SY6522_A_PH_BASE+SY6522_ORA
+
+	ldx		#AY_AFINE
+	jsr		AY1_ReadRegValue
+	tax
+	bne		@error0
+
+	ldx		#AY_AFINE
+	jsr		AY2_ReadRegValue
+	tax
+	bne		@error0
+
+	ldy		#SY6522_B_BASE+SY6522_ORA
+
+	ldx		#AY_AFINE
+	jsr		AY1_ReadRegValue
+	ldx		#$33
+	cmp		#$33
+	bne		@error
+
+	ldx		#AY_AFINE
+	jsr		AY2_ReadRegValue
+	ldx		#$44
+	cmp		#$44
+	bne		@error
+
+	clc
+	rts
+
+@error0
+	ldx		#0
+@error
+	stx		zpTmp2
+	sec
+	rts
+
+;------------------
+
+Check6522B_AYs
+; Pre:
+; Post: C=0(OK), C=1(NG)
+;	zpTmp2 = expected, A = actual
+
+	lda		#PH_PHASOR
+	jsr		SetPhasorMode
+
+	;
+
+	ldy		#SY6522_B_BASE+SY6522_ORA
+
+	ldx		#AY_AFINE
+	jsr		AY1_ReadRegValue
+	tax
+	bne		@error0
+
+	ldx		#AY_AFINE
+	jsr		AY2_ReadRegValue
+	tax
+	bne		@error0
+
+	ldy		#SY6522_A_PH_BASE+SY6522_ORA
+
+	ldx		#AY_AFINE
+	jsr		AY1_ReadRegValue
+	ldx		#$11
+	cmp		#$11
+	bne		@error
+
+	ldx		#AY_AFINE
+	jsr		AY2_ReadRegValue
+	ldx		#$22
+	cmp		#$22
+	bne		@error
+
+	clc
+	rts
+
+@error0
+	ldx		#0
+@error
+	stx		zpTmp2
+	sec
+	rts
+
+;------------------------------------------------------------------------------
+
+PhasorWriteAllAFINE
+
+	jsr		incSubTestNum
+
+	lda		#PH_PHASOR
+	jsr		SetPhasorMode
+
+	;
+
+	lda		#SY6522_A_PH_BASE
+	sta		zpTmp3
+
+	jsr		Init6522ForAY		; + reset AYs
+
+	lda		#AY_AFINE
+	ldx		#$11
+	jsr		AY1_WriteRegValue
+
+	lda		#AY_AFINE
+	ldx		#$22
+	jsr		AY2_WriteRegValue
+
+	;
+
+	lda		#SY6522_B_BASE
+	sta		zpTmp3
+
+	jsr		Init6522ForAY		; + reset AYs
+
+	lda		#AY_AFINE
+	ldx		#$33
+	jsr		AY1_WriteRegValue
+
+	lda		#AY_AFINE
+	ldx		#$44
+	jsr		AY2_WriteRegValue
+
+	rts
+
+;------------------------------------------------------------------------------
+
 TestAYTones
 ; Pre: X=slot#, hasAY8913, isPhasorCard
 ; Post:
@@ -2409,7 +2648,9 @@ SF_ChipReset
 @echo	lda		#AY_RESET|AY_ECHO_CS1|AY_ECHO_CS2
 		bne		+
 
-SetModeAndInactive	; pre: Y = SY6522_ORA for chip A or B
+SetModeAndInactive
+; Pre: Y = SY6522_ORA for chip A or B
+;	A = PSG Function | CS bits (or reset)
 	dey		; Y = ORB (reg#0)
 
 +	sta		(MBBase),y

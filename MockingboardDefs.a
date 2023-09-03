@@ -73,10 +73,12 @@ AY_NOT_CS2	= $08
 AY_CS1		= AY_NOT_CS2
 AY_CS2		= AY_NOT_CS1
 AY_NO_CS	= AY_NOT_CS1|AY_NOT_CS2	; each CS is active low
+AY_BOTH_CS	= $00
 ; Echo+ extra chip-select bits:
 AY_ECHO_CS1	= $08
 AY_ECHO_CS2	= $10
 AY_ECHO_NO_CS	= $00	; each CS is active high
+AY_ECHO_BOTH_CS	= AY_ECHO_CS1|AY_ECHO_CS2
 
 ; SSI263:
 SSI_DURPHON = 0
