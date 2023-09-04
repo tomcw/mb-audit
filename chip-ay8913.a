@@ -315,6 +315,13 @@ TestAY8913
 
 @TestMB	; Mockingboard or Phasor(in PH_MOCKINGBOARD) or MB4C(assume we can read AY regs)
 
+			lda		#$C
+			sta		testNum			; test #0C
+			jsr		TestAYMockingboard
+			bcs		@error
+
+		;
+
 		lda		#$0f
 		sta		testNum
 
@@ -872,6 +879,135 @@ TestAYReadHiZ
 @done
 	clc							; C=0(OK / WARNING)
 	jmp		AY_SetPortAOutput	; DDRA=0xFF
+
+;--------------------------------------
+
+TestAYMockingboard
+; Pre: phasorMode = PH_MOCKINGBOARD
+; Post: C=0(OK), C=1(NG)
+;	zpTmp2 = expected, A = actual
+
+	; MB tests for AY RESET (cf. TestAYPhasor5)
+	; Writing a 6522's ORB(PortB).bit2=0 will reset the AY
+	; . basically ORB.b2 is wired directly to both AY's /RESET pin
+	; NB. 6522-A's AY is independent of 6522-B's AY
+
+	jsr		resetSubTestMinus1
+	jsr		incTotalTests
+
+	; Reset AYs on 6522A, from MB mode
+
+	jsr		MBWriteAllAFINE					; subTest #0
+	ldy		#SY6522_A_BASE+SY6522_ORA
+	lda		#AY_RESET
+	jsr		SetModeAndInactive
+	jsr		MBCheck6522A_AYs
+	bcs		@done
+
+	; Reset AYs on 6522B, from MB mode
+
+	jsr		MBWriteAllAFINE					; subTest #1
+	ldy		#SY6522_B_BASE+SY6522_ORA
+	lda		#AY_RESET
+	jsr		SetModeAndInactive
+	jsr		MBCheck6522B_AYs
+
+@done
+	rts
+
+;------------------
+
+MBCheck6522A_AYs
+; Pre:
+; Post: C=0(OK), C=1(NG)
+;	zpTmp2 = expected, A = actual
+
+	ldy		#SY6522_A_BASE+SY6522_ORA
+
+	ldx		#AY_AFINE
+	jsr		AY_ReadRegValue
+	tax
+	bne		@error0
+
+	ldy		#SY6522_B_BASE+SY6522_ORA
+
+	ldx		#AY_AFINE
+	jsr		AY_ReadRegValue
+	ldx		#$33
+	cmp		#$33
+	bne		@error
+
+	clc
+	rts
+
+@error0
+	ldx		#0
+@error
+	stx		zpTmp2
+	sec
+	rts
+
+;------------------
+
+MBCheck6522B_AYs
+; Pre:
+; Post: C=0(OK), C=1(NG)
+;	zpTmp2 = expected, A = actual
+
+	ldy		#SY6522_B_BASE+SY6522_ORA
+
+	ldx		#AY_AFINE
+	jsr		AY_ReadRegValue
+	tax
+	bne		@error0
+
+	ldy		#SY6522_A_BASE+SY6522_ORA
+
+	ldx		#AY_AFINE
+	jsr		AY_ReadRegValue
+	ldx		#$11
+	cmp		#$11
+	bne		@error
+
+	clc
+	rts
+
+@error0
+	ldx		#0
+@error
+	stx		zpTmp2
+	sec
+	rts
+
+;------------------
+
+MBWriteAllAFINE
+
+	jsr		incSubTestNum
+
+	;
+
+	lda		#SY6522_A_BASE
+	sta		zpTmp3
+
+	jsr		Init6522ForAY		; + reset AYs
+
+	lda		#AY_AFINE
+	ldx		#$11
+	jsr		AY1_WriteRegValue
+
+	;
+
+	lda		#SY6522_B_BASE
+	sta		zpTmp3
+
+	jsr		Init6522ForAY		; + reset AYs
+
+	lda		#AY_AFINE
+	ldx		#$33
+	jsr		AY1_WriteRegValue
+
+	rts
 
 ;--------------------------------------
 
@@ -1835,7 +1971,7 @@ TestAYPhasor5
 	ldy		#SY6522_A_PH_BASE+SY6522_ORA
 	lda		#AY_RESET|AY_BOTH_CS
 	jsr		SetModeAndInactive
-	jsr		Check6522A_AYs
+	jsr		PhasorCheck6522A_AYs
 	bcc		+
 	jmp		@done
 +
@@ -1844,7 +1980,7 @@ TestAYPhasor5
 	ldy		#SY6522_A_PH_BASE+SY6522_ORA
 	lda		#AY_RESET|AY_NO_CS
 	jsr		SetModeAndInactive
-	jsr		Check6522A_AYs
+	jsr		PhasorCheck6522A_AYs
 	bcs		@done
 
 	; Reset AYs on 6522B (from PH mode)
@@ -1853,14 +1989,14 @@ TestAYPhasor5
 	ldy		#SY6522_B_BASE+SY6522_ORA
 	lda		#AY_RESET|AY_BOTH_CS
 	jsr		SetModeAndInactive
-	jsr		Check6522B_AYs
+	jsr		PhasorCheck6522B_AYs
 	bcs		@done
 
 	jsr		PhasorWriteAllAFINE				; subTest #3
 	ldy		#SY6522_B_BASE+SY6522_ORA
 	lda		#AY_RESET|AY_NO_CS
 	jsr		SetModeAndInactive
-	jsr		Check6522B_AYs
+	jsr		PhasorCheck6522B_AYs
 	bcs		@done
 
 	; Reset AYs on 6522A, from MB mode
@@ -1874,7 +2010,7 @@ TestAYPhasor5
 	dey										; Y = ORA
 	lda		#AY_RESET
 	jsr		SetModeAndInactive
-	jsr		Check6522A_AYs
+	jsr		PhasorCheck6522A_AYs
 	bcs		@done
 
 	; Reset AYs on 6522B, from MB mode
@@ -1888,7 +2024,7 @@ TestAYPhasor5
 	dey										; Y = ORA
 	lda		#AY_RESET
 	jsr		SetModeAndInactive
-	jsr		Check6522B_AYs
+	jsr		PhasorCheck6522B_AYs
 	bcs		@done
 
 	; Reset AYs on 6522B, from E+ mode
@@ -1899,7 +2035,7 @@ TestAYPhasor5
 	ldy		#SY6522_A_BASE+SY6522_ORA		; E+ can use any base addr
 	lda		#AY_RESET|AY_ECHO_BOTH_CS
 	jsr		SetModeAndInactive
-	jsr		Check6522B_AYs					; E+ only uses 6522B
+	jsr		PhasorCheck6522B_AYs			; E+ only uses 6522B
 	bcs		@done
 
 	jsr		PhasorWriteAllAFINE				; subTest #7
@@ -1908,7 +2044,7 @@ TestAYPhasor5
 	ldy		#SY6522_A_BASE+SY6522_ORA		; E+ can use any base addr
 	lda		#AY_RESET|AY_ECHO_NO_CS
 	jsr		SetModeAndInactive
-	jsr		Check6522B_AYs					; E+ only uses 6522B
+	jsr		PhasorCheck6522B_AYs			; E+ only uses 6522B
 
 @done
 	php
@@ -1921,7 +2057,7 @@ TestAYPhasor5
 
 ;------------------
 
-Check6522A_AYs
+PhasorCheck6522A_AYs
 ; Pre:
 ; Post: C=0(OK), C=1(NG)
 ;	zpTmp2 = expected, A = actual
@@ -1970,7 +2106,7 @@ Check6522A_AYs
 
 ;------------------
 
-Check6522B_AYs
+PhasorCheck6522B_AYs
 ; Pre:
 ; Post: C=0(OK), C=1(NG)
 ;	zpTmp2 = expected, A = actual
@@ -2019,7 +2155,7 @@ Check6522B_AYs
 	sec
 	rts
 
-;------------------------------------------------------------------------------
+;------------------
 
 PhasorWriteAllAFINE
 
