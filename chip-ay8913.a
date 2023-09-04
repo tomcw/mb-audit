@@ -1836,7 +1836,9 @@ TestAYPhasor5
 	lda		#AY_RESET|AY_BOTH_CS
 	jsr		SetModeAndInactive
 	jsr		Check6522A_AYs
-	bcs		@done
+	bcc		+
+	jmp		@done
++
 
 	jsr		PhasorWriteAllAFINE				; subTest #1
 	ldy		#SY6522_A_PH_BASE+SY6522_ORA
@@ -1861,27 +1863,35 @@ TestAYPhasor5
 	jsr		Check6522B_AYs
 	bcs		@done
 
-	; Reset AYs on 6522A from MB mode
+	; Reset AYs on 6522A, from MB mode
 
 	jsr		PhasorWriteAllAFINE				; subTest #4
 	lda		#PH_MOCKINGBOARD
 	jsr		SetPhasorMode
-	ldy		#SY6522_A_BASE+SY6522_ORA
+	ldy		#SY6522_A_BASE+SY6522_DDRB
+	lda		#$07
+	sta		(MBBase),y
+	dey										; Y = ORA
 	lda		#AY_RESET
 	jsr		SetModeAndInactive
 	jsr		Check6522A_AYs
 	bcs		@done
 
+	; Reset AYs on 6522B, from MB mode
+
 	jsr		PhasorWriteAllAFINE				; subTest #5
 	lda		#PH_MOCKINGBOARD
 	jsr		SetPhasorMode
-	ldy		#SY6522_B_BASE+SY6522_ORA
+	ldy		#SY6522_B_BASE+SY6522_DDRB
+	lda		#$07
+	sta		(MBBase),y
+	dey										; Y = ORA
 	lda		#AY_RESET
 	jsr		SetModeAndInactive
 	jsr		Check6522B_AYs
 	bcs		@done
 
-	; Reset AYs on 6522A from E+ mode
+	; Reset AYs on 6522B, from E+ mode
 
 	jsr		PhasorWriteAllAFINE				; subTest #6
 	lda		#PH_ECHOPLUS
@@ -1919,7 +1929,10 @@ Check6522A_AYs
 	lda		#PH_PHASOR
 	jsr		SetPhasorMode
 
-	ldy		#SY6522_A_PH_BASE+SY6522_ORA
+	ldy		#SY6522_A_PH_BASE+SY6522_DDRB
+	lda		#$1f
+	sta		(MBBase),y
+	dey										; Y = ORA
 
 	ldx		#AY_AFINE
 	jsr		AY1_ReadRegValue
@@ -1967,7 +1980,10 @@ Check6522B_AYs
 
 	;
 
-	ldy		#SY6522_B_BASE+SY6522_ORA
+	ldy		#SY6522_B_BASE+SY6522_DDRB
+	lda		#$1f
+	sta		(MBBase),y
+	dey										; Y = ORA
 
 	ldx		#AY_AFINE
 	jsr		AY1_ReadRegValue
