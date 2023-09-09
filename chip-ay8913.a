@@ -990,7 +990,7 @@ MBWriteAllAFINE
 	lda		#SY6522_A_BASE
 	sta		zpTmp3
 
-	jsr		Init6522ForAY		; + reset AYs
+	jsr		Init6522ForAY		; + reset AY
 
 	lda		#AY_AFINE
 	ldx		#$11
@@ -1001,7 +1001,7 @@ MBWriteAllAFINE
 	lda		#SY6522_B_BASE
 	sta		zpTmp3
 
-	jsr		Init6522ForAY		; + reset AYs
+	jsr		Init6522ForAY		; + reset AY
 
 	lda		#AY_AFINE
 	ldx		#$33
@@ -2782,23 +2782,13 @@ SF_WriteReg
 	bne		SetModeAndInactive
 
 SF_ChipReset
-; NB. For native Phasor mode, reset both AY's, since cmd=AY_RESET|(%00<<3) - and CS is active low
+; NB. For native Phasor mode, reset both AY's, since ORB.b2 is directly wired to both AYs' /RESET.
 ; NB. For Echo+ & Phasor(Echo+ mode), reset both AY's.
-; Pre: Y = SY6522_A_BASE or SY6522_A_PH_BASE or SY6522_B_BASE
-;	phasorMode
+; Pre: Y = SY6522_ORB for chip A or B
 ; Post: Y = SY6522_ORA for chip A or B
 ;	Z = 0
-	lda		isEchoPlus
-	bne		@echo
-	lda		isPhasorCard
-	beq		@mb_ph
-	lda		phasorMode
-	cmp		#PH_ECHOPLUS
-	beq		@echo
-@mb_ph	lda		#AY_RESET
-		beq		+
-@echo	lda		#AY_RESET|AY_ECHO_CS1|AY_ECHO_CS2
-		bne		+
+	lda		#AY_RESET			; Phasor/Echo+: don't need CS due to direct connection from ORB.b2 to AYs' /RESET
+	beq		+
 
 SetModeAndInactive
 ; Pre: Y = SY6522_ORA for chip A or B
