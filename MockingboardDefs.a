@@ -60,12 +60,13 @@ AY_DIS_A	= %00001001	; Disable A (Noise & Tone)
 AY_DIS_B	= %00010010	; Disable B (Noise & Tone)
 AY_DIS_C	= %00100100	; Disable C (Noise & Tone)
 
-; AY inputs on BDIR|BC2|BC1:
-AY_RESET	= 0
-AY_INACTIVE	= 4
-AY_READ		= 5
-AY_WRITE	= 6
-AY_LATCH	= 7
+; 6522 ORB bit:          2    1    0
+; AY inputs on:       /RESET|BDIR|BC1: (BC2=1)
+AY_RESET    = 0     ;    0    -    -
+AY_INACTIVE = 4     ;    1    0    0
+AY_READ     = 5     ;    1    0    1
+AY_WRITE    = 6     ;    1    1    0
+AY_LATCH    = 7     ;    1    1    1
 AY_FUNC_MASK = %00000111
 ; Phasor extra chip-select bits (when in native Phasor mode):
 AY_NOT_CS1	= $10
