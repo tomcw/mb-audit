@@ -1131,7 +1131,7 @@ TestAYEchoPlus
 +	stx		zpTmp2				; expected
 	sta		zpTmp1				; actual
 
-	jsr		Init6522ForAY		; Reset 6522's 2x AYs
+	jsr		Init6522ForAY		; Reset 6522's 2x AYs (and ORB with CS=%00nnn, so neither AY selected)
 
 	lda		zpTmp1
 	cmp		zpTmp2
@@ -1139,6 +1139,7 @@ TestAYEchoPlus
 
 	;
 	; 2) Check that reset has cleared all 2 AYs' reg#0
+	; NB. CS=%00nnn, so assume that for a real Echo+ that ORB.b2 is directly wired to both AYs' /RESET (like it is for Phasor Echo+)
 	;
 
 	jsr		incSubTestNum		; subTest #2
