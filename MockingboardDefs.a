@@ -7,7 +7,9 @@ SY6522_A_PH_BASE = $10	; Phasor mode (this is common to both MB & Phasor modes)
 SY6522_B_BASE = $80
 
 SY6522_ORB = 0
+SY6522_IRB = 0
 SY6522_ORA = 1
+SY6522_IRA = 1
 SY6522_DDRB = 2
 SY6522_DDRA = 3
 SY6522_TIMER1L_COUNTER = 4

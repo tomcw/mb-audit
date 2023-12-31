@@ -1,5 +1,5 @@
 ;license:MIT
-;(c) 2021-2022 by Tom Charlesworth
+;(c) 2021-2023 by Tom Charlesworth
 ;
 ; 6522 related
 ;
@@ -4117,15 +4117,27 @@ Test6522AfterReset
 	jsr		resetSubTest			; subTest #0
 	jsr		incTotalTests
 
+	; Test ACR
 	ldy		#SY6522_ACR
 	lda		(MBBase),y
-	ldx		#ACR_ONESHOT
-	and		#ACR_FREERUNNING
-	cmp		#ACR_ONESHOT
-	bne		@error
+	ldx		#$00
+	cmp		#$00
+	beq		+
+		jmp		@error
++
+
+	; Test PCR
+	jsr		incSubTestNum			; subTest #1
+	ldy		#SY6522_PCR
+	lda		(MBBase),y
+	ldx		#$00
+	cmp		#$00
+	beq		+
+		jmp		@error
++
 
 	; Test T1L_l/h
-	jsr		incSubTestNum			; subTest #1
+	jsr		incSubTestNum			; subTest #2
 	ldy		#SY6522_TIMER1L_LATCH
 	lda		(MBBase),y
 	ldx		#RESET_T1L_l
@@ -4138,7 +4150,7 @@ Test6522AfterReset
 	bne		@error
 
 	; Test that all IRQs are disabled
-	jsr		incSubTestNum			; subTest #2
+	jsr		incSubTestNum			; subTest #3
 	ldy		#SY6522_IER
 	lda		(MBBase),y
 	ldx		isMegaAudioCard
@@ -4154,7 +4166,7 @@ Test6522AfterReset
 ++
 
 	; Test that T1 & T2 IRQs are now de-asserted
-	jsr		incSubTestNum			; subTest #3
+	jsr		incSubTestNum			; subTest #4
 	ldy		#SY6522_IFR
 	lda		(MBBase),y
 	ldx		#0						; expected
@@ -4163,7 +4175,7 @@ Test6522AfterReset
 	bne		@error
 
 	; Test that no IRQs are still asserted
-	jsr		incSubTestNum			; subTest #4
+	jsr		incSubTestNum			; subTest #5
 	ldx		#0						; expected
 	stx		isrIFR
 	stx		isrFlag
@@ -4171,8 +4183,31 @@ Test6522AfterReset
 	sei
 	lda		isrIFR
 	bne		@error
-	jsr		incSubTestNum			; subTest #5
+	jsr		incSubTestNum			; subTest #6
 	lda		isrFlag
+	bne		@error
+
+	; Test reading DDRB/IRB, checking that DDRB bits set as inputs read back as 1's (AppleWin-GH#1260)
+	; . NB. MB's AY drives bus (so whatever was last written/read); Phasor has pull-ups? so always reads as 0xFF.
+	jsr		incSubTestNum			; subTest #7
+	ldy		#SY6522_DDRB
+	lda		(MBBase),y
+	ldx		#$00
+	cmp		#$00
+	bne		@error
+	jsr		incSubTestNum			; subTest #8
+	ldy		#SY6522_IRB
+	lda		(MBBase),y
+	ldx		#$ff
+	cmp		#$ff
+	bne		@error
+
+	; Test reading DDRA
+	jsr		incSubTestNum			; subTest #9
+	ldy		#SY6522_DDRA
+	lda		(MBBase),y
+	ldx		#$00
+	cmp		#$00
 	bne		@error
 
 	; fall through...
