@@ -1,5 +1,5 @@
 ;license:MIT
-;(c) 2021-2022 by Tom Charlesworth
+;(c) 2021-2024 by Tom Charlesworth
 ;
 ; mb-audit:
 ; . Verify real h/w is operating correctly, eg. inter-component (addr/data line, IRQ)
@@ -363,6 +363,8 @@ TestResetLoop
 
 @test		jsr		Test6522AfterReset
 			bcs		++
+
+			jsr		PrintWarning	; if there's a warning then print it. Reset warningCount to 0.
 
 +		dec		slotUnderTest
 		bne		nextSlot
@@ -1803,7 +1805,7 @@ cfgDoSoakTest	!byte NO_SOAK_TEST
 
 ayRegs			!fill 16,0
 
-msg_mbaudit	!text "mb-audit v1.50,Tom Charlesworth, 2021,23",0xd
+msg_mbaudit	!text "mb-audit v1.50,Tom Charlesworth, 2021,24",0xd
 msg_mbauditEnd !text 0
 
 msg_cpu6502Detected !text "6502 detected",0xd

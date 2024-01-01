@@ -1,5 +1,5 @@
 ;license:MIT
-;(c) 2021-2023 by Tom Charlesworth
+;(c) 2021-2024 by Tom Charlesworth
 ;
 ; 6522 related
 ;
@@ -4050,9 +4050,21 @@ Setup6522ForReset
 	jsr		resetSubTest			; subTest #0
 	jsr		incTotalTests
 
+	lda		#$ff
+	ldy		#SY6522_DDRB
+	sta		(MBBase),y				; Port-B: all bits output
+
+	lda		#$ff
+	ldy		#SY6522_DDRA
+	sta		(MBBase),y				; Port-A: all bits output
+
 	lda		#ACR_FREERUNNING
 	ldy		#SY6522_ACR
 	sta		(MBBase),y				; Free-running timer
+
+	lda		#$0C
+	ldy		#SY6522_PCR
+	sta		(MBBase),y				; Setup PCR for SSI263
 
 	lda		#IER_SET|IxR_TIMER1|IxR_TIMER2
 	ldy		#SY6522_IER
@@ -4103,6 +4115,7 @@ Test6522AfterReset
 ; Pre: has6522, isMegaAudioCard
 ; Post: C=0(OK), C=1(NG)
 ;	NG: zpTmp2 = expected value; A = actual value
+;	can set: warningCount + warnings vars
 ;
 
 	lda		has6522
@@ -4142,8 +4155,9 @@ Test6522AfterReset
 	lda		(MBBase),y
 	ldx		#RESET_T1L_l
 	cmp		#RESET_T1L_l
-	bne		@error
-	ldy		#SY6522_TIMER1H_LATCH
+	beq		+
+		jmp		@error
++	ldy		#SY6522_TIMER1H_LATCH
 	lda		(MBBase),y
 	ldx		#RESET_T1L_h
 	cmp		#RESET_T1L_h
@@ -4188,7 +4202,6 @@ Test6522AfterReset
 	bne		@error
 
 	; Test reading DDRB/IRB, checking that DDRB bits set as inputs read back as 1's (AppleWin-GH#1260)
-	; . NB. MB's AY drives bus (so whatever was last written/read); Phasor has pull-ups? so always reads as 0xFF.
 	jsr		incSubTestNum			; subTest #7
 	ldy		#SY6522_DDRB
 	lda		(MBBase),y
@@ -4200,16 +4213,32 @@ Test6522AfterReset
 	lda		(MBBase),y
 	ldx		#$ff
 	cmp		#$ff
-	bne		@error
+	bne		@warning				; eg. this fails for the WDC W65C22S6TPG-14 in my hybrid Mockingboard
 
-	; Test reading DDRA
+	; Test reading DDRA/IRA, checking that DDRB bits set as inputs read back as 1's
 	jsr		incSubTestNum			; subTest #9
 	ldy		#SY6522_DDRA
 	lda		(MBBase),y
 	ldx		#$00
 	cmp		#$00
 	bne		@error
+	jsr		incSubTestNum			; subTest #10
+	ldy		#SY6522_IRA
+	lda		(MBBase),y
+	ldx		#$ff
+	cmp		#$ff
+	bne		@warning				; (see above)
 
+	beq		@ok
+
+	;
+
+@warning	; Pre: A=actual, X=expected
+	jsr		setWarning				; pre: X = expected; A = actual
+	lda		#0						; set: Z=1
+	; fall through...
+
+@ok		; Pre: Z=1
 	; fall through...
 
 @error	; Pre: A=actual, X=expected
