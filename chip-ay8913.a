@@ -875,8 +875,11 @@ TestAYReadHiZ
 
 @errorXA
 	jsr		setWarning			; pre: X = expected; A = actual
+	lda		#SY6522_ORA
+	ora		zpTmp3
+	tay
 
-@done
+@done							; pre: Y = SY6522_ORA for chip A or B
 	clc							; C=0(OK / WARNING)
 	jmp		AY_SetPortAOutput	; DDRA=0xFF
 
