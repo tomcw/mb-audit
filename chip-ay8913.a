@@ -825,6 +825,7 @@ TestAYReadHiZ
 ; Post: C=0(OK), C=1(NG)
 ;	zpTmp2 = expected, A = actual
 ;	can set: warningCount + warnings vars
+;   . EG. WDC W65C22S6TPG-14 (in my hybrid Mockingboard) retains the value read from the AY on the bus even after a WAIT($FF) or $28882 cycles delay
 
 	jsr		resetSubTest			; subTest #0
 	jsr		incTotalTests
@@ -841,33 +842,15 @@ TestAYReadHiZ
 	bvs		@ph1
 	bmi		@ph2
 
-@mb		lda		isPhasorCard
-		bne		@mb_ph
-
-		jsr		AY_ReadRegValue		; Original MB can read reg from Port-A immediately after INACTIVE
-		lda		(MBBase),y			; Read Port-A
-		ldx		#HiZ_TEST_VALUE
-		cmp		#HiZ_TEST_VALUE
-		bne		@errorXA
-
-		jsr		incSubTestNum		; subTest #1
-		lda		#$ff				; WAIT $28882 cy - bus doesn't float
-		jsr		myWAIT
-		lda		(MBBase),y			; Read Port-A
-		ldx		#HiZ_TEST_VALUE
-		cmp		#HiZ_TEST_VALUE
-		bne		@errorXA
-		beq		@done
-
-@mb_ph	jsr		AY_ReadRegValue		; Phasor/AY8913 bus floats high immediately (even in Mockingboard mode)
+@mb		jsr		AY_ReadRegValue		; R6522/AY8913 bus pulled high immediately (for both Mockingboard & Phasor in MB mode)
 		lda		(MBBase),y			; Read Port-A
 		jmp		++
 
-@ph1	jsr		AY1_ReadRegValue	; Phasor/AY8913 bus floats high immediately
+@ph1	jsr		AY1_ReadRegValue	; Phasor/AY8913 bus pulled high immediately
 		lda		(MBBase),y			; Read Port-A
 		jmp		++
 
-@ph2	jsr		AY2_ReadRegValue	; Phasor/AY8913 bus floats high immediately
+@ph2	jsr		AY2_ReadRegValue	; Phasor/AY8913 bus pulled high immediately
 		lda		(MBBase),y			; Read Port-A
 ++		ldx		#$ff
 		cmp		#$ff

@@ -4031,7 +4031,7 @@ Setup6522ForReset
 ; 6522 regs that persist across reset: T1L_l ,T1L_h
 ; 6522 state that is cleared on reset: IRQ, ACR.T1_RUNMODE
 ; TODO: test 6522-B too; test that for Phasor card its mode reverts to PH_MOCKINGBOARD
-; . NB. isPhasorCard may not be correct is there are multiple MB cards
+; . NB. isPhasorCard may not be correct if there are multiple MB cards
 ;
 
 	sei
