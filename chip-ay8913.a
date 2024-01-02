@@ -1686,7 +1686,7 @@ TestAYPhasor3
 	jsr		AY_SetPortAOutput
 
 	lda		#$22
-	jsr		AY1_WriteReg		; write to both AY1 - NB. this is to setup for subTest #3, so that AY1:reg2 != AY2:reg2
+	jsr		AY1_WriteReg		; write to AY1 - NB. this is to setup for subTest #3, so that AY1:reg2 != AY2:reg2
 	; Post: AY1:reg2 = $22, AY2:reg2 = $11
 
 	;
