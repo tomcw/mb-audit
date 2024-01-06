@@ -252,7 +252,6 @@ DetectAY8913
 ; TODO:
 ; . Set AY reg without setting INACTIVE state (AppleWin-GH#320)
 ; . Write AY reg outside of the 10us spec (AppleWin-GH#742)
-; . Read AY reg after setting to INACTIVE state (high impedance state, so should read back as $FF)
 
 TestAY8913
 ; Pre: hasAY8913
@@ -818,7 +817,12 @@ TestAYLatchAddress
 HiZ_TEST_VALUE = %01010101			; Value with a mix of 0s and 1s
 
 TestAYReadHiZ
-; Read AY reg *after* READ/INACTIVE funcs - 6522/AY8913 bus is in high impedance
+; Read AY reg after all non-READ funcs - 6522/AY8913 bus is in high impedance - eg. after:
+;   0. AY reset (PSG=INACTIVE)
+;   1. READ (no AY reg selected)
+;   2. LATCH
+;   3. WRITE
+;   4. READ/INACTIVE funcs
 ; Pre:
 ;	zpTmp3 = SY6522_A_BASE or SY6522_A_PH_BASE or SY6522_B_BASE
 ;	zpTmp4 = AY chip select: 0(MB), $40(Phasor-AY1), $80(Phasor-AY2)
@@ -830,12 +834,32 @@ TestAYReadHiZ
 	jsr		resetSubTest			; subTest #0
 	jsr		incTotalTests
 
-	jsr		Init6522ForAY
+	jsr		Init6522ForAY			; Post: 6522's AY (or AY's) now reset
 
+	; AY(s) = INACTIVE
+	; . MB: AY selected; Phasor: CS is active low, so both AYs selected
+	jsr		@CheckPortAisFF
+
+	jsr		incSubTestNum			; subTest #1
+	lda		#AY_READ
+	jsr		@SetAYFunction
+	jsr		@CheckPortAisFF
+
+	jsr		incSubTestNum			; subTest #2
 	lda		#AY_AFINE
-	ldx		#HiZ_TEST_VALUE
-	jsr		AY_WriteRegValue		; NB. For Phasor: CS=AY1+AY2
+	sta		(MBBase),Y
+	lda		#AY_LATCH
+	jsr		@SetAYFunction
+	jsr		@CheckPortAisFF
 
+	jsr		incSubTestNum			; subTest #3
+	lda		#HiZ_TEST_VALUE
+	sta		(MBBase),Y
+	lda		#AY_WRITE
+	jsr		@SetAYFunction
+	jsr		@CheckPortAisFF
+
+	jsr		incSubTestNum			; subTest #4
 	ldx		#AY_AFINE
 
 	bit		zpTmp4					; N=b7, V=b6
@@ -843,15 +867,15 @@ TestAYReadHiZ
 	bmi		@ph2
 
 @mb		jsr		AY_ReadRegValue		; R6522/AY8913 bus pulled high immediately (for both Mockingboard & Phasor in MB mode)
-		lda		(MBBase),y			; Read Port-A
+		lda		(MBBase),y			; Read Port-A immediately
 		jmp		++
 
 @ph1	jsr		AY1_ReadRegValue	; Phasor/AY8913 bus pulled high immediately
-		lda		(MBBase),y			; Read Port-A
+		lda		(MBBase),y			; Read Port-A immediately
 		jmp		++
 
 @ph2	jsr		AY2_ReadRegValue	; Phasor/AY8913 bus pulled high immediately
-		lda		(MBBase),y			; Read Port-A
+		lda		(MBBase),y			; Read Port-A immediately
 ++		ldx		#$ff
 		cmp		#$ff
 		beq		@done
@@ -865,6 +889,46 @@ TestAYReadHiZ
 @done							; pre: Y = SY6522_ORA for chip A or B
 	clc							; C=0(OK / WARNING)
 	jmp		AY_SetPortAOutput	; DDRA=0xFF
+
+;
+
+@CheckPortAisFF
+; Pre: Y = SY6522_ORA for chip A or B
+; Post: Z=1(OK)
+	jsr		AY_SetPortAInput
+	lda		(MBBase),y			; Read Port-A
+	pha
+	jsr		AY_SetPortAOutput
+
+	lda		#AY_INACTIVE
+	jsr		@SetAYFunction		; Set AY back to INACTIVE
+
+	pla
+	ldx		#$ff
+	cmp		#$ff
+	bne		+
+	rts							; OK
+
++	tay
+	pla
+	pla
+	tya
+	jmp		@errorXA
+
+@SetAYFunction
+; Pre: A = AY function
+	bit		zpTmp4				; N=b7, V=b6
+	bvs		@_ph1
+	bmi		@_ph2
+	bpl		@setFunction		; (branch always)
+@_ph1	ora		#AY_CS1
+		bne		@setFunction
+@_ph2	ora		#AY_CS2
+@setFunction
+	dey
+	sta		(MBBase),Y
+	iny
+	rts
 
 ;--------------------------------------
 
@@ -2775,7 +2839,9 @@ SF_ChipReset
 ; Post: Y = SY6522_ORA for chip A or B
 ;	Z = 0
 	lda		#AY_RESET			; Phasor/Echo+: don't need CS due to direct connection from ORB.b2 to AYs' /RESET
-	beq		+
+	; NB. For Echo+ (or Phasor in E+ mode) should really use AY_RESET|AY_ECHO_BOTH_CS so that INACTIVE
+	; is set for both AYs (below), but reset has already set them to INACTIVE, so it's OK to skip this.
+	beq		+					; {branch always)
 
 SetModeAndInactive
 ; Pre: Y = SY6522_ORA for chip A or B
