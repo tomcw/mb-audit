@@ -312,7 +312,7 @@ TestAY8913
 			bcc		@soak
 			bcs		@error
 
-@TestMB	; Mockingboard or Phasor(in PH_MOCKINGBOARD) or MB4C(assume we can read AY regs)
+@TestMB	; Mockingboard or Phasor(in PH_MOCKINGBOARD) or MB4C(assume we can read AY regs) or MegaAudio or SD Music
 
 			lda		#$C
 			sta		testNum			; test #0C
@@ -377,7 +377,7 @@ TestAY8913
 NUM_AY_TESTS = 5
 HiZ_TEST = 4
 
-; 1) Test #10,... Called for Mockingboard or Phasor(phasorMode = PH_MOCKINGBOARD) or MB4C
+; 1) Test #10,... Called for Mockingboard or Phasor(phasorMode = PH_MOCKINGBOARD) or MB4C or MegaAudio or SD Music
 ;		test AY: data lines, addr lines, etc
 ; 2) Test #30,... Called for Phasor(phasorMode = PH_PHASOR)
 ;		test AY1: data lines, addr lines, etc
@@ -447,7 +447,7 @@ TestAYs
 			lda		#NUM_AY_TESTS	; skip the Phasor-only tests for 2nd AY
 			adc		testNum
 			sta		testNum
-			bcc		++
+			bcc		++				; (branch always)
 
 		; Phasor
 
@@ -936,6 +936,10 @@ TestAYMockingboard
 ; Pre: phasorMode = PH_MOCKINGBOARD
 ; Post: C=0(OK), C=1(NG)
 ;	zpTmp2 = expected, A = actual
+
+	clc
+	lda		isMegaAudioCard					; MegaAudio doesn't support AY reads, so skip this whole test
+	bne		@done
 
 	; MB tests for AY RESET (cf. TestAYPhasor5)
 	; Writing a 6522's ORB(PortB).bit2=0 will reset the AY
