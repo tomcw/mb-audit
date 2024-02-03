@@ -2321,6 +2321,7 @@ TestAYTones
 	lda		hasAY8913
 	and		#2
 	beq		+
+		; NB. for Echo+ (or Phasor in Echo+ mode), this just duplicates the previous setup for the same AYs!
 		lda		#SY6522_B_BASE
 		sta		zpTmp3
 		jsr		Init6522ForAY
@@ -2460,6 +2461,7 @@ TestAYTones
 
 @InitAYRegs	; Pre: Y = SY6522_ORA for chip A or B
 ; NB. In native Phasor mode, calls to AY_WriteRegValue() are done to both A1/A2 (or B1/B2) AY chips
+; NB. In Echo+ mode, calls to AY_WriteRegValue() are done to both B1/B2 AY chips
 
 	sty		zpTmp1
 
