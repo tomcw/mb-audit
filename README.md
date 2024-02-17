@@ -12,17 +12,18 @@ The purpose of "mb-audit" is two fold:
 
 As it is intended as a full-correctness suite for emulators, then it goes deeper than what emulators currently need to emulate. The way the tests have been ordered is that (more or less) the more important tests are done first, with the more esoteric tests towards the end.
 
-Tests are run in order and can't be skipped. On a first failure, then the audit will stop at that point, outputting an error to identify the test failure and some extra info to help narrow down the failure. There is no way to resume testing from after this failing test, mainly because subsequent tests rely on behaviour that must be working from previous tests.
+Tests are run in order and can't be skipped (except for the soak test where ESC skips the current test). On a first failure, then the audit will stop at that point, outputting an error to identify the test failure and some extra info to help narrow down the failure. There is no way to resume testing from after this failing test, mainly because subsequent tests rely on behaviour that must be working from previous tests. NB. A few tests will output a warning and continue.
 
 Motivation: to consolidate the sprawling set of individual tests I've been creating over the years for AppleWin.
 - AppleWin 1.30.1 passes all tests for mb-audit v0.1-beta. Configurations: (a) 2x MB-C; (b) 1x Phasor
 
 Current test matrix for real hardware:
-- ReactiveMicro's Mockingboard-C, non-enhanced //e, 65C02, SSI263(socket-B) mb-audit v0.2-beta
-- Applied Engineering's Phasor, non-enhanced //e, 65C02, SSI263(socket-A), mb-audit v0.2-beta
+- ReactiveMicro's Mockingboard-C (but with WDC-65C22's), enhanced //e, 65C02, SSI263(socket-B), all versions of mb-audit
+- Applied Engineering's Phasor, enhanced //e, 65C02, SSI263(socket-A), all versions of mb-audit
 - SMS's Sound/Speech I, mb-audit v0.4-beta
 - Ian Kim's SD Music Deluxe, mb-audit v0.9
 - MEGA Audio, mb-audit v1.4x
+- Echo+, mb-audit v1.51
 
 ![DSC00534-s](https://user-images.githubusercontent.com/6696896/117582673-188b6300-b0fb-11eb-9baf-4ba27d112542.png)
 
@@ -46,7 +47,7 @@ mb-audit v0.1-beta, 2021
 Then for each card found:
 - Do basic 6522 hardware checks (address lines, data lines, and IRQ)
 - Detect connected sub-units: SSI263s, SC-01, AY-3-8913s
-- Determine if the card is a Phasor or MEGA Audio or MB4C(*1) or Echo+(*1)
+- Determine if the card is a Phasor, MEGA Audio, MB4C(*1), Echo+ or SD Music
   - (*1) Untested on real hardware
 - Display a more detailed summary of what has been detected, eg:
 ```
@@ -169,4 +170,4 @@ Running on a IIgs
 
 ### Acknowledgements
 
-Thanks to Andrew Roughan for his help with testing against his MEGA Audio and single-6522 clone cards.
+Thanks to Andrew Roughan for his help with testing against his MEGA Audio and single-6522 clone cards, and Brian J. Bernstein for testing against his Echo+ card.
