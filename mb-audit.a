@@ -420,8 +420,27 @@ SetupResetVector
 
 TestTones
 
+	lda		#<msg_ToneHelp
+	ldx		#>msg_ToneHelp
+	jsr		Print
+
+	; FLASH the "USE KEYS" start of this message:
+	ldy		#7
+-		lda		(BASL),y
+		cmp		#$80+' '				; special case for SPACE
+		bne		+
+		lda		#$80+$60
++		eor		#$80					; for letters: NORMAL -> FLASH
+		sta		(BASL),y
+		dey
+		bpl		-
+
+	jsr		CROUT
+
+	;
+
 	lda		CV
-	sta		saveZPTextVars
+	sta		saveZPTextVars				; Use same line for all cards
 
 	lda		#7
 	sta		slotUnderTest
@@ -442,14 +461,8 @@ TestTones
 			sta		hasAY8913
 			jsr		RestoreFromSlotInfo2	; pre: X=slot#
 
-			; Use same line for all cards
-			lda		saveZPTextVars
-			jsr		VTABZ
-			lda		#0
-			sta		CH
-
 			; "Tone: "
-			jsr		PrintSlotNum
+			jsr		PrintSlotNumInvert
 			lda		#<msg_ToneKeys
 			ldx		#>msg_ToneKeys
 			jsr		Print
@@ -464,7 +477,7 @@ TestTones
 
 				lda		hasAY8913
 				and		#%00001110		; any more AYs?
-				beq		@cr
+				beq		@clreol
 
 				lda		#$80+','
 				jsr		COUT
@@ -480,20 +493,24 @@ TestTones
 
 				lda		hasAY8913
 				and		#%00001100		; any more AYs?
-				beq		@cr
+				beq		@clreol
 +
 
 			; ",A2:QWE,B2:RTY"
 			lda		isPhasorCard
-			beq		@cr
+			beq		@clreol
 				lda		#<msg_ToneKeysPhasor
 				ldx		#>msg_ToneKeysPhasor
 				jsr		Print
 				jmp		+				; NB. No CR, since exactly 40 chars
 
-@cr				jsr		CLREOL			; clear to EOL
-				jsr		CROUT
-+
+@clreol		jsr		CLREOL				; clear to EOL
+
++			; Use same line for all cards; and reset BASL for TestAYTones()
+			lda		saveZPTextVars
+			jsr		VTABZ
+			lda		#0
+			sta		CH
 
 			jsr		DisplaySlotUpdate
 
@@ -506,7 +523,14 @@ TestTones
 		jmp		@loop
 
 @done
-	rts
+	ldy		saveZPTextVars
+	dey
+	tya
+	sta		CV							; update CV, as VTABZ doesn't
+	jsr		VTABZ
+	jsr		CLREOL						; erase the "USE KEYS: ..." message
+	jsr		CROUT
+	jmp		CLREOL						; erase the "Slot #? :Tone: A:123..." message
 
 ;------------------------------------------------------------------------------
 
@@ -1660,12 +1684,23 @@ PrintSlotNum
 	ldx		#>msg_Slot
 	jsr		Print
 	lda		slotUnderTest
-	ora		#$80+$30
+	ora		#$30
+	ora		slotNumInvert
 	jsr		COUT
 	lda		#$80+' '
 	jsr		COUT
 	lda		#$80+':'
 	jmp		COUT
+
+PrintSlotNumInvert
+	lda		#$00
+	sta		slotNumInvert
+	jsr		PrintSlotNum
+	lda		#$80
+	sta		slotNumInvert
+	rts
+
+slotNumInvert !byte $80
 
 ;------------------------------------------------------------------------------
 
@@ -1868,6 +1903,10 @@ msg_MultiCardOKEnd !text 0
 
 msg_MultiCardSkipped !text "(Multi-card tests skipped)",0xd
 msg_MultiCardSkippedEnd !text 0
+
+                   ;0123456789012345678901234567890123456789
+msg_ToneHelp !text "USE KEYS: 1-6 (and Q-Y) to toggle tones"	; NB. no CR (and after printing, "USE KEYS" is converted to FLASHing)
+msg_ToneHelpEnd !text 0
 
 msg_ToneKeys !text "Tone: "
 msg_ToneKeysEnd !text 0

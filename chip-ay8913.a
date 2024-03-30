@@ -2403,18 +2403,51 @@ TestAYTones
 	;
 
 @ayEna	; Pre: Y=1,2,3; X=index in ayEna[]
+	tya
+	pha								; save Y for later
 	lda		#1
 	dey
-	beq		@ayEnaDone
+	beq		+
 	asl
 	dey
-	beq		@ayEnaDone
+	beq		+
 	asl
-
-@ayEnaDone
++		; Pre: A=1,2,4; X=index in ayEna[]
 	eor		ayEna,x					; toggle
 	sta		ayEna,x
-	jmp 	@loop
+
+	pla
+	clc
+
+	dex
+	bmi		@X0
+	dex
+	bmi		@X1
+	dex
+	bmi		@X2
+@X3	adc		#36
+	bne		@invertLetter
+@X2	adc		#29
+@invertLetter
+	tay
+	lda		(BASL),y
+	cmp		#$80+' '				; if this card has no AY here...
+	beq		+						; ...then skip
+	eor		#$C0
+	sta		(BASL),y
++	jmp 	@loop
+
+@X1	adc		#22
+	bne		@invertNumber
+@X0	adc		#16
+@invertNumber
+	tay
+	lda		(BASL),y
+	cmp		#$80+' '				; if this card has no AY here...
+	beq		+						; ...then skip
+	eor		#$80
+	sta		(BASL),y
++	jmp 	@loop
 
 	;
 
