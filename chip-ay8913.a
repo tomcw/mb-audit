@@ -2309,6 +2309,8 @@ TestAYTones
 		jsr		SetPhasorMode
 +
 
+	jsr		PrintPhasorMode
+
 	lda		hasAY8913
 	and		#1
 	beq		+
@@ -2340,8 +2342,8 @@ TestAYTones
 		lda		isPhasorCard
 		beq		++
 			sei
-			jsr		IncPhasorMode	; Post: A = 'M', 'P' or 'E'; hasAY8913 reflects new mode
-			sta		$400			; FIXME: find better way to show Phasor mode
+			jsr		IncPhasorMode	; Post: hasAY8913 reflects new mode
+			jsr		PrintPhasorMode
 			cli
 			jmp		@loop
 ++	cmp		#$80+27					; ESC
@@ -2546,6 +2548,45 @@ ayEna	; 6522 chip A at $Cn00(+$Cn10), 6522 chip B at $Cn80
 		; . AY8913 B1 (and B2) connected to 6522 chip B
 	!byte $3f,$3f	; chip A1,B1 (1=dis, 0=ena -- just like reg#7)
 	!byte $3f,$3f	; chip A2,B2 (for Phasor)
+
+;------------------
+
+PrintPhasorMode
+	lda		CV
+	pha								; save CV
+	lda		#7
+	sta		CV
+	jsr		VTABZ
+	lda		#16
+	sta		CH
+
+	lda		isPhasorCard
+	bne		+
+		jsr		CLREOL
+		jmp		@done
++
+
+	lda		phasorMode
+	cmp		#PH_MOCKINGBOARD
+	beq		@mb
+	cmp		#PH_PHASOR
+	beq		@ph
+@ep	lda		#<msg_phasorModeE
+	ldx		#>msg_phasorModeE
+	bne		+
+@mb	lda		#<msg_phasorModeM
+	ldx		#>msg_phasorModeM
+	bne		+
+@ph	lda		#<msg_phasorModeP
+	ldx		#>msg_phasorModeP
++	jsr		Print
+
+@done
+	lda		#0
+	sta		CH
+	pla								; restore CV
+	sta		CV
+	jmp		VTABZ
 
 ;------------------------------------------------------------------------------
 

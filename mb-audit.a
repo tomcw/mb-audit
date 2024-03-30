@@ -508,6 +508,7 @@ TestTones
 
 +			; Use same line for all cards; and reset BASL for TestAYTones()
 			lda		saveZPTextVars
+			sta		CV					; update CV, as VTABZ doesn't
 			jsr		VTABZ
 			lda		#0
 			sta		CH
@@ -860,7 +861,7 @@ RestoreFromSlotInfo2
 IncPhasorMode
 ; MB -> Phasor -> Echo+ -> MB -> ...
 ; Pre: SEI
-; Post: A = 'M', 'P' or 'E'
+; Post:
 ;	hasAY8913 = %0011 or %1111
 
 	lda		phasorMode
@@ -870,29 +871,23 @@ IncPhasorMode
 	cmp		#PH_PHASOR
 	beq		@setEchoPlus
 
-	lda		#'M'
 	ldx		#PH_MOCKINGBOARD
 	bne		++
 
 @setPhasor
-	lda		#'P'
 	ldx		#PH_PHASOR
 	ldy		#%00001111
 	bne		+
 
 @setEchoPlus
-	lda		#'E'
 	ldx		#PH_ECHOPLUS
 ++	ldy		#%00000011
 
 +	sty		hasAY8913
-	pha
 	txa
-	jsr		SetPhasorMode
-	pla
-	rts
+	; fall through...
 
-;------------------
+;--------
 
 SetPhasorMode
 ; Pre: A=phasorMode
@@ -1844,7 +1839,7 @@ cfgDoSoakTest	!byte NO_SOAK_TEST
 
 ayRegs			!fill 16,0
 
-msg_mbaudit	!text "mb-audit v1.51,Tom Charlesworth, 2021,24",0xd
+msg_mbaudit	!text "mb-audit v1.52,Tom Charlesworth, 2021,24",0xd
 msg_mbauditEnd !text 0
 
 msg_cpu6502Detected !text "6502 detected",0xd
@@ -1903,6 +1898,12 @@ msg_MultiCardOKEnd !text 0
 
 msg_MultiCardSkipped !text "(Multi-card tests skipped)",0xd
 msg_MultiCardSkippedEnd !text 0
+
+       ;0123456789012345678901234567890123456789
+       ;65c02 detected
+msg_phasorModeM  !text "Phasor mode=Mockingboard",0
+msg_phasorModeP  !text "Phasor mode=Native      ",0
+msg_phasorModeE  !text "Phasor mode=Echo+       ",0
 
                    ;0123456789012345678901234567890123456789
 msg_ToneHelp !text "USE KEYS: 1-6 (and Q-Y) to toggle tones"	; NB. no CR (and after printing, "USE KEYS" is converted to FLASHing)
