@@ -278,8 +278,7 @@ entrypoint
 	jsr		PRNTYX
 	lda		#$80+')'
 	jsr		COUT
-	lda		#$80+$0d
-	jsr		COUT
+	jsr		CROUT
 
 	;
 
@@ -421,6 +420,9 @@ SetupResetVector
 
 TestTones
 
+	lda		CV
+	sta		saveZPTextVars
+
 	lda		#7
 	sta		slotUnderTest
 @loop	ldx		slotUnderTest
@@ -440,6 +442,13 @@ TestTones
 			sta		hasAY8913
 			jsr		RestoreFromSlotInfo2	; pre: X=slot#
 
+			; Use same line for all cards
+			lda		saveZPTextVars
+			jsr		VTABZ
+			lda		#0
+			sta		CH
+
+			; "Tone: "
 			jsr		PrintSlotNum
 			lda		#<msg_ToneKeys
 			ldx		#>msg_ToneKeys
@@ -474,6 +483,7 @@ TestTones
 				beq		@cr
 +
 
+			; ",A2:QWE,B2:RTY"
 			lda		isPhasorCard
 			beq		@cr
 				lda		#<msg_ToneKeysPhasor
@@ -481,8 +491,8 @@ TestTones
 				jsr		Print
 				jmp		+				; NB. No CR, since exactly 40 chars
 
-@cr				lda		#$80+$0d
-				jsr		COUT
+@cr				jsr		CLREOL			; clear to EOL
+				jsr		CROUT
 +
 
 			jsr		DisplaySlotUpdate
@@ -583,8 +593,7 @@ DumpAYRegs
 		cmp		zpTmp2
 		bne		-
 
-	lda		#$80+$0d
-	jmp		COUT
+	jmp		CROUT
 
 ;------------------------------------------------------------------------------
 
@@ -1035,8 +1044,7 @@ PrintWarning
 		ldx		warningActual
 		jsr		PRNTX
 
-		lda		#$80+$0d
-		jsr		COUT
+		jsr		CROUT
 
 +	lda		#0
 	sta		warningCount
@@ -1439,8 +1447,7 @@ DisplayCardUpdate
 				pla
 				dec		zpTmp3
 				bne		-
-			lda		#$80+$0d
-			jsr		COUT
+			jsr		CROUT
 			pla
 			tax
 
@@ -1576,8 +1583,7 @@ PrintTestFailedErrBytes
 	jsr		Print
 	ldx		errorActual
 	jsr		PRNTX
-	lda		#$80+$0d
-	jmp		COUT
+	jmp		CROUT
 
 	;
 
@@ -1617,8 +1623,7 @@ PrintLineTestFailed
 @4	lda		#<msg_componentSSI263
 	ldx		#>msg_componentSSI263
 +	jsr		Print
-;	lda		#$80+$0d		; exactly 40 char, so no need for CR
-;	jsr		COUT
+;	jsr		CROUT		; exactly 40 char, so no need for CR
 	rts
 
 	;
@@ -1648,8 +1653,7 @@ PrintLineTestNum
 		lda		#$80+')'
 		jsr		COUT
 
-+	lda		#$80+$0d
-	jmp		COUT
++	jmp		CROUT
 
 PrintSlotNum
 	lda		#<msg_Slot
