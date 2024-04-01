@@ -197,6 +197,7 @@ entrypoint
 			lda		#<msg_cpu65816Detected
 			ldx		#>msg_cpu65816Detected
 +	jsr		Print
+	jsr		CROUT					; Blank line between "65??? detected  Phasor mode=???" and test results
 
 	lda		#0
 	sta		totalTests+0

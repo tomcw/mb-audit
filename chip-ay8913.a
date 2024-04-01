@@ -2554,7 +2554,7 @@ ayEna	; 6522 chip A at $Cn00(+$Cn10), 6522 chip B at $Cn80
 PrintPhasorMode
 	lda		CV
 	pha								; save CV
-	lda		#7
+	lda		#7						; line 7
 	sta		CV
 	jsr		VTABZ
 	lda		#16
