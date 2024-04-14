@@ -216,24 +216,28 @@ TestSSI263
 	sta		zpTmp1
 	bcc		@nextSSI263
 
-@loop	inc		testNum				; test #00, 05
+@loop	inc		testNum				; test #00, $06
 		jsr		T263_0
 		bcs		@error
 
-		inc		testNum				; test #01, 06
+		inc		testNum				; test #01, $07
 		jsr		T263_1
 		bcs		@error
 
-		inc		testNum				; test #02, 07
+		inc		testNum				; test #02, $08
 		jsr		T263_2
 		bcs		@error
 
-		inc		testNum				; test #03, 08
+		inc		testNum				; test #03, $09
 		jsr		T263_3
 		bcs		@error
 
-		inc		testNum				; test #04, 09
+		inc		testNum				; test #04, $0A
 		jsr		T263_4
+		bcs		@error
+
+		inc		testNum				; test #05, $0B
+		jsr		T263_5
 		bcs		@error
 
 @nextSSI263
@@ -870,6 +874,256 @@ T263_4
 	pla
 	plp
 	rts
+
+;------------------------------------------------------------------------------
+
+T263_5
+; Pre:
+; Post: C=0(OK), C=1(NG)
+;
+; Test#5 - Phasor only
+; . Part-1: Test clearing IRQ using writes to all 16 register locations (polling, ints disabled)
+; . Part-2: Test clearing IRQ using writes to all 16 register locations (using ISR, ints enabled)
+
+	lda		isPhasorCard
+	bne		+
+		clc
+		rts
++
+
+	jsr		resetSubTestMinus1		; subTest #-1
+	jsr		incTotalTests
+
+	sei
+
+	lda		#<@T263_5_ISR
+	ldx		#>@T263_5_ISR
+	jsr		SetIrqVector
+
+	lda		#PH_PHASOR
+	jsr		SetPhasorMode
+
+	lda		#$00					; Peripheral for PA port Control: CA2 = input (so don't PD/RST to SSI263)
+									; CA1 = input (as before)
+	ldy		#SY6522_PCR
+	sta		(MBBase),y
+
+	;
+	;-------------- Part-1:
+	;
+
+	; Kick with phoneme $00 && MODE_PHONEME_TRANSITIONED_INFLECTION
+	jsr		KickSSI263_no_PCR
+
+	lda		#0						; Countup from $0 to $F
+	sta		@regNum
+
+-		jsr		incSubTestNum			; subTest# = regNum * 2
+		jsr		@waitPhonemeDone
+		beq		+
+			jmp		@error
++
+
+		jsr		incSubTestNum			; subTest# = regNum * 2 + 1
+
+		lda		@regNum
+		and		#7
+		tay								; y=0..7
+		lda		@regs,y
+		ldy		@regNum					; y=0..F
+		sta		(SSI263Base),y			; Try to clear IRQ by writing to an SSI263 reg
+		lda		(SSI263Base),y
+		and		#REQ_NEW_DATA			; D7
+		cpy		#3						; (reg3 = SSI_CTTRAMP)
+		bcc		@irqClear				; 0 <= y < 3 ?
+		cpy		#8
+		bcc		@irqSet					; 3 <= y < 8 ?
+		cpy		#3+8					; (reg3 = SSI_CTTRAMP)
+		bcc		@irqClear				; 8 <= y < (3+8) ?
+@irqSet	ldx		#REQ_NEW_DATA
+		cmp		#REQ_NEW_DATA
+		beq		+
+			jmp		@error
+@irqClear
+		ldx		#0
+		cmp		#0
+		bne		@error
++
+		;
+
+		iny
+		sty		@regNum
+		cpy		#$10
+		beq		+
+
+		dey
+		tya
+		and		#7
+		beq		-						; already written reg#0, so loop
+
+		lda		@regs+0
+		ldy		#SSI_DURPHON
+		sta		(SSI263Base),y
+		jmp		-
+
++	; done
+	jsr		DisableSSI263			; Clear the IRQ
+
+	;
+	;-------------- Part-2:
+	;
+
+	; Kick with phoneme $00 && MODE_PHONEME_TRANSITIONED_INFLECTION
+	jsr		KickSSI263_no_PCR
+
+	lda		#$0f					; Countdown from $F to $0
+	sta		@regNum
+
+	lda		#0
+	sta		@loopCount
+
+-		jsr		incSubTestNum			; subTest# = $20,$22,$24,...,$2A
+		jsr		@waitPhonemeDone
+		bne		@error
+
+		jsr		incSubTestNum			; subTest# = $21,$23,$25...,$2B
+
+		cli								; let the IRQ occur & vector to ISR
+										; IRQ keeps occurring until a SSI263 write clears IRQ
+		nop
+		nop
+		nop
+		nop
+		;
+		nop
+		nop
+		nop
+		nop
+		sei
+
+		lda		@regNum
+		clc
+		adc		#1						; A = recovered regNum that successfully cleared IRQ
+		ldx		#0						; X = expected (don't care)
+		cmp		#3+8					; (reg3 = SSI_CTTRAMP)
+		bcs		@error					; NG if: regNum >= (3+8)
+		cmp		#3
+		bcc		+						; OK if: regNum < 3
+		cmp		#8
+		bcc		@error					; NG if: regNum < 8
++
+
+		inc		@loopCount
+
+		ldy		@regNum
+		cpy		#$ff
+		beq		+
+
+		iny
+		tya
+		and		#7
+		beq		-						; already written reg#0, so loop
+
+		lda		@regs+0
+		ldy		#SSI_DURPHON
+		sta		(SSI263Base),y
+		jmp		-
+
++	; done
+
+	jsr		incSubTestNum			; subTest# = $2C
+	ldx		#6
+	lda		@loopCount
+	cmp		#6
+	bne		@error
+
+	;--------------
+
+	clc
+	bcc		@cleanup
+
+@error	; A=actual, X=expected
+	stx		zpTmp2
+	sec
+
+@cleanup
+	pha
+	php
+	lda		#<TestSSI263ISR
+	ldx		#>TestSSI263ISR
+	jsr		SetIrqVector
+	jsr		DisableSSI263
+	lda		#PH_MOCKINGBOARD
+	jsr		SetPhasorMode
+	plp
+	pla
+	rts
+
+;------------------
+
+; Wait until phoneme is complete
+; . Don't need a timeout, since earlier tests have shown that D7 is working
+; Post: A = b1:0 = D7:D7' = b#11 (if correct)
+;		X = 3 (expected result)
+;		Z = 1 (if A==3)
+@waitPhonemeDone
+	; NB. Reading reg#0 doesn't clear the IRQ
+	ldy		#SSI_DURPHON
+--		lda		(SSI263Base),y
+		rol							; C=D7
+		bcc		--
+	lda		(SSI263Base),y
+	rol								; b0=D7, C=D7'
+	rol								; b1=D7, b0=D7'
+	and		#3
+	ldx		#3
+	cmp		#3
+	rts
+
+;------------------
+
+@T263_5_ISR
+
+	txa
+	pha
+	tya
+	pha
+
+	;------
+
+	lda		@regNum
+	and		#7
+	tay							; y=0..7
+	lda		@regs,y
+	ldy		@regNum
+	sta		(SSI263Base),y		; Try to clear IRQ by writing to an SSI263 reg
+	dec		@regNum
+
+	;------
+
+	pla
+	tay
+	pla
+	tax
+
+	lda		$45		; for Apple II/II+
+	rti
+
+;------------------
+
+@regNum
+	!byte 0
+
+@loopCount
+	!byte 0
+
+@regs
+	; reg0: DUR[7:6]=3(shortest), PHONEME=$00
+	; reg1: INF[7:0]=$52
+	; reg2: RATE[7:4]=$F(quickest), INF[3:0]=$8
+	; reg3: CTL[7]=0, ART[6:4]=$7, AMP[3:0]=$0
+	; reg4-7: FILTER[7:0]=$E6 (all the same)
+	!byte $C0,$52,$F8,$70, $E6,$E6,$E6,$E6
 
 ;------------------------------------------------------------------------------
 
