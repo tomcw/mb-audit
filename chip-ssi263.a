@@ -1140,6 +1140,7 @@ T263_6
 ;
 ; Test#6
 ; Start phoneme playback. Wait for Phoneme complete. If Phoneme IRQ is then cleared, a new IRQ will occur when the phoneme completes again.
+; . Part-0: MB/Phasor   : Use IRQ for phoneme complete, but in ISR *don't* clear SSI263 int with the reg1 write
 ; . Part-1: MB/Phasor   : Use IRQ for phoneme complete
 ; . Part-2: Phasor only : Poll D7 for phoneme complete
 
@@ -1161,6 +1162,36 @@ T263_6
 	sta		(MBTimer),y				; Disable Timer1 IRQ
 
 	;
+	;-------------- Part-0:
+	;
+
+	lda		#1
+	sta		@skipWriteToReg1
+
+	lda		#IER_SET|IxR_SSI263
+	ldy		#SY6522_IER
+	sta		(MBBase),y				; Enable SSI263 IRQ
+
+	; Kick with phoneme $00 && MODE_PHONEME_TRANSITIONED_INFLECTION
+	jsr		KickSSI263
+
+	jsr		incSubTestNum			; subTest# = $00
+	jsr		@waitPhonemeDoneIrqWithTimeout
+	beq		+
+		jmp		@error
++
+
+	jsr		incSubTestNum			; subTest# = $01
+	jsr		@waitPhonemeDoneIrqWithTimeout
+	beq		@error					; *** Expect timeout! ***
+
+	lda		#IER_CLR|IxR_SSI263
+	ldy		#SY6522_IER
+	sta		(MBBase),y				; Disable SSI263 IRQ
+
+	dec		@skipWriteToReg1
+
+	;
 	;-------------- Part-1:
 	;
 
@@ -1173,7 +1204,7 @@ T263_6
 
 	lda		#4
 @loop1	pha
-		jsr		incSubTestNum		; subTest# = $00, $01, $02, $03
+		jsr		incSubTestNum		; subTest# = $02, $03, $04, $05
 		jsr		@waitPhonemeDoneIrqWithTimeout
 		bne		@error
 		pla
@@ -1205,14 +1236,14 @@ T263_6
 	; Kick with phoneme $00 && MODE_PHONEME_TRANSITIONED_INFLECTION
 	jsr		KickSSI263_no_PCR
 
-	jsr		incSubTestNum			; subTest# = $04
+	jsr		incSubTestNum			; subTest# = $06
 	ldx		#$00
 	ldy		#SSI_DURPHON
 	lda		(SSI263Base),y
 	and		#REQ_NEW_DATA
 	bne		@error
 
-	jsr		incSubTestNum			; subTest# = $05
+	jsr		incSubTestNum			; subTest# = $07
 	jsr		@waitPhonemeDoneWithTimeout
 	bne		@error
 
@@ -1220,13 +1251,13 @@ T263_6
 	ldy		#SSI_INFLECT			; reg1
 	sta		(SSI263Base),y			; clear IRQ & set D7=0
 
-	jsr		incSubTestNum			; subTest# = $06
+	jsr		incSubTestNum			; subTest# = $08
 	ldx		#$00
 	lda		(SSI263Base),y			; Y=$1 (can be $0-$F)
 	and		#REQ_NEW_DATA
 	bne		@error
 
-	jsr		incSubTestNum			; subTest# = $07
+	jsr		incSubTestNum			; subTest# = $09
 	jsr		@waitPhonemeDoneWithTimeout
 	bne		@error
 
@@ -1360,7 +1391,11 @@ T263_6
 	lda		#IxR_SSI263
 	ldy		#SY6522_IFR
 	sta		(MBBase),y				; Clear CA1(Speech) IRQ
-	; fall through... (need to do this part-2 bit for MB-C! ...otherwise get a timeout at subtest#1)
+
+	lda		@skipWriteToReg1
+	bne		++
+
+	; fall through... (need to do this part-2 bit for MB-C! ...otherwise get a timeout at subtest#3)
 
 +	; Part-2
 	lda		#0
@@ -1380,6 +1415,7 @@ T263_6
 	rti
 
 @intFlag	!byte	0
+@skipWriteToReg1	!byte	0
 
 ;------------------------------------------------------------------------------
 
