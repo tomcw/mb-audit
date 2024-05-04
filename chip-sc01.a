@@ -285,8 +285,11 @@ TestSC01ISR
 		bit		KBDSTRB
 		cmp		#$80+27				; ESC?
 		bne		+
-			lda		#0
-			beq		@endSpeech
+			; Skip to final STOP phoneme
+			lda		#<TheSpyStrikesBack_end
+			sta		SpeechDataL
+			lda		#>TheSpyStrikesBack_end
+			sta		SpeechDataH
 +
 
 	;------
@@ -363,6 +366,7 @@ TheSpyStrikesBack
 	!byte $2E
 	!byte $19
 	!byte $03
+TheSpyStrikesBack_end
 	!byte $3F
 NullPhraseSC01
 	!byte 0,0,0,0,0
