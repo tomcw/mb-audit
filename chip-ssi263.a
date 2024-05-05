@@ -252,6 +252,10 @@ TestSSI263
 		jsr		T263_7
 		bcs		@error
 
+		inc		testNum				; test #08, $88
+		jsr		T263_8
+		bcs		@error
+
 @nextSSI263
 		lda		#$7f
 		sta		testNum
@@ -1131,7 +1135,7 @@ T263_6
 ; Post: C=0(OK), C=1(NG)
 ;
 ; Test#6
-; Start phoneme playback. Wait for Phoneme complete. If Phoneme IRQ is then cleared, a new IRQ will occur when the phoneme completes again.
+; Start phoneme playback. Wait for phoneme to complete. If Phoneme IRQ is then cleared, a new IRQ will occur when the phoneme completes again.
 ; . Part-0: MB/Phasor   : Use IRQ for phoneme complete, but in ISR *don't* clear SSI263 int with the reg1 write
 ; . Part-1: MB/Phasor   : Use IRQ for phoneme complete
 ; . Part-2: Phasor only : Poll D7 for phoneme complete
@@ -1341,7 +1345,7 @@ T263_7
 ; Post: C=0(OK), C=1(NG)
 ;
 ; Test#7 (Phasor only)
-; . Start phoneme playback. Wait for Phoneme complete, then:
+; . Start phoneme playback. Wait for phoneme to complete, then:
 ;   . CTL=1(power-down) : Check IRQ de-asserted (and D7=0)
 ;   . CTL=0(power-up)   : Check IRQ still de-asserted (and D7=0)
 ; . Part-1: MB/Phasor   : Use IRQ for phoneme complete
@@ -1538,6 +1542,81 @@ T263_7
 
 	lda		$45		; for Apple II/II+
 	rti
+
+;------------------------------------------------------------------------------
+
+T263_8
+; Pre:
+; Post: C=0(OK), C=1(NG)
+;
+; Test#8 (Phasor only)
+; . Start phoneme playback (with SSI263 IRQ enabled). Wait for phoneme to complete, then:
+; . Check that 6522.IFR.IxR_SSI263 == 0
+
+	lda		isPhasorCard
+	bne		+
+		clc
+		rts
++
+
+	;
+
+	jsr		resetSubTestMinus1		; subTest #-1
+	jsr		incTotalTests
+
+	sei
+
+	lda		MBBaseL
+	sta		zpTmp3					; keep a copy & restore at end
+
+	lda		#ACR_FREERUNNING
+	ldy		#SY6522_ACR
+	sta		(MBTimer),y				; Free-running timer
+
+	lda		#PH_PHASOR
+	jsr		SetPhasorMode
+
+	lda		MBBaseL
+	cmp		#SY6522_A_BASE
+	bne		+
+		lda		#SY6522_A_PH_BASE
+		sta		MBBaseL
++
+
+	; Kick with phoneme $00 && MODE_PHONEME_TRANSITIONED_INFLECTION
+	jsr		KickSSI263				; (doesn't matter if PCR = $00 or $0C)
+
+	jsr		incSubTestNum			; subTest# = $00
+	jsr		WaitPhonemeDoneWithTimeout
+	bne		@error
+
+	jsr		incSubTestNum			; subTest# = $01
+	ldy		#SY6522_IFR
+	lda		(MBBase),y
+	ldx		#0						; (expected)
+	and		#IxR_SSI263
+	bne		@error
+
+	clc								; C=0(OK)
+	bcc		@exit
+
+@error		; pre: A=actual, X=expected
+	stx		zpTmp2					; expected
+	sec								; C=1(NG)
+
+@exit
+	php
+	pha
+
+	lda		zpTmp3
+	sta		MBBaseL					; restore
+	jsr		DisableSSI263
+	lda		#PH_MOCKINGBOARD
+	jsr		SetPhasorMode
+
+	pla
+	plp
+	rts
 
 ;------------------------------------------------------------------------------
 
