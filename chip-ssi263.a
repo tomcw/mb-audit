@@ -84,24 +84,28 @@ DisableSSI263
 
 ;------------------------------------------------------------------------------
 
+KickSSI263_no_PCR
+
+	lda		#$00					; NB. No different to setting to 0x0C
+	beq		+
+
 KickSSI263
 
-	lda		#$0C					; Peripheral for PA port Control: CA2 = low output (Pin18: Power Down/Reset)
-									; CA1 = negative active edge (input) (Pin4: A/!R)
-	ldy		#SY6522_PCR
+	lda		#$0C					; Peripheral for PA port Control: CA2 = low output (Not connected to SSI263)
+									; CA1 = negative active edge (input) (SSI263 Pin4: A/!R)
+									; NB. Can use a value of 0x00 and it still works (tested on real MB & Phasor)
+
++	ldy		#SY6522_PCR
 	sta		(MBBase),y
 
 	lda		#IxR_SSI263
 	ldy		#SY6522_IFR
-	sta		(MBBase),y				; clear CA1(Speech) IRQ after setting PCR
-
-KickSSI263_no_PCR
+	sta		(MBBase),y				; Clear CA1(Speech) IRQ after setting PCR
 
 	lda		#CONTROL_H
 	ldy		#SSI_CTTRAMP
 	sta		(SSI263Base),y
 
-	; Warning: stepping this won't yield an IRQ, since the phoneme completes before H->L (assuming prev mode=MODE_IRQ_DISABLED)
 	lda		#MODE_PHONEME_TRANSITIONED_INFLECTION+$00	; DR1:DR0=3 , P5:P0=$00
 	ldy		#SSI_DURPHON
 	sta		(SSI263Base),y
@@ -551,11 +555,7 @@ T263_2
 	lda		#PH_PHASOR
 	jsr		SetPhasorMode
 
-	lda		#$00					; Peripheral for PA port Control: CA2 = input (so don't PD/RST to SSI263)
-									; CA1 = input (as before)
-	ldy		#SY6522_PCR
-	sta		(MBBase),y
-
+	; Kick with phoneme $00 && MODE_PHONEME_TRANSITIONED_INFLECTION
 	jsr		KickSSI263_no_PCR
 
 	lda		#$FF
@@ -748,17 +748,12 @@ T263_4
 ;
 ; Test#4
 ; . Test phoneme playback using direct IRQ (MB & Phasor)
-; NB. Mockingboard must fail
+; NB. Mockingboard must fail, as SSI263 IRQ isn't directly connected
 
 	sei
 
 	lda		MBBaseL
 	sta		zpTmp3					; keep a copy & restore at end
-
-	lda		#$00					; Peripheral for PA port Control: CA2 = input (so don't PD/RST to SSI263)
-									; CA1 = input (as before), so for MB mode (Test#2) then IFR.b1 will be set when phoneme completes
-	ldy		#SY6522_PCR
-	sta		(MBBase),y
 
 	lda		#IER_CLR|IxR_SSI263
 	ldy		#SY6522_IER
@@ -768,6 +763,7 @@ T263_4
 
 	;
 	; First test Mockingboard (or Phasor in Mockingboard mode)
+	; . Show that SSI263 IRQ isn't directly connected
 	;
 
 	jsr		resetSubTest			; subTest #0
@@ -779,7 +775,7 @@ T263_4
 
 	ldx		#1
 -		lda		doingSpeech
-		beq		@error
+		beq		@error				; speech phrase complete... an error, as expect it to timeout for MB
 		lda		irqT1IntCount
 		cmp		#4					; timeout = ~256ms (expected for Mockingboard)
 		bcc		-					; loop if < 4
@@ -789,7 +785,7 @@ T263_4
 
 	jsr		incSubTestNum			; subTest #1
 
-	; IFR=IxR_SSI263 during the timeout (as CA1=input) - verified on real Phasor h/w
+	; IFR=IxR_SSI263 during the timeout (as CA1=input)
 	ldy		#SY6522_IFR
 	lda		#IxR_SSI263
 	tax								; expected
@@ -798,8 +794,7 @@ T263_4
 	sta		(MBBase),y				; Clear the CA1(Speech) IRQ
 
 	; SSI263 is still asserting A/!R interrupt: switching to Phasor mode will cause a 6502 IRQ! (On CLI opcode)
-	; NB. the 'jsr DisableSSI263' (in the ISR) doesn't de-assert the A/!R signal.
-	; So use the 6522's CA1/CA2 handshake to de-assert...
+	; ...because SSI263 only de-asserts A/!R by writing to regs 0,1 or 2 (or set reg3.CTL=1)
 
 	jsr		KickSSI263
 
@@ -807,8 +802,6 @@ T263_4
 	jsr		WAIT					; delay for 0x28882 (166018) cycles / ~163ms
 
 	jsr		incSubTestNum			; subTest #2
-
-	; TODO AppleWin:SSI263-new: (Phasor card) once got error 41:04:02 (expected=02, actual=00) - Stepping?
 
 	ldy		#SY6522_IFR
 	lda		#IxR_SSI263
@@ -909,11 +902,6 @@ T263_5
 
 	lda		#PH_PHASOR
 	jsr		SetPhasorMode
-
-	lda		#$00					; Peripheral for PA port Control: CA2 = input (so don't PD/RST to SSI263)
-									; CA1 = input (as before)
-	ldy		#SY6522_PCR
-	sta		(MBBase),y
 
 	;
 	;-------------- Part-1:
@@ -1227,11 +1215,6 @@ T263_6
 
 	lda		#PH_PHASOR
 	jsr		SetPhasorMode
-
-	lda		#$00					; Peripheral for PA port Control: CA2 = input (so don't PD/RST to SSI263)
-									; CA1 = input (as before)
-	ldy		#SY6522_PCR
-	sta		(MBBase),y
 
 	; Kick with phoneme $00 && MODE_PHONEME_TRANSITIONED_INFLECTION
 	jsr		KickSSI263_no_PCR
