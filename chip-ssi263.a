@@ -248,6 +248,10 @@ TestSSI263
 		jsr		T263_6
 		bcs		@error
 
+		inc		testNum				; test #07, $87
+		jsr		T263_7
+		bcs		@error
+
 @nextSSI263
 		lda		#$7f
 		sta		testNum
@@ -1164,13 +1168,13 @@ T263_6
 	jsr		KickSSI263
 
 	jsr		incSubTestNum			; subTest# = $00
-	jsr		@waitPhonemeDoneIrqWithTimeout
+	jsr		WaitPhonemeDoneIrqWithTimeout
 	beq		+
 		jmp		@error
 +
 
 	jsr		incSubTestNum			; subTest# = $01
-	jsr		@waitPhonemeDoneIrqWithTimeout
+	jsr		WaitPhonemeDoneIrqWithTimeout
 	beq		@error					; *** Expect timeout! ***
 
 	lda		#IER_CLR|IxR_SSI263
@@ -1193,7 +1197,7 @@ T263_6
 	lda		#4
 @loop1	pha
 		jsr		incSubTestNum		; subTest# = $02, $03, $04, $05
-		jsr		@waitPhonemeDoneIrqWithTimeout
+		jsr		WaitPhonemeDoneIrqWithTimeout
 		bne		@error
 		pla
 		sec
@@ -1227,7 +1231,7 @@ T263_6
 	bne		@error
 
 	jsr		incSubTestNum			; subTest# = $07
-	jsr		@waitPhonemeDoneWithTimeout
+	jsr		WaitPhonemeDoneWithTimeout
 	bne		@error
 
 	lda		#0
@@ -1241,15 +1245,15 @@ T263_6
 	bne		@error
 
 	jsr		incSubTestNum			; subTest# = $09
-	jsr		@waitPhonemeDoneWithTimeout
+	jsr		WaitPhonemeDoneWithTimeout
 	bne		@error
 
 	lda		#0
-	sta		@intFlag
+	sta		isrFlag
 	cli
 	sei
 	ldx		#1
-	lda		@intFlag
+	lda		isrFlag
 	bne		@exitOK
 
 @error		; pre: A=actual, X=expected
@@ -1285,76 +1289,6 @@ T263_6
 
 ;------------------
 
-; Wait until phoneme is complete or timeout occurs
-; Post: Z = 1(OK) / 0(NG)
-		SEI
-@waitPhonemeDoneIrqWithTimeout
-	lda		#0
-	sta		@intFlag
-	cli
-	lda		#$ff					; T1C = T1L = $FFFF
-	ldy		#SY6522_TIMER1L_COUNTER
-	sta		(MBTimer),y
-	iny								; SY6522_TIMER1H_COUNTER
-	sta		(MBTimer),y				; (and clears IFR.b6)
-	ldx		#4						; timeout = $40000 cycles (longest phoneme)
--		ldy		#SY6522_IFR
-		lda		(MBTimer),y
-		and		#IxR_TIMER1
-		beq		+
-			sta		(MBTimer),y		; clear int flag
-			dex
-			beq		@timeout1
-+		lda		@intFlag
-		beq		-
-	lda		#0						; Z=1(OK) or 0(NG)
-	sei
-	rts
-
-@timeout1
-			; A = $40 (IxR_TIMER1)
-	dex		; X = $FF				; timeout
-			; Z = 0(NG)
-	sei
-	rts
-
-;------------------
-
-; Wait until phoneme is complete or timeout occurs
-; Post: Z = 1(OK) / 0(NG)
-@waitPhonemeDoneWithTimeout
-	lda		#$ff					; T1C = T1L = $FFFF
-	ldy		#SY6522_TIMER1L_COUNTER
-	sta		(MBTimer),y
-	iny								; SY6522_TIMER1H_COUNTER
-	sta		(MBTimer),y				; (and clears IFR.b6)
-	ldx		#4						; timeout = $40000 cycles (longest phoneme)
--		ldy		#SY6522_IFR
-		lda		(MBTimer),y
-		and		#IxR_TIMER1
-		beq		+
-			sta		(MBTimer),y		; clear int flag
-			dex
-			beq		@timeout2
-+		lda		(SSI263Base),y		; Y=$D (can be $0-$F)
-		rol							; C=D7
-		bcc		-
-	lda		(SSI263Base),y
-	rol								; b0=D7, C=D7'
-	rol								; b1=D7, b0=D7'
-	and		#3
-	ldx		#3
-	cmp		#3						; Z=1(OK) or 0(NG)
-	rts
-
-@timeout2
-			; A = $40 (IxR_TIMER1)
-	dex		; X = $FF				; timeout
-			; Z = 0(NG)
-	rts
-
-;------------------
-
 @T263_6_ISR
 
 	txa
@@ -1364,7 +1298,7 @@ T263_6
 
 	;------
 
-	inc		@intFlag
+	inc		isrFlag
 
 	lda		phasorMode
 	cmp		#PH_PHASOR
@@ -1379,11 +1313,12 @@ T263_6
 	bne		++
 
 	; fall through... (need to do this part-2 bit for MB-C! ...otherwise get a timeout at subtest#3)
+	; NB. Required, as there's no ACK from the 6522 to the SSI263 (ie. 6522.CA2 isn't connected to SSI263)
 
 +	; Part-2
 	lda		#0
 	ldy		#SSI_INFLECT			; reg1
-	sta		(SSI263Base),y			; Clear IRQ by writing to SSI263 reg1
+	sta		(SSI263Base),y			; De-assert IRQ by writing to SSI263 reg1
 
 ++
 
@@ -1397,8 +1332,282 @@ T263_6
 	lda		$45		; for Apple II/II+
 	rti
 
-@intFlag	!byte	0
 @skipWriteToReg1	!byte	0
+
+;------------------------------------------------------------------------------
+
+T263_7
+; Pre:
+; Post: C=0(OK), C=1(NG)
+;
+; Test#7 (Phasor only)
+; . Start phoneme playback. Wait for Phoneme complete, then:
+;   . CTL=1(power-down) : Check IRQ de-asserted (and D7=0)
+;   . CTL=0(power-up)   : Check IRQ still de-asserted (and D7=0)
+; . Part-1: MB/Phasor   : Use IRQ for phoneme complete
+; . Part-2: Phasor only : Poll D7 for phoneme complete & include checks for D7
+
+	jsr		resetSubTestMinus1		; subTest #-1
+	jsr		incTotalTests
+
+	sei
+
+	lda		#<@T263_7_ISR
+	ldx		#>@T263_7_ISR
+	jsr		SetIrqVector
+
+	lda		#ACR_FREERUNNING
+	ldy		#SY6522_ACR
+	sta		(MBTimer),y				; Free-running timer
+
+	lda		#IER_CLR|IxR_TIMER1
+	ldy		#SY6522_IER
+	sta		(MBTimer),y				; Disable Timer1 IRQ
+
+	;
+	;-------------- Part-1:
+	;
+
+	lda		#IER_SET|IxR_SSI263
+	ldy		#SY6522_IER
+	sta		(MBBase),y				; Enable SSI263 IRQ
+
+	; Kick with phoneme $00 && MODE_PHONEME_TRANSITIONED_INFLECTION
+	jsr		KickSSI263_no_PCR
+
+	jsr		incSubTestNum			; subTest# = $00
+	jsr		@CheckIRQ
+	bne		@error
+
+	jsr		incSubTestNum			; subTest# = $01
+	jsr		WaitPhonemeDoneIrqWithTimeout
+	bne		@error
+
+	lda		#CONTROL_H				; Power-down (de-assert IRQ)
+	ldy		#SSI_CTTRAMP
+	sta		(SSI263Base),y
+
+	jsr		incSubTestNum			; subTest# = $02
+	jsr		@CheckIRQ
+	bne		@error
+
+	lda		#CONTROL_L				; Power-up, and IRQ still de-asserted (also set operating mode=DR1:0 - unchanged)
+	sta		(SSI263Base),y			; Y=SSI_CTTRAMP
+
+	jsr		incSubTestNum			; subTest# = $03
+	jsr		@CheckIRQ
+	bne		@error
+
+	lda		#IER_CLR|IxR_SSI263
+	ldy		#SY6522_IER
+	sta		(MBBase),y				; Disable SSI263 IRQ
+
+	;
+	;-------------- Part-2:
+	;
+
+	lda		isPhasorCard
+	beq		@exitOK
+
+	lda		#PH_PHASOR
+	jsr		SetPhasorMode
+
+	; Kick with phoneme $00 && MODE_PHONEME_TRANSITIONED_INFLECTION
+	jsr		KickSSI263_no_PCR
+
+	jsr		incSubTestNum			; subTest# = $04
+	ldx		#$00
+	ldy		#SSI_DURPHON
+	lda		(SSI263Base),y
+	and		#REQ_NEW_DATA
+	bne		@error
+
+	jsr		incSubTestNum			; subTest# = $05
+	jsr		WaitPhonemeDoneWithTimeout
+	bne		@error
+
+	lda		#CONTROL_H				; Power-down (set D7=0 & de-assert IRQ)
+	ldy		#SSI_CTTRAMP
+	sta		(SSI263Base),y
+
+	jsr		incSubTestNum			; subTest# = $06
+	ldx		#$00
+	lda		(SSI263Base),y			; Y=$3 (can be $0..$f)
+	and		#REQ_NEW_DATA
+	bne		@error
+
+	jsr		incSubTestNum			; subTest# = $07
+	jsr		@CheckIRQ
+
+	bne		@error
+
+	lda		#CONTROL_L				; Power-up, and IRQ still de-asserted (also set operating mode=DR1:0 - unchanged)
+	sta		(SSI263Base),y			; Y=SSI_CTTRAMP
+
+	jsr		incSubTestNum			; subTest# = $08
+	ldx		#$00
+	lda		(SSI263Base),y			; Y=$3 (can be $0..$f)
+	and		#REQ_NEW_DATA
+	bne		@error
+
+	jsr		incSubTestNum			; subTest# = $09
+	jsr		@CheckIRQ
+
+	beq		@exitOK
+
+	;
+
+@error		; pre: A=actual, X=expected
+	stx		zpTmp2					; expected
+	sec								; C=1(NG)
+	bcs		+
+
+@exitOK
+	clc
+
++	php
+	pha
+	;
+	lda		#<TestSSI263ISR
+	ldx		#>TestSSI263ISR
+	jsr		SetIrqVector
+	jsr		DisableSSI263
+	lda		isPhasorCard
+	beq		+
+		lda		#PH_MOCKINGBOARD
+		jsr		SetPhasorMode
++	lda		MBBaseL
+	pha
+	lda		MBTimerL
+	sta		MBBaseL
+	jsr		WaitT1OneShotUnderflow	; Pre: MBBaseH/L
+	pla
+	sta		MBBaseL
+	;
+	pla
+	plp
+	rts
+
+;------------------
+
+@CheckIRQ
+; Post: Z=1/EQ(no IRQ) or Z=0/NE(IRQ)
+	lda		#0
+	tax								; (expected value=0)
+	sta		isrFlag
+	cli
+	sei
+	lda		isrFlag
+	rts
+
+;------------------
+
+@T263_7_ISR
+
+	txa
+	pha
+	tya
+	pha
+
+	;------
+
+	inc		isrFlag
+
+	lda		phasorMode
+	cmp		#PH_PHASOR
+	beq		+
+
+	lda		#IxR_SSI263
+	ldy		#SY6522_IFR
+	sta		(MBBase),y				; Clear CA1(Speech) IRQ
+
+	; fall through...
+
++	lda		#0
+	ldy		#SSI_INFLECT			; reg1
+	sta		(SSI263Base),y			; De-assert IRQ by writing to SSI263 reg1
+
+++
+
+	;------
+
+	pla
+	tay
+	pla
+	tax
+
+	lda		$45		; for Apple II/II+
+	rti
+
+;------------------------------------------------------------------------------
+
+; Wait until phoneme is complete or timeout occurs
+; Post: Z = 1(OK) / 0(NG)
+		SEI
+WaitPhonemeDoneIrqWithTimeout
+	lda		#0
+	sta		isrFlag
+	cli
+	lda		#$ff					; T1C = T1L = $FFFF
+	ldy		#SY6522_TIMER1L_COUNTER
+	sta		(MBTimer),y
+	iny								; SY6522_TIMER1H_COUNTER
+	sta		(MBTimer),y				; (and clears IFR.b6)
+	ldx		#4						; timeout = $40000 cycles (longest phoneme)
+-		ldy		#SY6522_IFR
+		lda		(MBTimer),y
+		and		#IxR_TIMER1
+		beq		+
+			sta		(MBTimer),y		; clear int flag
+			dex
+			beq		@timeout1
++		lda		isrFlag
+		beq		-
+	lda		#0						; Z=1(OK) or 0(NG)
+	sei
+	rts
+
+@timeout1
+			; A = $40 (IxR_TIMER1)
+	dex		; X = $FF				; timeout
+			; Z = 0(NG)
+	sei
+	rts
+
+;------------------------------------------------------------------------------
+
+; Wait until phoneme is complete or timeout occurs
+; Post: Z = 1(OK) / 0(NG)
+WaitPhonemeDoneWithTimeout
+	lda		#$ff					; T1C = T1L = $FFFF
+	ldy		#SY6522_TIMER1L_COUNTER
+	sta		(MBTimer),y
+	iny								; SY6522_TIMER1H_COUNTER
+	sta		(MBTimer),y				; (and clears IFR.b6)
+	ldx		#4						; timeout = $40000 cycles (longest phoneme)
+-		ldy		#SY6522_IFR
+		lda		(MBTimer),y
+		and		#IxR_TIMER1
+		beq		+
+			sta		(MBTimer),y		; clear int flag
+			dex
+			beq		@timeout
++		lda		(SSI263Base),y		; Y=$D (can be $0-$F)
+		rol							; C=D7
+		bcc		-
+	lda		(SSI263Base),y
+	rol								; b0=D7, C=D7'
+	rol								; b1=D7, b0=D7'
+	and		#3
+	ldx		#3
+	cmp		#3						; Z=1(OK) or 0(NG)
+	rts
+
+@timeout
+			; A = $40 (IxR_TIMER1)
+	dex		; X = $FF				; timeout
+			; Z = 0(NG)
+	rts
 
 ;------------------------------------------------------------------------------
 
