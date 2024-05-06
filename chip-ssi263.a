@@ -735,6 +735,7 @@ T263_3
 	sei
 	php
 	pha
+
 	lda		zpTmp3
 	sta		MBBaseL					; restore
 	lda		#PH_MOCKINGBOARD
@@ -870,6 +871,7 @@ T263_4
 	sei
 	php
 	pha
+
 	lda		zpTmp3
 	sta		MBBaseL					; restore
 	lda		#PH_MOCKINGBOARD
@@ -1052,12 +1054,14 @@ T263_5
 @cleanup
 	pha
 	php
+
 	lda		#<TestSSI263ISR
 	ldx		#>TestSSI263ISR
 	jsr		SetIrqVector
 	jsr		DisableSSI263
 	lda		#PH_MOCKINGBOARD
 	jsr		SetPhasorMode
+
 	plp
 	pla
 	rts
@@ -1136,9 +1140,9 @@ T263_6
 ;
 ; Test#6
 ; Start phoneme playback. Wait for phoneme to complete. If Phoneme IRQ is then cleared, a new IRQ will occur when the phoneme completes again.
-; . Part-0: MB/Phasor   : Use IRQ for phoneme complete, but in ISR *don't* clear SSI263 int with the reg1 write
-; . Part-1: MB/Phasor   : Use IRQ for phoneme complete
-; . Part-2: Phasor only : Poll D7 for phoneme complete
+; . Part-0: MB/Phasor   : Use IRQ for phoneme complete, but in ISR *don't* clear SSI263 int with reg1 write
+; . Part-1: MB/Phasor   : Use IRQ for phoneme complete, and in ISR clear SSI263 int with reg1 write
+; . Part-2: Phasor only : Poll D7 for phoneme complete, and clear SSI263 int with reg1 write
 
 	jsr		resetSubTestMinus1		; subTest #-1
 	jsr		incTotalTests
@@ -1199,14 +1203,12 @@ T263_6
 	jsr		KickSSI263
 
 	lda		#4
-@loop1	pha
-		jsr		incSubTestNum		; subTest# = $02, $03, $04, $05
+	sta		@loopCount
+@loop	jsr		incSubTestNum		; subTest# = $02, $03, $04, $05
 		jsr		WaitPhonemeDoneIrqWithTimeout
 		bne		@error
-		pla
-		sec
-		sbc		#1
-		bne		@loop1
+		dec		@loopCount
+		bne		@loop
 
 	lda		#IER_CLR|IxR_SSI263
 	ldy		#SY6522_IER
@@ -1270,7 +1272,7 @@ T263_6
 
 +	php
 	pha
-	;
+
 	lda		#<TestSSI263ISR
 	ldx		#>TestSSI263ISR
 	jsr		SetIrqVector
@@ -1286,10 +1288,12 @@ T263_6
 	jsr		WaitT1OneShotUnderflow	; Pre: MBBaseH/L
 	pla
 	sta		MBBaseL
-	;
+
 	pla
 	plp
 	rts
+
+@loopCount	!byte 0
 
 ;------------------
 
@@ -1471,7 +1475,7 @@ T263_7
 
 +	php
 	pha
-	;
+
 	lda		#<TestSSI263ISR
 	ldx		#>TestSSI263ISR
 	jsr		SetIrqVector
@@ -1487,7 +1491,7 @@ T263_7
 	jsr		WaitT1OneShotUnderflow	; Pre: MBBaseH/L
 	pla
 	sta		MBBaseL
-	;
+
 	pla
 	plp
 	rts
@@ -1551,7 +1555,10 @@ T263_8
 ;
 ; Test#8 (Phasor only)
 ; . Start phoneme playback (with SSI263 IRQ enabled). Wait for phoneme to complete, then:
-; . Check that 6522.IFR.IxR_SSI263 == 0
+;   . Check that 6522.IFR.IxR_SSI263 == 0
+;   . Switch to MB mode, and check that 6522.IFR.IxR_SSI263 == 1 (then KickSSI263 & wait for phoneme complete)
+;   . Switch to PH mode, and check that D7=1 & SSI263 IRQ asserted
+;   . In ISR, switch to MB mode, which blocks the SSI263 IRQ to the 6502 (allowing the ISR to return)
 
 	lda		isPhasorCard
 	bne		+
@@ -1565,6 +1572,10 @@ T263_8
 	jsr		incTotalTests
 
 	sei
+
+	lda		#<@T263_8_ISR
+	ldx		#>@T263_8_ISR
+	jsr		SetIrqVector
 
 	lda		MBBaseL
 	sta		zpTmp3					; keep a copy & restore at end
@@ -1583,18 +1594,54 @@ T263_8
 		sta		MBBaseL
 +
 
-	; Kick with phoneme $00 && MODE_PHONEME_TRANSITIONED_INFLECTION
+	; Kick with phoneme $00 && MODE_PHONEME_TRANSITIONED_INFLECTION (not MODE_IRQ_DISABLED, as need SSI263 IRQ enabled)
 	jsr		KickSSI263				; (doesn't matter if PCR = $00 or $0C)
 
 	jsr		incSubTestNum			; subTest# = $00
 	jsr		WaitPhonemeDoneWithTimeout
 	bne		@error
 
-	jsr		incSubTestNum			; subTest# = $01
-	ldy		#SY6522_IFR
-	lda		(MBBase),y
 	ldx		#0						; (expected)
-	and		#IxR_SSI263
+	jsr		@CheckIFR				; subTest# = $01
+	bne		@error
+
+	; Switch to MB mode - expect 6522.IFR.b1 == 1 (ie. IxR_SSI263 to be set)
+	lda		#PH_MOCKINGBOARD
+	jsr		SetPhasorMode			; this blocks the SSI263 IRQ to the 6502, but doesn't de-assert it
+
+	ldx		#IxR_SSI263				; (expected)
+	jsr		@CheckIFR				; subTest# = $02
+	beq		@error
+									; A=IxR_SSI263
+	sta		(MBBase),y				; (Y=SY6522_IFR) clear IFR.b1
+
+	; Kick with phoneme $00 && MODE_PHONEME_TRANSITIONED_INFLECTION + de-asserts SSI263 IRQ
+	jsr		KickSSI263_no_PCR
+
+	; Wait for phoneme to complete (no timeout!)
+	ldy		#SY6522_IFR
+-		lda		(MBBase),y
+		and		#IxR_SSI263
+		beq		-
+
+	; Switch to PH mode - expect D7=1 & IRQ asserted
+	lda		#PH_PHASOR
+	jsr		SetPhasorMode
+
+	jsr		incSubTestNum			; subTest# = $03
+	lda		(SSI263Base),y			; Y=$D (can be $0-$F)
+	ldx		#REQ_NEW_DATA
+	and		#REQ_NEW_DATA
+	beq		@error
+
+	jsr		incSubTestNum			; subTest# = $04
+	lda		#0
+	sta		isrFlag
+	cli
+	sei								; Post: ISR switches to MB mode (blocks the SSI263 IRQ to the 6502)
+	ldx		#1						; (expected)
+	lda		isrFlag
+	cmp		#1
 	bne		@error
 
 	clc								; C=0(OK)
@@ -1608,6 +1655,9 @@ T263_8
 	php
 	pha
 
+	lda		#<TestSSI263ISR
+	ldx		#>TestSSI263ISR
+	jsr		SetIrqVector
 	lda		zpTmp3
 	sta		MBBaseL					; restore
 	jsr		DisableSSI263
@@ -1617,6 +1667,59 @@ T263_8
 	pla
 	plp
 	rts
+
+;------------------
+
+@CheckIFR
+; Post: Z=0(IFR.b2==IxR_SSI263) / Z=1(IFR.b2==0)
+	jsr		incSubTestNum
+	ldy		#SY6522_IFR
+	lda		(MBBase),y
+	and		#IxR_SSI263
+	rts
+
+;------------------
+
+@T263_8_ISR
+
+	txa
+	pha
+	tya
+	pha
+
+	;------
+
+	inc		isrFlag
+
+	lda		isrFlag
+	cmp		#1
+	beq		+
+
+		; Unexpected 2nd ISR! So switching to MB didn't work - de-assert IRQ like this as a safety measure:
+		lda		#IxR_SSI263
+		ldy		#SY6522_IFR
+		sta		(MBBase),y				; Clear CA1(Speech) IRQ
+
+		lda		#0
+		ldy		#SSI_INFLECT			; reg1
+		sta		(SSI263Base),y			; De-assert IRQ by writing to SSI263 reg1
+		bne		++						; (bra)
+
++	; De-assert IRQ by switching back to MB mode!
+	lda		#PH_MOCKINGBOARD
+	jsr		SetPhasorMode
+
+++
+
+	;------
+
+	pla
+	tay
+	pla
+	tax
+
+	lda		$45		; for Apple II/II+
+	rti
 
 ;------------------------------------------------------------------------------
 
@@ -1639,14 +1742,14 @@ WaitPhonemeDoneIrqWithTimeout
 		beq		+
 			sta		(MBTimer),y		; clear int flag
 			dex
-			beq		@timeout1
+			beq		@timeout
 +		lda		isrFlag
 		beq		-
 	lda		#0						; Z=1(OK) or 0(NG)
 	sei
 	rts
 
-@timeout1
+@timeout
 			; A = $40 (IxR_TIMER1)
 	dex		; X = $FF				; timeout
 			; Z = 0(NG)
@@ -1655,7 +1758,7 @@ WaitPhonemeDoneIrqWithTimeout
 
 ;------------------------------------------------------------------------------
 
-; Wait until phoneme is complete or timeout occurs
+; Wait until phoneme is complete or timeout occurs (Phasor only)
 ; Post: Z = 1(OK) / 0(NG)
 WaitPhonemeDoneWithTimeout
 	lda		#$ff					; T1C = T1L = $FFFF
