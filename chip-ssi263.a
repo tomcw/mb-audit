@@ -1,5 +1,5 @@
 ;license:MIT
-;(c) 2021 by Tom Charlesworth
+;(c) 2021-2024 by Tom Charlesworth
 ;
 ; SSI263 related
 ;
@@ -174,6 +174,13 @@ PlaySSI263
 
 ;------------------------------------------------------------------------------
 
+;            SSI263-A  SSI263-B
+; SSI263Base  $Cs40     $Cs20
+; MBBase      $Cs80     $Cs10    input for CA1 (SSI263 interrupt) to this 6522's IFR
+; MBTimer     $Cs80     $Cs80    same for both SSI263s
+; hasSSI263   .b0       .b1
+;
+
 TestSSI263
 ; Pre: has6522, hasSSI263
 ; Post: C=0(OK), C=1(NG)
@@ -262,14 +269,17 @@ TestSSI263
 
 		lda		#SSI_B_BASE
 		sta		SSI263BaseL
-		lda		#SY6522_A_BASE
+		lda		#SY6522_A_PH_BASE
 		sta		MBBaseL
 
 		lsr		zpTmp1
 		bcs		@loop
 
+	lda		#SY6522_A_BASE
+	sta		MBBaseL
+
 	clc
-	rts
+	bcc		@done
 
 @error
 ; Pre: zpTmp2 = expected value
@@ -280,10 +290,19 @@ TestSSI263
 	lda		zpTmp2
 	sta		errorExpected
 
-	lda		#0
+	sec
+
+@done
+	php
+
+	lda		MBTimerL				; =SY6522_B_BASE
+	sta		MBBaseL
+	jsr		WaitT1OneShotUnderflow	; Pre: MBBaseH/L (restore to one-shot mode)
+
+	lda		#SY6522_A_BASE
 	sta		MBBaseL
 
-	sec
+	plp
 	rts
 
 ;------------------------------------------------------------------------------
@@ -662,9 +681,6 @@ T263_3
 
 	sei
 
-	lda		MBBaseL
-	sta		zpTmp3					; keep a copy & restore at end
-
 	;
 	; First test Mockingboard (or Phasor in Mockingboard mode)
 	;
@@ -701,13 +717,6 @@ T263_3
 	lda		#PH_PHASOR
 	jsr		SetPhasorMode
 
-	lda		MBBaseL
-	cmp		#SY6522_A_BASE
-	bne		+
-		lda		#SY6522_A_PH_BASE
-		sta		MBBaseL
-+
-
 	lda		#<NullPhrase
 	ldx		#>NullPhrase
 	jsr		PlaySSI263
@@ -736,8 +745,6 @@ T263_3
 	php
 	pha
 
-	lda		zpTmp3
-	sta		MBBaseL					; restore
 	lda		#PH_MOCKINGBOARD
 	jsr		SetPhasorMode
 
@@ -760,9 +767,6 @@ T263_4
 ; NB. Mockingboard must fail, as SSI263 IRQ isn't directly connected
 
 	sei
-
-	lda		MBBaseL
-	sta		zpTmp3					; keep a copy & restore at end
 
 	lda		#IER_CLR|IxR_SSI263
 	ldy		#SY6522_IER
@@ -835,13 +839,6 @@ T263_4
 	lda		#PH_PHASOR
 	jsr		SetPhasorMode
 
-	lda		MBBaseL
-	cmp		#SY6522_A_BASE
-	bne		+
-		lda		#SY6522_A_PH_BASE
-		sta		MBBaseL
-+
-
 	lda		#<NullPhrase
 	ldx		#>NullPhrase
 	jsr		PlaySSI263_no_PCR
@@ -872,8 +869,6 @@ T263_4
 	php
 	pha
 
-	lda		zpTmp3
-	sta		MBBaseL					; restore
 	lda		#PH_MOCKINGBOARD
 	jsr		SetPhasorMode
 
@@ -1281,13 +1276,7 @@ T263_6
 	beq		+
 		lda		#PH_MOCKINGBOARD
 		jsr		SetPhasorMode
-+	lda		MBBaseL
-	pha
-	lda		MBTimerL
-	sta		MBBaseL
-	jsr		WaitT1OneShotUnderflow	; Pre: MBBaseH/L
-	pla
-	sta		MBBaseL
++
 
 	pla
 	plp
@@ -1484,13 +1473,7 @@ T263_7
 	beq		+
 		lda		#PH_MOCKINGBOARD
 		jsr		SetPhasorMode
-+	lda		MBBaseL
-	pha
-	lda		MBTimerL
-	sta		MBBaseL
-	jsr		WaitT1OneShotUnderflow	; Pre: MBBaseH/L
-	pla
-	sta		MBBaseL
++
 
 	pla
 	plp
@@ -1577,22 +1560,12 @@ T263_8
 	ldx		#>@T263_8_ISR
 	jsr		SetIrqVector
 
-	lda		MBBaseL
-	sta		zpTmp3					; keep a copy & restore at end
-
 	lda		#ACR_FREERUNNING
 	ldy		#SY6522_ACR
 	sta		(MBTimer),y				; Free-running timer
 
 	lda		#PH_PHASOR
 	jsr		SetPhasorMode
-
-	lda		MBBaseL
-	cmp		#SY6522_A_BASE
-	bne		+
-		lda		#SY6522_A_PH_BASE
-		sta		MBBaseL
-+
 
 	; Kick with phoneme $00 && MODE_PHONEME_TRANSITIONED_INFLECTION (not MODE_IRQ_DISABLED, as need SSI263 IRQ enabled)
 	jsr		KickSSI263				; (doesn't matter if PCR = $00 or $0C)
@@ -1658,8 +1631,6 @@ T263_8
 	lda		#<TestSSI263ISR
 	ldx		#>TestSSI263ISR
 	jsr		SetIrqVector
-	lda		zpTmp3
-	sta		MBBaseL					; restore
 	jsr		DisableSSI263
 	lda		#PH_MOCKINGBOARD
 	jsr		SetPhasorMode

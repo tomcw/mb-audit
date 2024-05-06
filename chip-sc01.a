@@ -114,10 +114,10 @@ TestSC01
 
 	lda		has6522
 	and		#1
-	beq		@done
+	beq		@exitOK
 
 	lda		hasSC01
-	beq		@done
+	beq		@exitOK
 
 	lda		#IER_CLR|IxR_TIMER1|IxR_TIMER2|IxR_VOTRAX
 	ldy		#SY6522_IER	; disable IRQ
@@ -145,9 +145,9 @@ TestSC01
 	jsr		TSC01_0
 	bcs		@error
 
-@done
+@exitOK
 	clc
-	rts
+	bcc		@done
 
 @error
 ; Pre: zpTmp2 = expected value
@@ -159,6 +159,13 @@ TestSC01
 	sta		errorExpected
 
 	sec
+
+@done
+	php
+
+	jsr		WaitT1OneShotUnderflow	; Pre: MBBaseH/L (restore to one-shot mode)
+
+	plp
 	rts
 
 ;------------------------------------------------------------------------------
