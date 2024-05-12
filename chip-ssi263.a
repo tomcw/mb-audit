@@ -263,6 +263,10 @@ TestSSI263
 		jsr		T263_8
 		bcs		@error
 
+		inc		testNum				; test #09, $89
+		jsr		T263_9
+		bcs		@error
+
 @nextSSI263
 		lda		#$7f
 		sta		testNum
@@ -1691,6 +1695,220 @@ T263_8
 
 	lda		$45		; for Apple II/II+
 	rti
+
+;------------------------------------------------------------------------------
+
+T263_9
+; Pre:
+; Post: C=0(OK), C=1(NG)
+;
+; Test#9 (Phasor only)
+; . Check SSI263 mapping in $Csnn I/O space
+
+	lda		isPhasorCard
+	bne		+
+		clc
+		rts
++
+
+	;
+
+	jsr		resetSubTestMinus1		; subTest #-1
+	jsr		incTotalTests
+
+	sei
+
+	lda		#PH_PHASOR
+	jsr		SetPhasorMode
+
+	lda		#ACR_ONESHOT
+	ldy		#SY6522_ACR
+	sta		(MBTimer),y				; Oneshot timer
+
+	; Set phoneme speed to quickest
+	; TODO: How many cycles is it? (reg0=$C0, reg2.RATE=$F, time from CTL:1->0 until D7=1)
+	lda		#$F0					; RATE[7:4]=$F (quickest), INF[3:0]=$0
+	ldy		#SSI_RATEINF
+	sta		(SSI263Base),y
+
+	lda		SSI263BaseL
+	cmp		#SSI_A_BASE
+	beq		@checkChipA
+	jmp		@checkChipB
+
+@checkChipA							; at $Cs40
+	lda		SSI263BaseH
+	sta		@smcA0+2
+	sta		@smcA1+2
+	sta		@smcA2+2
+	sta		@smcA3+2
+	sta		@smcA4+2
+	sta		@smcA5+2
+	sta		@smcA6+2
+	sta		@smcA7+2
+
+	jsr		@powerDown				; Post: A = CONTROL_L
+@smcA0	sta		$C703				; power-up
+	jsr		@readD7
+	bne		@error
+
+	jsr		@powerDown				; Post: A = CONTROL_L
+@smcA1	sta		$C713				; power-up
+	jsr		@readD7
+	bne		@error
+
+	jsr		@powerDown				; Post: A = CONTROL_L
+@smcA2	sta		$C723				; power-up
+	jsr		@readD7
+	bne		@error
+
+	jsr		@powerDown				; Post: A = CONTROL_L
+@smcA3	sta		$C733				; power-up
+	jsr		@readD7
+	bne		@error
+
+	jsr		@powerDown				; Post: A = CONTROL_L
+@smcA4	sta		$C743				; power-up
+	jsr		@readD7
+	beq		@error
+
+	jsr		@powerDown				; Post: A = CONTROL_L
+@smcA5	sta		$C753				; power-up
+	jsr		@readD7
+	beq		@error
+
+	jsr		@powerDown				; Post: A = CONTROL_L
+@smcA6	sta		$C763				; power-up
+	jsr		@readD7
+	beq		@error
+
+	jsr		@powerDown				; Post: A = CONTROL_L
+@smcA7	sta		$C773				; power-up
+	jsr		@readD7
+	beq		@error
+
+@exitOK
+	clc
+	bcc		@exit
+
+@error		; pre: A=actual, (X=not set)
+	pha
+	eor		#REQ_NEW_DATA
+	tax								; X = A ^ $80
+	pla
+	stx		zpTmp2					; expected
+	sec								; C=1(NG)
+
+@exit
+	php
+	pha
+
+	jsr		DisableSSI263			; Needed (de-assert SSI263 IRQ), else TestTones() locks up for Phasor
+	lda		#PH_MOCKINGBOARD
+	jsr		SetPhasorMode
+
+	pla
+	plp
+	rts
+
+;------------------
+
+@checkChipB							; at $Cs20
+	lda		SSI263BaseH
+	sta		@smcB0+2
+	sta		@smcB1+2
+	sta		@smcB2+2
+	sta		@smcB3+2
+	sta		@smcB4+2
+	sta		@smcB5+2
+	sta		@smcB6+2
+	sta		@smcB7+2
+
+	jsr		@powerDown				; Post: A = CONTROL_L
+@smcB0	sta		$C703				; power-up
+	jsr		@readD7
+	bne		@error
+
+	jsr		@powerDown				; Post: A = CONTROL_L
+@smcB1	sta		$C713				; power-up
+	jsr		@readD7
+	bne		@error
+
+	jsr		@powerDown				; Post: A = CONTROL_L
+@smcB2	sta		$C723				; power-up
+	jsr		@readD7
+	beq		@error
+
+	jsr		@powerDown				; Post: A = CONTROL_L
+@smcB3	sta		$C733				; power-up
+	jsr		@readD7
+	beq		@error
+
+	jsr		@powerDown				; Post: A = CONTROL_L
+@smcB4	sta		$C743				; power-up
+	jsr		@readD7
+	bne		@error
+
+	jsr		@powerDown				; Post: A = CONTROL_L
+@smcB5	sta		$C753				; power-up
+	jsr		@readD7
+	bne		@error
+
+	jsr		@powerDown				; Post: A = CONTROL_L
+@smcB6	sta		$C763				; power-up
+	jsr		@readD7
+	beq		@error
+
+	jsr		@powerDown				; Post: A = CONTROL_L
+@smcB7	sta		$C773				; power-up
+	jsr		@readD7
+	beq		@error2
+
+	jmp		@exitOK
+
+@error2
+	jmp		@error
+
+;------------------
+
+@powerDown
+; Post: A = CONTROL_L
+
+	jsr		incSubTestNum			; subTest# = n, ie. $Csn0 (16-byte I/O block), n=[0..7]
+	lda		#CONTROL_H				; Power-down (set D7=0 & de-assert IRQ)
+	ldy		#SSI_CTTRAMP
+	sta		(SSI263Base),y
+	lda		#MODE_IRQ_DISABLED
+	ldy		#SSI_DURPHON
+	sta		(SSI263Base),y			; Set mode=irq disabled, so that the subsequent CTL 1->0 uses this mode
+	lda		#CONTROL_L
+	rts
+
+@readD7
+; Pre: T1 in one shot mode
+; Post: A = REQ_NEW_DATA(Z=0) = phoneme complete
+;		A = $00(Z=1) = timeout
+
+	lda		#$C0					; DURATION[7:6]=3 (shortest), PHONEME=$00
+	ldy		#SSI_DURPHON
+	sta		(SSI263Base),y
+
+	lda		#$ff					; T1C = T1L = $FFFF
+	ldy		#SY6522_TIMER1L_COUNTER
+	sta		(MBTimer),y
+	iny								; SY6522_TIMER1H_COUNTER
+	sta		(MBTimer),y				; (and clears IFR.b6)
+-		ldy		#SY6522_IFR
+		lda		(MBTimer),y
+		and		#IxR_TIMER1
+		beq		+
+			sta		(MBTimer),y		; clear int flag
+			lda		#0
+			rts
++		lda		(SSI263Base),y		; Y=$3 (can be $0-$F)
+		and		#REQ_NEW_DATA
+		beq		-
+	rts
 
 ;------------------------------------------------------------------------------
 
