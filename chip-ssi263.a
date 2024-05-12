@@ -1704,6 +1704,7 @@ T263_9
 ;
 ; Test#9 (Phasor only)
 ; . Check SSI263 mapping in $Csnn I/O space
+; . test duration = 8x64ms + 8x8ms(?) = ~576ms
 
 	lda		isPhasorCard
 	bne		+
@@ -1733,69 +1734,35 @@ T263_9
 
 	lda		SSI263BaseL
 	cmp		#SSI_A_BASE
-	beq		@checkChipA
-	jmp		@checkChipB
+	bne		@checkChipB
 
 @checkChipA							; at $Cs40
+	; reset to $Cs03
+	lda		#SSI_CTTRAMP
+	sta		@smcA+1
 	lda		SSI263BaseH
-	sta		@smcA0+2
-	sta		@smcA1+2
-	sta		@smcA2+2
-	sta		@smcA3+2
-	sta		@smcA4+2
-	sta		@smcA5+2
-	sta		@smcA6+2
-	sta		@smcA7+2
+	sta		@smcA+2
 
-	jsr		@powerDown				; Post: A = CONTROL_L
-@smcA0	sta		$C703				; power-up
-	jsr		@readD7
-	bne		@error
-
-	jsr		@powerDown				; Post: A = CONTROL_L
-@smcA1	sta		$C713				; power-up
-	jsr		@readD7
-	bne		@error
-
-	jsr		@powerDown				; Post: A = CONTROL_L
-@smcA2	sta		$C723				; power-up
-	jsr		@readD7
-	bne		@error
-
-	jsr		@powerDown				; Post: A = CONTROL_L
-@smcA3	sta		$C733				; power-up
-	jsr		@readD7
-	bne		@error
-
-	jsr		@powerDown				; Post: A = CONTROL_L
-@smcA4	sta		$C743				; power-up
-	jsr		@readD7
-	beq		@error
-
-	jsr		@powerDown				; Post: A = CONTROL_L
-@smcA5	sta		$C753				; power-up
-	jsr		@readD7
-	beq		@error
-
-	jsr		@powerDown				; Post: A = CONTROL_L
-@smcA6	sta		$C763				; power-up
-	jsr		@readD7
-	beq		@error
-
-	jsr		@powerDown				; Post: A = CONTROL_L
-@smcA7	sta		$C773				; power-up
-	jsr		@readD7
-	beq		@error
+	; test all 16 possible chip I/O locations
+@loopA	jsr		@powerDown			; Post: A = CONTROL_L
+@smcA	sta		$C703				; attempt to power-up
+		lda		@smcA+1
+		and		#SSI_A_BASE
+		asl							; A = expected result
+		jsr		@readD7
+		bne		@error
+		clc
+		lda		@smcA+1
+		adc		#$10
+		sta		@smcA+1
+		cmp		#SSI_CTTRAMP
+		bne		@loopA
 
 @exitOK
 	clc
 	bcc		@exit
 
-@error		; pre: A=actual, (X=not set)
-	pha
-	eor		#REQ_NEW_DATA
-	tax								; X = A ^ $80
-	pla
+@error		; pre: A=actual, X=expected
 	stx		zpTmp2					; expected
 	sec								; C=1(NG)
 
@@ -1814,67 +1781,36 @@ T263_9
 ;------------------
 
 @checkChipB							; at $Cs20
+	; reset to $Cs03
+	lda		#SSI_CTTRAMP
+	sta		@smcB+1
 	lda		SSI263BaseH
-	sta		@smcB0+2
-	sta		@smcB1+2
-	sta		@smcB2+2
-	sta		@smcB3+2
-	sta		@smcB4+2
-	sta		@smcB5+2
-	sta		@smcB6+2
-	sta		@smcB7+2
+	sta		@smcB+2
 
-	jsr		@powerDown				; Post: A = CONTROL_L
-@smcB0	sta		$C703				; power-up
-	jsr		@readD7
-	bne		@error
-
-	jsr		@powerDown				; Post: A = CONTROL_L
-@smcB1	sta		$C713				; power-up
-	jsr		@readD7
-	bne		@error
-
-	jsr		@powerDown				; Post: A = CONTROL_L
-@smcB2	sta		$C723				; power-up
-	jsr		@readD7
-	beq		@error
-
-	jsr		@powerDown				; Post: A = CONTROL_L
-@smcB3	sta		$C733				; power-up
-	jsr		@readD7
-	beq		@error
-
-	jsr		@powerDown				; Post: A = CONTROL_L
-@smcB4	sta		$C743				; power-up
-	jsr		@readD7
-	bne		@error
-
-	jsr		@powerDown				; Post: A = CONTROL_L
-@smcB5	sta		$C753				; power-up
-	jsr		@readD7
-	bne		@error
-
-	jsr		@powerDown				; Post: A = CONTROL_L
-@smcB6	sta		$C763				; power-up
-	jsr		@readD7
-	beq		@error
-
-	jsr		@powerDown				; Post: A = CONTROL_L
-@smcB7	sta		$C773				; power-up
-	jsr		@readD7
-	beq		@error2
+	; test all 16 possible chip I/O locations
+@loopB	jsr		@powerDown			; Post: A = CONTROL_L
+@smcB	sta		$C703				; attempt to power-up
+		lda		@smcB+1
+		and		#SSI_B_BASE
+		asl
+		asl							; A = expected result
+		jsr		@readD7
+		bne		@error
+		clc
+		lda		@smcB+1
+		adc		#$10
+		sta		@smcB+1
+		cmp		#SSI_CTTRAMP
+		bne		@loopB
 
 	jmp		@exitOK
-
-@error2
-	jmp		@error
 
 ;------------------
 
 @powerDown
 ; Post: A = CONTROL_L
 
-	jsr		incSubTestNum			; subTest# = n, ie. $Csn0 (16-byte I/O block), n=[0..7]
+	jsr		incSubTestNum			; subTest# = n, ie. $Csn0 (16-byte I/O block), n=[0..$F]
 	lda		#CONTROL_H				; Power-down (set D7=0 & de-assert IRQ)
 	ldy		#SSI_CTTRAMP
 	sta		(SSI263Base),y
@@ -1886,8 +1822,12 @@ T263_9
 
 @readD7
 ; Pre: T1 in one shot mode
-; Post: A = REQ_NEW_DATA(Z=0) = phoneme complete
-;		A = $00(Z=1) = timeout
+;		A = expected result (REQ_NEW_DATA or $00)
+; Post:	Z = 1(OK:got expected), 0(NG: not expected)
+;		A = actual (REQ_NEW_DATA = phoneme complete / $00 = timeout)
+;		X = expected result
+
+	sta		@readD7expectedResult
 
 	lda		#$C0					; DURATION[7:6]=3 (shortest), PHONEME=$00
 	ldy		#SSI_DURPHON
@@ -1904,11 +1844,16 @@ T263_9
 		beq		+
 			sta		(MBTimer),y		; clear int flag
 			lda		#0
-			rts
+			beq		++				; (bra)
 +		lda		(SSI263Base),y		; Y=$3 (can be $0-$F)
 		and		#REQ_NEW_DATA
 		beq		-
+
+++	ldx		@readD7expectedResult
+	cmp		@readD7expectedResult
 	rts
+
+@readD7expectedResult	!byte 0
 
 ;------------------------------------------------------------------------------
 
