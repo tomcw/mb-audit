@@ -1236,7 +1236,7 @@ T263_6
 	bne		@error
 
 	jsr		incSubTestNum			; subTest# = $07
-	jsr		WaitPhonemeDoneWithTimeout
+	jsr		WaitPhonemeDoneD7WithTimeout
 	bne		@error
 
 	lda		#0
@@ -1250,7 +1250,7 @@ T263_6
 	bne		@error
 
 	jsr		incSubTestNum			; subTest# = $09
-	jsr		WaitPhonemeDoneWithTimeout
+	jsr		WaitPhonemeDoneD7WithTimeout
 	bne		@error
 
 	lda		#0
@@ -1424,7 +1424,7 @@ T263_7
 	bne		@error
 
 	jsr		incSubTestNum			; subTest# = $05
-	jsr		WaitPhonemeDoneWithTimeout
+	jsr		WaitPhonemeDoneD7WithTimeout
 	bne		@error
 
 	lda		#CONTROL_H				; Power-down (set D7=0 & de-assert IRQ)
@@ -1439,7 +1439,6 @@ T263_7
 
 	jsr		incSubTestNum			; subTest# = $07
 	jsr		@CheckIRQ
-
 	bne		@error
 
 	lda		#CONTROL_L				; Power-up, and IRQ still de-asserted (also set operating mode=DR1:0 - unchanged)
@@ -1453,7 +1452,6 @@ T263_7
 
 	jsr		incSubTestNum			; subTest# = $09
 	jsr		@CheckIRQ
-
 	beq		@exitOK
 
 	;
@@ -1575,7 +1573,7 @@ T263_8
 	jsr		KickSSI263				; (doesn't matter if PCR = $00 or $0C)
 
 	jsr		incSubTestNum			; subTest# = $00
-	jsr		WaitPhonemeDoneWithTimeout
+	jsr		WaitPhonemeDoneD7WithTimeout
 	bne		@error
 
 	ldx		#0						; (expected)
@@ -1845,7 +1843,7 @@ T263_9
 			sta		(MBTimer),y		; clear int flag
 			lda		#0
 			beq		++				; (bra)
-+		lda		(SSI263Base),y		; Y=$3 (can be $0-$F)
++		lda		(SSI263Base),y		; Y=$D (can be $0-$F)
 		and		#REQ_NEW_DATA
 		beq		-
 
@@ -1859,7 +1857,7 @@ T263_9
 
 ; Wait until phoneme is complete or timeout occurs
 ; Post: Z = 1(OK) / 0(NG)
-		SEI
+;		SEI
 WaitPhonemeDoneIrqWithTimeout
 	lda		#0
 	sta		isrFlag
@@ -1894,7 +1892,7 @@ WaitPhonemeDoneIrqWithTimeout
 
 ; Wait until phoneme is complete or timeout occurs (Phasor only)
 ; Post: Z = 1(OK) / 0(NG)
-WaitPhonemeDoneWithTimeout
+WaitPhonemeDoneD7WithTimeout
 	lda		#$ff					; T1C = T1L = $FFFF
 	ldy		#SY6522_TIMER1L_COUNTER
 	sta		(MBTimer),y
