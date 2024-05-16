@@ -1702,7 +1702,7 @@ T263_9
 ;
 ; Test#9 (Phasor only)
 ; . Check SSI263 mapping in $Csnn I/O space
-; . test duration = 8x64ms + 8x8ms(?) = ~576ms
+; . test duration = 8x64ms(timeouts) + 8x8ms(phoneme-complete) = ~576ms
 
 	lda		isPhasorCard
 	bne		+
@@ -1724,8 +1724,9 @@ T263_9
 	ldy		#SY6522_ACR
 	sta		(MBTimer),y				; Oneshot timer
 
-	; Set phoneme speed to quickest
-	; TODO: How many cycles is it? (reg0=$C0, reg2.RATE=$F, time from CTL:1->0 until D7=1)
+	; Set phoneme speed to quickest: $1ED8 cycles ~=8ms
+	; . In Phasor mode, timed using: regs[]={$C0, $00, $F0, $00, $00}, ie. reg0.DUR=3, reg2.RATE=$F, time from CTL:1->0 until D7=1
+	; . In theory this should be: FD = (4096 x (16-RATE)) = 4096; PD = FD x (4-DUR) = 4096 cycles
 	lda		#$F0					; RATE[7:4]=$F (quickest), INF[3:0]=$0
 	ldy		#SSI_RATEINF
 	sta		(SSI263Base),y
