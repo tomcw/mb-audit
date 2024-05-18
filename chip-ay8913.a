@@ -2266,7 +2266,7 @@ TestAYTones
 
 	sei
 
-	jsr		SetMBBase
+	jsr		SetMBBase				; pre: X=slot#
 
 	lda		#<AYTonesISR
 	ldx		#>AYTonesISR
@@ -2614,6 +2614,18 @@ AYTonesISR
 	ldy		#SY6522_IFR
 	lda		(MBBase),y
 	sta		(MBBase),y					; clear IRQ
+	bne		+
+		; Error: Unexpected interrupt!
+		lda		#'I'
+		sta		$400					; Flashing 'I'
+		lda		isPhasorCard
+		beq		@hang
+			lda		#SY6522_A_PH_BASE
+			sta		MBBaseL
+			lda		(MBBase),y			; Y=SY6522_IFR
+			sta		$480				; write to line-1, so that after CTRL+RESET we can retrieve the value
+@hang	jmp		@hang					; ... and hang!
++
 
 	lda		isPhasorCard
 	beq		+

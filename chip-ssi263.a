@@ -1762,6 +1762,23 @@ T263_9
 		bne		@loopA
 
 @exitOK
+	; Pre: Phasor mode=PH_PHASOR, SSI263 device mode=MODE_IRQ_DISABLED, D7=1, A/!R=high (so IRQ de-asserted)
+	; Check that SSI263 IRQ is de-asserted
+	jsr		incSubTestNum			; subTest# = $10
+	lda		#<@T263_9_ISR
+	ldx		#>@T263_9_ISR
+	jsr		SetIrqVector
+	lda		#0
+	sta		isrFlag
+	cli
+	sei
+	lda		#<TestSSI263ISR
+	ldx		#>TestSSI263ISR
+	jsr		SetIrqVector
+	ldx		#0
+	lda		isrFlag
+	bne		@error
+
 	clc
 	bcc		@exit
 
@@ -1773,7 +1790,7 @@ T263_9
 	php
 	pha
 
-	jsr		DisableSSI263			; Needed (de-assert SSI263 IRQ), else TestTones() locks up for Phasor
+	jsr		DisableSSI263			; Needed (set DR1:0=b#00), else RESET then TestTones() locks up for Phasor
 	lda		#PH_MOCKINGBOARD
 	jsr		SetPhasorMode
 
@@ -1860,6 +1877,34 @@ T263_9
 
 @waitD7expectedResult	!byte 0
 
+;------------------
+
+; NB. This code is never called (except for the error case) - so never gets exercised & tested!
+@T263_9_ISR
+
+	txa
+	pha
+	tya
+	pha
+
+	;------
+
+	inc		isrFlag
+
+	lda		#0
+	ldy		#SSI_INFLECT			; reg1
+	sta		(SSI263Base),y			; De-assert IRQ by writing to SSI263 reg1
+
+	;------
+
+	pla
+	tay
+	pla
+	tax
+
+	lda		$45		; for Apple II/II+
+	rti
+
 ;------------------------------------------------------------------------------
 
 T263_A
@@ -1929,7 +1974,7 @@ T263_A
 	php
 	pha
 
-	jsr		DisableSSI263			; Needed (de-assert SSI263 IRQ), else TestTones() locks up for Phasor
+	jsr		DisableSSI263			; Needed (de-assert IRQ & set MODE_IRQ_DISABLED), else TestTones() locks up for Phasor
 
 	pla
 	plp

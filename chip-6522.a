@@ -4023,7 +4023,7 @@ RESET_T1L_l = $34
 RESET_T1L_h = $02
 
 Setup6522ForReset
-; Pre: has6522, isMegaAudioCard
+; Pre: has6522, isSDMusic, isMegaAudioCard, isMB4C, isEchoPlus, isPhasorCard
 ; Post: C=0(OK), C=1(NG)
 ;	NG: zpTmp2 = expected value; A = actual value
 ;
@@ -4031,7 +4031,6 @@ Setup6522ForReset
 ; 6522 regs that persist across reset: T1L_l ,T1L_h
 ; 6522 state that is cleared on reset: IRQ, ACR.T1_RUNMODE
 ; TODO: test 6522-B too; test that for Phasor card its mode reverts to PH_MOCKINGBOARD
-; . NB. isPhasorCard may not be correct if there are multiple MB cards
 ;
 
 	sei
