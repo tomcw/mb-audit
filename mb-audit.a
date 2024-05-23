@@ -338,7 +338,7 @@ nextSlot
 			and		#3
 			sta		has6522
 			jsr		SetMBBase				; pre: X=slot#
-			jsr		RestoreFromSlotInfo2	; pre: X=slot#
+			jsr		RestoreFromSlotInfo		; pre: X=slot#
 			jsr		Setup6522ForReset
 			bcs		++
 			jsr		DisplaySlotUpdate
@@ -451,16 +451,11 @@ TestTones
 
 !if 0 {		; has6522 not needed by TestAYTones or AYTonesISR
 			pha
-			and		#HAS_6522B|HAS_6522A
+			and		#HAS_BOTH_6522s
 			sta		has6522
 			pla
 }
-			lsr
-			lsr
-			lsr
-			lsr
-			sta		hasAY8913
-			jsr		RestoreFromSlotInfo2	; pre: X=slot#
+			jsr		RestoreFromSlotInfo	; pre: X=slot#
 
 			; "Tone: "
 			jsr		PrintSlotNumInvert
@@ -654,8 +649,8 @@ GetNumMBsForMCT
 	ldx		#7
 -		lda		slotInfo,x
 		beq		+
-			and		#HAS_6522B|HAS_6522A
-			cmp		#HAS_6522B|HAS_6522A
+			and		#HAS_BOTH_6522s
+			cmp		#HAS_BOTH_6522s
 			bne		+
 				inc		numMockingboardsForMCT
 +		dex
@@ -696,8 +691,8 @@ DetectSubunits
 	sta		phasorMode
 
 	lda		zpTmp1
-	and		#HAS_6522B|HAS_6522A
-	cmp		#HAS_6522B|HAS_6522A
+	and		#HAS_BOTH_6522s
+	cmp		#HAS_BOTH_6522s
 	bne		@doneCardDetection
 
 	; Determine if this is a MegaAudio
@@ -809,13 +804,44 @@ DetectSubunits
 	tya
 	sta		slotInfo2,x
 
+	;
+	; set slotInfo3 - speech chips
+	;
+
+	lda		hasSC01
+	asl
+	asl
+	ora		hasSSI263
+	sta		slotInfo3,x
+
 	rts
 
 ;------------------------------------------------------------------------------
 
-RestoreFromSlotInfo2
+RestoreFromSlotInfo
 ; pre: X=slot#
-; post: isSDMusic, isMegaAudioCard, isMB4C, isEchoPlus, isPhasorCard
+; post: hasAY8913; isSDMusic, isMegaAudioCard, isMB4C, isEchoPlus, isPhasorCard
+
+	lda		slotInfo,x
+	lsr
+	lsr
+	lsr
+	lsr
+	sta		hasAY8913
+
+	;
+
+	lda		slotInfo3,x
+	pha
+	and		#SI3_SSI263_MASK
+	sta		hasSSI263
+	pla
+	lsr
+	lsr
+	and		#SI3_SC01_MASK
+	sta		hasSC01
+
+	;
 
 	lda		#0
 	sta		isSDMusic
@@ -894,6 +920,10 @@ SetPhasorMode
 ; Pre: A=phasorMode
 
 	sta		phasorMode
+
+	txa								; save X
+	pha
+
 	lda		MBBaseH
 	asl
 	asl
@@ -903,6 +933,10 @@ SetPhasorMode
 	adc		phasorMode
 	tax
 	lda		$c080,x
+
+	pla
+	tax								; restore X
+
 	rts
 
 ;------------------------------------------------------------------------------
@@ -1750,12 +1784,14 @@ COMPONENT_SSI263	= $40
 saveZP			!fill ($100-ZP_BASE),0
 
 ; slotInfo bitfield:
-							;   b7..4: AY bitmap
+							;   b7..4: AY bitmap: [Phasor:B2,A1],B,A
 NMI_FOR_6522B	= %00001000	;   b3:    NMI for 6522 at $80
 NMI_FOR_6522A	= %00000100	;   b2:    NMI for 6522 at $00
 HAS_6522B		= %00000010	;   b1:    6522 at $80
 HAS_6522A		= %00000001	;   b0:    6522 at $00
 slotInfo		!fill 8,0	; slot[0..7]
+
+HAS_BOTH_6522s	= HAS_6522A|HAS_6522B
 
 ; slotInfo2 bitfield:
 CARDTYPE_MASK		= %00001111
@@ -1766,6 +1802,13 @@ CARDTYPE_ECHOPLUS	= 2
 CARDTYPE_PHASOR		= 1
 CARDTYPE_UNKNOWN	= 0
 slotInfo2		!fill 8,0	; slot[0..7]
+
+; slotInfo3 bitfield:
+SI3_SC01_MASK		= %00000100
+SI3_SSI263_MASK		= %00000011
+HAS_SSI263B			= %00000010		; $Cs20
+HAS_SSI263A			= %00000001		; $Cs40
+slotInfo3		!fill 8,0	; slot[0..7]
 
 numMockingboards		!byte 0
 numMockingboardsForMCT	!byte 0		; num of Mockingboards for multi-card tests: need 2x 6522 per card

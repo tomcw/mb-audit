@@ -102,8 +102,8 @@ DetectMegaAudioCard
 	sta		isMegaAudioCard
 
 	lda		zpTmp1
-	and		#HAS_6522B|HAS_6522A
-	cmp		#HAS_6522B|HAS_6522A
+	and		#HAS_BOTH_6522s
+	cmp		#HAS_BOTH_6522s
 	bne		@done
 
 	sei
@@ -3310,8 +3310,8 @@ T6522_18
 
 	; Require MB with 2x 6522s
 	lda		has6522
-	and		#HAS_6522B|HAS_6522A
-	cmp		#HAS_6522B|HAS_6522A
+	and		#HAS_BOTH_6522s
+	cmp		#HAS_BOTH_6522s
 	beq		+
 -		clc
 		rts
@@ -4023,7 +4023,7 @@ RESET_T1L_l = $34
 RESET_T1L_h = $02
 
 Setup6522ForReset
-; Pre: has6522, isSDMusic, isMegaAudioCard, isMB4C, isEchoPlus, isPhasorCard
+; Pre: has6522, hasAY8913; isSDMusic, isMegaAudioCard, isMB4C, isEchoPlus, isPhasorCard; hasSSI263, hasSC01
 ; Post: C=0(OK), C=1(NG)
 ;	NG: zpTmp2 = expected value; A = actual value
 ;
@@ -4035,10 +4035,16 @@ Setup6522ForReset
 
 	sei
 
+	; Uses 6522-B's T1 at $Cs80, so do the SSI263 setup before the 6522 below
+	jsr		SetupPhasorWithSSI263ForReset
+	bcs		@error					; test component $43; subTest #1, 2, 3, 4
+
+	;
+
 	lda		has6522
 	lsr
 	bcs		+
-		lda		#$80
+		lda		#SY6522_B_BASE
 		sta		MBBaseL
 +
 
@@ -4097,7 +4103,7 @@ Setup6522ForReset
 @error	; Pre: A=actual, X=expected
 	stx		zpTmp2					; expected
 	pha
-	jsr		WaitT1OneShotUnderflow	; don't leave T1L set to a very small value (else 6522 detection will fail next time!)
+	jsr		Skip6522ForReset		; restore to sensible state for: 6522 & SSI263 chips
 	pla
 	jmp		Test6522Error			; C=1(NG)
 
@@ -4105,6 +4111,9 @@ Setup6522ForReset
 
 Skip6522ForReset
 ; TODO: clean-up for 6522-B; for Phasor card revert to PH_MOCKINGBOARD
+
+	jsr		SkipPhasorWithSSI263AfterReset	; Post: if Phasor card then SetPhasorMode(PH_MOCKINGBOARD) (so 6522 back at $Cs00)
+
 	jsr		WaitT1OneShotUnderflow	; de-assert T1 IRQ & set T1L to a sensible value
 	jmp		WaitT2OneShotUnderflow	; de-assert T2 IRQ
 
@@ -4112,17 +4121,15 @@ Skip6522ForReset
 
 Test6522AfterReset
 ; Pre: has6522, isMegaAudioCard
+;	MBBaseL = value from Setup6522ForReset()
 ; Post: C=0(OK), C=1(NG)
 ;	NG: zpTmp2 = expected value; A = actual value
 ;	can set: warningCount + warnings vars
 ;
 
-	lda		has6522
-	lsr
-	bcs		+
-		lda		#$80
-		sta		MBBaseL
-+
+	lda		#<Test6522ISR
+	ldx		#>Test6522ISR
+	jsr		SetIrqVector
 
 	lda		#$f1
 	sta		testNum					; test #f1
@@ -4160,7 +4167,9 @@ Test6522AfterReset
 	lda		(MBBase),y
 	ldx		#RESET_T1L_h
 	cmp		#RESET_T1L_h
-	bne		@error
+	beq		+
+		jmp		@error
++
 
 	; Test that all IRQs are disabled
 	jsr		incSubTestNum			; subTest #3
@@ -4221,12 +4230,18 @@ Test6522AfterReset
 	ldx		#$00
 	cmp		#$00
 	bne		@error
-	jsr		incSubTestNum			; subTest #10
+	jsr		incSubTestNum			; subTest #$A
 	ldy		#SY6522_IRA
 	lda		(MBBase),y
 	ldx		#$ff
 	cmp		#$ff
 	bne		@warning				; (see above)
+
+	;
+
+	; Do this at the end to ensure that none of the 6522 timer ints are active
+	jsr		TestPhasorWithSSI263AfterReset		; subTest #$B
+	bne		@error
 
 	beq		@ok
 
@@ -4234,18 +4249,17 @@ Test6522AfterReset
 
 @warning	; Pre: A=actual, X=expected
 	jsr		setWarning				; pre: X = expected; A = actual
-	lda		#0						; set: Z=1
+	lda		#0						; set: Z=1(OK)
 	; fall through...
 
 @ok		; Pre: Z=1
 	; fall through...
 
-@error	; Pre: A=actual, X=expected
+@error	; Pre: Z=1(OK)/0(NG), A=actual, X=expected
 	stx		zpTmp2					; expected
 	php
 	pha
-	jsr		WaitT1OneShotUnderflow	; de-assert T1 IRQ & set T1L to a sensible value
-	jsr		WaitT2OneShotUnderflow	; de-assert T2 IRQ
+	jsr		Skip6522ForReset		; restore to sensible state for: 6522 & SSI263 chips
 	pla
 	plp
 	bne		+
