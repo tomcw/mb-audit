@@ -2268,7 +2268,7 @@ SetupPhasorWithSSI263ForReset
 ; Pre:
 ; Post: C=0(OK), C=1(Error)
 ;		Phasor mode = PH_MOCKINGBOARD and MBBaseL=SY6522_A_BASE
-;		$Cs80/6522_B.T1 will timeout and IFR=$40
+;		$Cs80/6522_B.T1 will timeout and IFR=$40 - not important, since RESET will clear this
 
 	lda		#0
 	sta		PhasorWithSSI263ResetFlag
@@ -2282,7 +2282,7 @@ SetupPhasorWithSSI263ForReset
 	lda		hasSSI263				; Need at least 1x SSI263
 	bne		++
 +		clc
-		rts							; OK
+		rts							; OK (skipped)
 ++
 
 	lda		#1
@@ -2319,12 +2319,12 @@ SetupPhasorWithSSI263ForReset
 	ldy		#SSI_RATEINF
 	sta		(SSI263Base),y
 
-	jsr		incSubTestNum			; subTest# = 1
+									; subTest# = 0 (resetSubTest done by parent)
 	jsr		DisableSSI263			; Set DR1:0=b#00 and SSI263 device mode=MODE_IRQ_DISABLED
 	jsr		WaitPhonemeDoneD7WithTimeout
 	bne		@error					; Error (A=$40, X=$FF)
 
-	jsr		incSubTestNum			; subTest# = 2
+	jsr		incSubTestNum			; subTest# = 1
 	lda		#$C0
 	ldy		#SSI_DURPHON
 	sta		(SSI263Base),y			; set DR1:0=b#11 & de-assert IRQ
@@ -2336,7 +2336,7 @@ SetupPhasorWithSSI263ForReset
 	ldx		#>T263_Reset_ISR
 	jsr		SetIrqVector
 
-	jsr		PhasorCheckIRQ_0		; subTest# = 3
+	jsr		PhasorCheckIRQ_0		; subTest# = 2
 	bne		@error					; Error (A=$01, X=$00)
 
 	; Check that just switching MB->Phasor doesn't cause IRQ to be asserted
@@ -2345,7 +2345,7 @@ SetupPhasorWithSSI263ForReset
 	lda		#PH_PHASOR
 	jsr		SetPhasorMode
 
-	jsr		PhasorCheckIRQ_0		; subTest# = 4
+	jsr		PhasorCheckIRQ_0		; subTest# = 3
 	bne		@error					; Error (A=$01, X=$00)
 
 	clc
@@ -2433,7 +2433,6 @@ TestPhasorWithSSI263AfterReset
 	pla
 	plp
 	rts
-
 
 ;------------------
 

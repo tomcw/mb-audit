@@ -4029,15 +4029,18 @@ Setup6522ForReset
 ;
 ; Notes:
 ; 6522 regs that persist across reset: T1L_l ,T1L_h
-; 6522 state that is cleared on reset: IRQ, ACR.T1_RUNMODE
+; 6522 state that is cleared on reset: IRQ, DDRB, DDRA, ACR, PCR, IFR, IER
 ; TODO: test 6522-B too; test that for Phasor card its mode reverts to PH_MOCKINGBOARD
 ;
 
 	sei
 
+	jsr		resetSubTest			; subTest #0
+	jsr		incTotalTests
+
 	; Uses 6522-B's T1 at $Cs80, so do the SSI263 setup before the 6522 below
 	jsr		SetupPhasorWithSSI263ForReset
-	bcs		@error					; test component $43; subTest #1, 2, 3, 4
+	bcs		@error					; test component $43; subTest #0, 1, 2, 3
 
 	;
 
@@ -4052,8 +4055,6 @@ Setup6522ForReset
 	sta		testComponentNum
 	lda		#$f0
 	sta		testNum					; test #f0
-	jsr		resetSubTest			; subTest #0
-	jsr		incTotalTests
 
 	lda		#$ff
 	ldy		#SY6522_DDRB
@@ -4090,6 +4091,7 @@ Setup6522ForReset
 
 	jsr		WaitT1Underflow			; Post: T1 IRQ asserted
 
+	jsr		incSubTestNum			; subTest# = 4
 	ldy		#SY6522_IFR
 	lda		(MBBase),y
 	and		#IER_SET|IxR_TIMER1|IxR_TIMER2		; NB. use 'IxR_TIMER2' in the bit-mask (even for MegaAudio)
@@ -4112,7 +4114,7 @@ Setup6522ForReset
 Skip6522ForReset
 ; TODO: clean-up for 6522-B; for Phasor card revert to PH_MOCKINGBOARD
 
-	jsr		SkipPhasorWithSSI263AfterReset	; Post: if Phasor card then SetPhasorMode(PH_MOCKINGBOARD) (so 6522 back at $Cs00)
+	jsr		SkipPhasorWithSSI263AfterReset
 
 	jsr		WaitT1OneShotUnderflow	; de-assert T1 IRQ & set T1L to a sensible value
 	jmp		WaitT2OneShotUnderflow	; de-assert T2 IRQ
