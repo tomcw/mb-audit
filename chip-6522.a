@@ -4035,6 +4035,8 @@ Setup6522ForReset
 
 	sei
 
+	lda		#$f0
+	sta		testNum					; test #f0
 	jsr		resetSubTest			; subTest #0
 	jsr		incTotalTests
 
@@ -4053,8 +4055,6 @@ Setup6522ForReset
 
 	lda		#COMPONENT_6522+3		; test component $13
 	sta		testComponentNum
-	lda		#$f0
-	sta		testNum					; test #f0
 
 	lda		#$ff
 	ldy		#SY6522_DDRB
