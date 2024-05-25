@@ -860,11 +860,10 @@ Test6522Error
 ;	A = actual value
 ; Post: C=1(NG)
 
-	sta		errorActual
-	lda		zpTmp2
-	sta		errorExpected
+	ldx		zpTmp2
+	jsr		SetError
 
-	lda		#0
+	lda		#SY6522_A_BASE
 	sta		MBBaseL
 
 	sec		; C=1(NG)
@@ -4025,7 +4024,7 @@ RESET_T1L_h = $02
 Setup6522ForReset
 ; Pre: has6522, hasAY8913; isSDMusic, isMegaAudioCard, isMB4C, isEchoPlus, isPhasorCard; hasSSI263, hasSC01
 ; Post: C=0(OK), C=1(NG)
-;	NG: zpTmp2 = expected value; A = actual value
+;	NG: Called SetError() to set errorExpected & errorActual
 ;
 ; Notes:
 ; 6522 regs that persist across reset: T1L_l ,T1L_h
@@ -4035,16 +4034,11 @@ Setup6522ForReset
 
 	sei
 
-	lda		#$f0
-	sta		testNum					; test #f0
+	lda		#COMPONENT_6522+3		; test component $13
+	sta		testComponentNum
+
 	jsr		resetSubTest			; subTest #0
 	jsr		incTotalTests
-
-	; Uses 6522-B's T1 at $Cs80, so do the SSI263 setup before the 6522 below
-	jsr		SetupPhasorWithSSI263ForReset
-	bcs		@error					; test component $43; subTest #0, 1, 2, 3
-
-	;
 
 	lda		has6522
 	lsr
@@ -4052,9 +4046,6 @@ Setup6522ForReset
 		lda		#SY6522_B_BASE
 		sta		MBBaseL
 +
-
-	lda		#COMPONENT_6522+3		; test component $13
-	sta		testComponentNum
 
 	lda		#$ff
 	ldy		#SY6522_DDRB
@@ -4091,30 +4082,24 @@ Setup6522ForReset
 
 	jsr		WaitT1Underflow			; Post: T1 IRQ asserted
 
-	jsr		incSubTestNum			; subTest# = 4
 	ldy		#SY6522_IFR
 	lda		(MBBase),y
 	and		#IER_SET|IxR_TIMER1|IxR_TIMER2		; NB. use 'IxR_TIMER2' in the bit-mask (even for MegaAudio)
 	ldx		#IER_SET|IxR_TIMER1|IxR_TIMER2		; expected
 	cmp		#IER_SET|IxR_TIMER1|IxR_TIMER2
-	bne		@error
+	bne		@error					; subTest #0
 
 	clc
 	rts								; C=0(OK)
 
-@error	; Pre: A=actual, X=expected
+@error		; Pre: A=actual, X=expected
 	stx		zpTmp2					; expected
-	pha
-	jsr		Skip6522ForReset		; restore to sensible state for: 6522 & SSI263 chips
-	pla
 	jmp		Test6522Error			; C=1(NG)
 
 ;------------------------------------------------------------------------------
 
 Skip6522ForReset
 ; TODO: clean-up for 6522-B; for Phasor card revert to PH_MOCKINGBOARD
-
-	jsr		SkipPhasorWithSSI263AfterReset
 
 	jsr		WaitT1OneShotUnderflow	; de-assert T1 IRQ & set T1L to a sensible value
 	jmp		WaitT2OneShotUnderflow	; de-assert T2 IRQ
@@ -4125,6 +4110,7 @@ Test6522AfterReset
 ; Pre: has6522, isMegaAudioCard
 ;	MBBaseL = value from Setup6522ForReset()
 ; Post: C=0(OK), C=1(NG)
+;	MBBaseL = SY6522_A_BASE
 ;	NG: zpTmp2 = expected value; A = actual value
 ;	can set: warningCount + warnings vars
 ;
@@ -4133,8 +4119,9 @@ Test6522AfterReset
 	ldx		#>Test6522ISR
 	jsr		SetIrqVector
 
-	lda		#$f1
-	sta		testNum					; test #f1
+	lda		#COMPONENT_6522+3		; test component $13
+	sta		testComponentNum
+
 	jsr		resetSubTest			; subTest #0
 	jsr		incTotalTests
 
@@ -4239,34 +4226,21 @@ Test6522AfterReset
 	cmp		#$ff
 	bne		@warning				; (see above)
 
-	;
-
-	; Do this at the end to ensure that none of the 6522 timer ints are active
-	jsr		TestPhasorWithSSI263AfterReset		; subTest #$B
-	bne		@error
-
 	beq		@ok
 
 	;
 
 @warning	; Pre: A=actual, X=expected
 	jsr		setWarning				; pre: X = expected; A = actual
-	lda		#0						; set: Z=1(OK)
 	; fall through...
 
-@ok		; Pre: Z=1
-	; fall through...
-
-@error	; Pre: Z=1(OK)/0(NG), A=actual, X=expected
-	stx		zpTmp2					; expected
-	php
-	pha
-	jsr		Skip6522ForReset		; restore to sensible state for: 6522 & SSI263 chips
-	pla
-	plp
-	bne		+
+@ok
+	lda		#SY6522_A_BASE
+	sta		MBBaseL
 
 	clc
 	rts								; C=0(OK)
 
-+	jmp		Test6522Error			; C=1(NG)
+@error		; Pre: A=actual, X=expected
+	stx		zpTmp2					; expected
+	jmp		Test6522Error			; C=1(NG)

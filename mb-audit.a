@@ -339,8 +339,13 @@ nextSlot
 			sta		has6522
 			jsr		SetMBBase				; pre: X=slot#
 			jsr		RestoreFromSlotInfo		; pre: X=slot#
+			lda		#$f0
+			sta		testNum					; test #f0
+			; Setup Phasor/SSI263 before 6522, as we don't want any 6522 timer ints active
+			jsr		SetupPhasorWithSSI263ForReset
+			bcs		TestResetError			; test component $43
 			jsr		Setup6522ForReset
-			bcs		++
+			bcs		TestResetError			; test component $13
 			jsr		DisplaySlotUpdate
 			jsr		PrintSlotNum
 			lda		#<msg_PressReset
@@ -358,11 +363,17 @@ TestResetLoop
 				bit		KBDSTRB
 				cmp		#$80+27
 				bne		-
-			jsr		Skip6522ForReset
+			; ESC pressed - so skip this card
+			jsr		TestResetSkip
 			jmp		+
 
-@test		jsr		Test6522AfterReset
-			bcs		++
+@test		lda		#$f1
+			sta		testNum					; test #f1
+			jsr		Test6522AfterReset
+			bcs		TestResetError			; test component $13
+			; Test Phasor/SSI263 after testing 6522 to ensure that none of the 6522 timer ints are active
+			jsr		TestPhasorWithSSI263AfterReset
+			bcs		TestResetError			; test component $43
 
 			jsr		PrintWarning	; if there's a warning then print it. Reset warningCount to 0.
 
@@ -374,9 +385,22 @@ TestResetLoop
 	jsr		Print
 
 @ok	clc
-++	rts
+	rts
 
-;
+;------------------
+
+TestResetError
+	jsr		TestResetSkip
+	sec
+	rts
+
+; Restore to sensible state for: 6522 & SSI263 chips
+TestResetSkip
+	jsr		Skip6522ForReset
+	jsr		SkipPhasorWithSSI263ForReset
+	rts
+
+;------------------
 
 ResetVector
 
@@ -395,7 +419,7 @@ ResetVector
 
 	jmp		TestResetLoop
 
-;
+;------------------
 
 SetupResetVector
 ; Pre: X=SP
@@ -667,7 +691,7 @@ SetMBBase
 	txa
 	ora		#$c0
 	sta		MBBaseH
-	lda		#0
+	lda		#SY6522_A_BASE
 	sta		MBBaseL
 	rts
 
@@ -1032,14 +1056,22 @@ incTotalTests
 
 ;------------------------------------------------------------------------------
 
+SetError
+; Pre: X = expected; A = actual
+
+	stx		errorExpected
+	sta		errorActual
+	rts
+
+;------------------------------------------------------------------------------
+
 setWarning
 ; Pre: X = expected; A = actual
 ; Post: warningCount++
 ;	only set the warningXxx vars for 1st warning
 ; Trashes: zpTmpPtr2L/H; zpTmpSrcL/H
 
-	stx		errorExpected
-	sta		errorActual
+	jsr		SetError
 
 	lda		warningCount
 	bne		+
