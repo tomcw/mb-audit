@@ -365,9 +365,8 @@ TestAY8913
 ; Pre: zpTmp2 = expected value
 ;	A = actual value
 
-	sta		errorActual
-	lda		zpTmp2
-	sta		errorExpected
+	ldx		zpTmp2
+	jsr		SetError
 
 	sec
 	rts

@@ -266,8 +266,7 @@ Check6522
 ;	A = actual value
 ; Post: C=1(NG)
 
-	sta		errorActual
-	stx		errorExpected
+	jsr		SetError
 
 	sec		; C=1(NG)
 	rts
@@ -4111,7 +4110,7 @@ Test6522AfterReset
 ;	MBBaseL = value from Setup6522ForReset()
 ; Post: C=0(OK), C=1(NG)
 ;	MBBaseL = SY6522_A_BASE
-;	NG: zpTmp2 = expected value; A = actual value
+;	NG: Called SetError() to set errorExpected & errorActual
 ;	can set: warningCount + warnings vars
 ;
 

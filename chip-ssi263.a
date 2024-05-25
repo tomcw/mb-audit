@@ -294,9 +294,8 @@ TestSSI263
 ;	A = actual value
 ; Post: C=1(NG)
 
-	sta		errorActual
-	lda		zpTmp2
-	sta		errorExpected
+	ldx		zpTmp2
+	jsr		SetError
 
 	sec
 
@@ -2254,10 +2253,11 @@ TestSSI263ISR
 
 ;------------------------------------------------------------------------------
 
-; Nuanced test:
+; Test edge-case where RESET will enable SSI263 ints: (GH#175)
 ; . SetPhasorMode(PH_PHASOR)
 ; . DisableSSI263()
 ; . set reg0 = $C0 (or $40 or $80)
+; . SetPhasorMode(PH_MOCKINGBOARD) or remain in PH_PHASOR mode
 ; . RESET -> resets Phasor's GAL (so Phasor mode = PH_MOCKINGBOARD), but doesn't reset the SSI263
 ; . SetPhasorMode(PH_PHASOR)
 ; . CLI
@@ -2403,7 +2403,9 @@ SkipPhasorWithSSI263ForReset
 TestPhasorWithSSI263AfterReset
 ; Pre:
 ; Post: C=0(OK), C=1(NG)
-;	NG: zpTmp2 = expected value; A = actual value
+;	NG: Called SetError() to set errorExpected & errorActual
+;   OK/NG:
+;	. Phasor mode = PH_MOCKINGBOARD
 ;
 
 	lda		phasorWithSSI263ResetFlag
