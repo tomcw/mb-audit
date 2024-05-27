@@ -368,6 +368,8 @@ TestResetLoop
 			jmp		+
 
 @test		lda		#$f1
+			cmp		testNum
+			beq		TestResetStuckError
 			sta		testNum					; test #f1
 			jsr		Test6522AfterReset
 			bcs		TestResetError			; test component $13
@@ -388,6 +390,11 @@ TestResetLoop
 	rts
 
 ;------------------
+
+TestResetStuckError	; Got stuck in an "after-reset" test!
+	lda		#$ff
+	sta		testNum							; test #ff
+	; fall through...
 
 TestResetError
 	jsr		TestResetSkip
@@ -844,7 +851,7 @@ DetectSubunits
 
 RestoreFromSlotInfo
 ; pre: X=slot#
-; post: hasAY8913; isSDMusic, isMegaAudioCard, isMB4C, isEchoPlus, isPhasorCard
+; post: hasAY8913; isSDMusic, isMegaAudioCard, isMB4C, isEchoPlus, isPhasorCard, phasorMode=PH_MOCKINGBOARD
 
 	lda		slotInfo,x
 	lsr
@@ -852,6 +859,9 @@ RestoreFromSlotInfo
 	lsr
 	lsr
 	sta		hasAY8913
+
+	lda		#PH_MOCKINGBOARD
+	sta		phasorMode
 
 	;
 
@@ -904,6 +914,8 @@ RestoreFromSlotInfo
 	rts
 @phasor
 	stx		isPhasorCard
+	lda		#PH_MOCKINGBOARD
+	jsr		SetPhasorMode
 @done
 	rts
 
