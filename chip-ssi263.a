@@ -2380,6 +2380,9 @@ SetupPhasorWithSSI263ForReset
 
 !if 0 {
 	; Don't do this - RESET doesn't bring the device out of power-down mode
+	; And it's impossible to tell if it has set the device mode, as after RESET:
+	; a) CTL=0 => device mode is set to %11 (as reg0=$C0 from above), or
+	; b) reg0=$00 + CTL=0 => device mode is set to %00
 	lda		#CONTROL_H
 	ldy		#SSI_CTTRAMP
 	sta		(SSI263Base),y			; Put device into Power-down / standby mode
@@ -2481,6 +2484,7 @@ TestPhasorWithSSI263AfterReset
 !if 0 {
 	lda		isPhasorCard
 	beq		@mb
+		; It'll have taken ~117ms [Enh//e] to get here after CTRL+RESET, so the SSI263 IRQ will already be asserted.
 		lda		#PH_PHASOR
 		jsr		SetPhasorMode		; Phasor mode = PH_PHASOR, which causes SSI263 IRQ to be asserted!
 		jmp		@checkIRQ

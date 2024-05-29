@@ -367,7 +367,8 @@ TestResetLoop
 			jsr		TestResetSkip
 			jmp		+
 
-@test		lda		#$f1
+@test		; # of cycles to get here: [Enh//e] 0x1C941 (117,057 = 117ms)
+			lda		#$f1
 			cmp		testNum
 			beq		TestResetStuckError
 			sta		testNum					; test #f1
