@@ -1585,7 +1585,7 @@ T263_8
 ;   . Check that 6522.IFR.IxR_SSI263 == 0
 ;   . Switch to MB mode, and check that 6522.IFR.IxR_SSI263 == 1 (then KickSSI263 & wait for phoneme complete)
 ;   . Switch to PH mode, and check that D7=1 & SSI263 IRQ asserted
-;   . In ISR, switch to MB mode, which blocks the SSI263 IRQ to the 6502 (allowing the ISR to return)
+;   . In ISR, switch to MB (1st) & E+ (2nd) modes, which block the SSI263 IRQ to the 6502 (allowing the ISR to return)
 
 	lda		isPhasorCard
 	bne		+
@@ -1641,25 +1641,30 @@ T263_8
 		and		#IxR_SSI263
 		beq		-
 
-	; Switch to PH mode - expect D7=1 & IRQ asserted
-	lda		#PH_PHASOR
-	jsr		SetPhasorMode
+	lda		#1
+	sta		@T263_8_ISR_mode
 
-	jsr		incSubTestNum			; subTest# = $03
-	lda		(SSI263Base),y			; Y=$D (can be $0-$F)
-	ldx		#REQ_NEW_DATA
-	and		#REQ_NEW_DATA
-	beq		@error
+@loop	lda		#PH_PHASOR
+		jsr		SetPhasorMode
 
-	jsr		incSubTestNum			; subTest# = $04
-	lda		#0
-	sta		isrFlag
-	cli
-	sei								; Post: ISR switches to MB mode (blocks the SSI263 IRQ to the 6502)
-	ldx		#1						; (expected)
-	lda		isrFlag
-	cmp		#1
-	bne		@error
+		jsr		incSubTestNum			; subTest# = $03, $05
+		lda		(SSI263Base),y			; Y=$D (can be $0-$F)
+		ldx		#REQ_NEW_DATA
+		and		#REQ_NEW_DATA
+		beq		@error
+
+		jsr		incSubTestNum			; subTest# = $04, $06
+		lda		#0
+		sta		isrFlag
+		cli
+		sei								; Post: ISR switches to MB/E+ mode (blocks the SSI263 IRQ to the 6502)
+		ldx		#1						; (expected)
+		lda		isrFlag
+		cmp		#1
+		bne		@error
+
+		dec		@T263_8_ISR_mode
+		bpl		@loop
 
 	clc								; C=0(OK)
 	bcc		@exit
@@ -1710,7 +1715,10 @@ T263_8
 	cmp		#1
 	beq		+
 
-		; Unexpected 2nd ISR! So switching to MB didn't work - de-assert IRQ like this as a safety measure:
+		; Unexpected 2nd ISR! So switching to MB/E+ didn't work - de-assert IRQ like this as a safety measure:
+!if 1 {		; DEBUG: Indicate code is stuck in IRQ!
+		inc		$400
+}
 		lda		#IxR_SSI263
 		ldy		#SY6522_IFR
 		sta		(MBBase),y				; Clear CA1(Speech) IRQ
@@ -1718,13 +1726,16 @@ T263_8
 		lda		#0
 		ldy		#SSI_INFLECT			; reg1
 		sta		(SSI263Base),y			; De-assert IRQ by writing to SSI263 reg1
-		bne		++						; (bra)
+		bne		@isrDone				; (bra)
 
-+	; De-assert IRQ by switching back to MB mode!
-	lda		#PH_MOCKINGBOARD
-	jsr		SetPhasorMode
++	lda		@T263_8_ISR_mode
+	bne		@mb
+	lda		#PH_ECHOPLUS				; De-assert IRQ by switching back to E+ mode!
+	bne		+							; (bra)
+@mb	lda		#PH_MOCKINGBOARD			; De-assert IRQ by switching back to MB mode!
++	jsr		SetPhasorMode
 
-++
+@isrDone
 
 	;------
 
@@ -1735,6 +1746,9 @@ T263_8
 
 	lda		$45		; for Apple II/II+
 	rti
+
+@T263_8_ISR_mode
+	!byte	0
 
 ;------------------------------------------------------------------------------
 
