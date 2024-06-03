@@ -385,6 +385,14 @@ T263_0
 	lda		#IER_CLR|IxR_TIMER1
 	sta		(MBTimer),y				; Disable Timer1 IRQ
 
+	lda		MBBaseL
+	pha
+	lda		MBTimerL
+	sta		MBBaseL
+	jsr		WaitT1OneShotUnderflow	; Disable the free-running time on MBTimer/$Cs80
+	pla
+	sta		MBBaseL
+
 	jsr		CalcPhraseDuration		; Real MB: 0x132BDD,0x132E59,0x133073 (AppleWin: 0x18D3D8,0x192332/running; ~0x14EFFF,0x14F247/stepping)
 
 	lda		#1						; actual
@@ -572,8 +580,10 @@ T263_2
 ; Post: C=0(OK), C=1(NG)
 ;
 ; Test#2 - Phasor only
-; . phoneme request using SSI263.D7 w/o IRQ (mode=MODE_PHONEME_TRANSITIONED_INFLECTION)
-; . phoneme request using SSI263.D7 w/o IRQ (mode=MODE_IRQ_DISABLED)
+; . phoneme request using SSI263.D7 w/o IRQ (mode=MODE_PHONEME_TRANSITIONED_INFLECTION) & check IRQ
+; . phoneme request using SSI263.D7 w/o IRQ (mode=MODE_PHONEME_IMMEDIATE_INFLECTION) & check IRQ
+; . phoneme request using SSI263.D7 w/o IRQ (mode=MODE_FRAME_IMMEDIATE_INFLECTION) & check IRQ
+; . phoneme request using SSI263.D7 w/o IRQ (mode=MODE_IRQ_DISABLED) & check *no* IRQ
 
 	sei
 
@@ -583,76 +593,80 @@ T263_2
 		rts
 +
 
-	jsr		resetSubTest			; subTest #0
+	jsr		resetSubTestMinus1		; subTest #-1
 	jsr		incTotalTests
 
 	lda		#PH_PHASOR
 	jsr		SetPhasorMode
-
-	; Kick with phoneme $00 && MODE_PHONEME_TRANSITIONED_INFLECTION
-	jsr		KickSSI263_no_PCR
-
-	lda		#$FF
-	jsr		WAIT					; delay for 0x28882 (166018) cycles / ~163ms
-
-	ldy		#SSI_DURPHON
-	lda		(SSI263Base),y
-	and		#REQ_NEW_DATA			; D7
-	beq		@errorNot80
-
-	jsr		incSubTestNum			; subTest #1
-
-	jsr		DisableSSI263
-
-	; Warning: stepping this won't yield D7==0, since the phoneme completes and sets D7=1
-
-	;   Time | D7
-	;   ---------
-	;      0 | 0
-	;    163 | 0
-	;    326 | 1					- In total wait for 163x2 = 326ms - a very long time!
-
-	ldy		#SSI_DURPHON			; Check D7==0
-	lda		(SSI263Base),y
-	and		#REQ_NEW_DATA
-	bne		@errorNot00
-
-	jsr		incSubTestNum			; subTest #2
-
-	lda		#$FF
-	jsr		WAIT					; wait 163ms
-
-!if 0 {
-	ldy		#SSI_DURPHON			; Check D7==0 a 2nd time - no good on emulator!
-	lda		(SSI263Base),y
-	and		#REQ_NEW_DATA
-	bne		@errorNot00
-}
-
-	jsr		incSubTestNum			; subTest #3
-
-	lda		#$FF
-	jsr		WAIT					; wait 163ms a 2nd time
-
-	ldy		#SSI_DURPHON			; Check D7==1
-	lda		(SSI263Base),y
-	and		#REQ_NEW_DATA
-	beq		@errorNot80
-
-	jsr		incSubTestNum			; subTest #4
 
 	lda		#<NullPhrase
 	ldx		#>NullPhrase
 	sta		SpeechDataL
 	stx		SpeechDataH
 
-	lda		#0
-	sta		isrFlag
-	cli
-	sei
-	lda		isrFlag					; Check that MODE_IRQ_DISABLED prevents IRQ from occurring
-	bne		@errorNot00
+	lda		#$F0					; RATE[7:4]=$F (quickest), INF[3:0]=$0
+	ldy		#SSI_RATEINF
+	sta		(SSI263Base),y
 
+	lda		#MODE_PHONEME_TRANSITIONED_INFLECTION
+	sta		@deviceMode
+
+@loop	; Kick with phoneme $00 && device mode && ena/dis ints
+		; . R = RATE = $F (set above)
+		; . Device Mode:
+		;   $C0: FD = 4ms * (16-R) = 4ms; PD = FD * (4-D) = 4ms (where D = %11 = 3) [Phoneme timing mode]
+		;   $80: FD = 4ms * (16-R) = 4ms; PD = FD * (4-D) = 8ms (where D = %10 = 2) [Phoneme timing mode]
+		;   $40: FD = 4ms * (16-R) = 4ms  [Frame timing mode]
+		;   $00: 4ms (use previous device mode)
+
+		lda		#CONTROL_H
+		ldy		#SSI_CTTRAMP
+		sta		(SSI263Base),y
+
+		lda		@deviceMode
+		ldy		#SSI_DURPHON
+		sta		(SSI263Base),y
+
+		lda		#CONTROL_L
+		ldy		#SSI_CTTRAMP
+		sta		(SSI263Base),y
+
+		jsr		incSubTestNum		; subTest #0,3,6,9
+		lda		(SSI263Base),y		; Y=$3 (can be $0-$F)
+		and		#REQ_NEW_DATA
+		bne		@errorNot00			; Check D7==0
+
+		lda		#$A0				; NB. pick a big enough delay for AppleWin emulator!
+		jsr		WAIT				; delay for 0x1027D (66,173) cycles / ~66ms
+
+		jsr		incSubTestNum		; subTest #1,4,7,A
+		ldy		#SSI_DURPHON
+		lda		(SSI263Base),y
+		and		#REQ_NEW_DATA
+		beq		@errorNot80			; Check D7==1
+
+		jsr		incSubTestNum		; subTest #2,5,8,B
+		lda		#0
+		sta		isrFlag
+		cli
+		sei
+		lda		@deviceMode
+		beq		@dis
+		lda		isrFlag
+		beq		@errorNot01			; Check that MODE_PHONEME|FRAME_XXX allows IRQ to occur
+		bne		+					; (bra)
+@dis	lda		isrFlag
+		bne		@errorNot00			; Check that MODE_IRQ_DISABLED prevents IRQ from occurring
++
+
+		lda		@deviceMode
+		beq		@done
+		sec
+		sbc		#$40
+		sta		@deviceMode
+		jmp		@loop
+
+@done
 	clc								; C=0(OK)
 	bcc		@exit
 
@@ -660,7 +674,10 @@ T263_2
 
 @errorNot00	; pre: A=actual; post X=0
 	ldx		#$00
-	beq		+
+	beq		+						; (bra)
+@errorNot01	; pre: A=actual; post X=0
+	ldx		#$01
+	bne		+						; (bra)
 @errorNot80	; pre: A=actual; post X=0
 	ldx		#$80
 
@@ -671,11 +688,15 @@ T263_2
 @exit
 	php
 	pha
+
 	lda		#PH_MOCKINGBOARD
 	jsr		SetPhasorMode
+
 	pla
 	plp
 	rts
+
+@deviceMode	!byte	0
 
 ;------------------------------------------------------------------------------
 
@@ -694,8 +715,6 @@ T263_3
 
 	jsr		resetSubTest			; subTest #0
 	jsr		incTotalTests
-
-	; TODO AppleWin:SSI263-new: (Phasor card) once got error 41:03:00 (expected=00, actual=04) - was stepping
 
 	lda		#<NullPhrase
 	ldx		#>NullPhrase
