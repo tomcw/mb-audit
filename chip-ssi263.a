@@ -581,7 +581,9 @@ T263_2
 ;
 ; Test#2 - Phasor only
 ; . phoneme request using SSI263.D7 w/o IRQ (mode=MODE_PHONEME_TRANSITIONED_INFLECTION) & check IRQ
+; . phoneme request using SSI263.D7 w/o IRQ (mode=MODE_IRQ_DISABLED) & check *no* IRQ
 ; . phoneme request using SSI263.D7 w/o IRQ (mode=MODE_PHONEME_IMMEDIATE_INFLECTION) & check IRQ
+; . phoneme request using SSI263.D7 w/o IRQ (mode=MODE_IRQ_DISABLED) & check *no* IRQ
 ; . phoneme request using SSI263.D7 w/o IRQ (mode=MODE_FRAME_IMMEDIATE_INFLECTION) & check IRQ
 ; . phoneme request using SSI263.D7 w/o IRQ (mode=MODE_IRQ_DISABLED) & check *no* IRQ
 
@@ -610,59 +612,72 @@ T263_2
 
 	lda		#MODE_PHONEME_TRANSITIONED_INFLECTION
 	sta		@deviceMode
+	lda		#0
+	sta		@disableIntsFlag
 
 @loop	; Kick with phoneme $00 && device mode && ena/dis ints
 		; . R = RATE = $F (set above)
-		; . Device Mode:
-		;   $C0: FD = 4ms * (16-R) = 4ms; PD = FD * (4-D) = 4ms (where D = %11 = 3) [Phoneme timing mode]
-		;   $80: FD = 4ms * (16-R) = 4ms; PD = FD * (4-D) = 8ms (where D = %10 = 2) [Phoneme timing mode]
-		;   $40: FD = 4ms * (16-R) = 4ms  [Frame timing mode]
-		;   $00: 4ms (use previous device mode)
+		; loop# - Device Mode:
+		;     0 - $C0:  4ms: FD = 4ms * (16-R) = 4ms; PD = FD * (4-D) = 4ms (where D = %11 = 3) [Phoneme timing mode]
+		;     1 - $00: 16ms (use previous device mode, but D=0, so PD = FD * 4 = 16ms)
+		;     2 - $80:  8ms: FD = 4ms * (16-R) = 4ms; PD = FD * (4-D) = 8ms (where D = %10 = 2) [Phoneme timing mode]
+		;     3 - $00: 16ms (use previous device mode, but D=0, so PD = FD * 4 = 16ms)
+		;     4 - $40:  4ms: FD = 4ms * (16-R) = 4ms  [Frame timing mode]
+		;     5 - $00:  4ms (use previous device mode)
 
 		lda		#CONTROL_H
 		ldy		#SSI_CTTRAMP
 		sta		(SSI263Base),y
 
-		lda		@deviceMode
-		ldy		#SSI_DURPHON
+		lda		@disableIntsFlag
+		bne		@disInts1
+			lda		@deviceMode
+			bne		+				; (bra)
+@disInts1	lda		#MODE_IRQ_DISABLED
++		ldy		#SSI_DURPHON
 		sta		(SSI263Base),y
 
 		lda		#CONTROL_L
 		ldy		#SSI_CTTRAMP
 		sta		(SSI263Base),y
 
-		jsr		incSubTestNum		; subTest #0,3,6,9
+		jsr		incSubTestNum		; subTest #0,3,6,9,C,F
 		lda		(SSI263Base),y		; Y=$3 (can be $0-$F)
 		and		#REQ_NEW_DATA
 		bne		@errorNot00			; Check D7==0
 
-		lda		#$A0				; NB. pick a big enough delay for AppleWin emulator!
-		jsr		WAIT				; delay for 0x1027D (66,173) cycles / ~66ms
+		lda		#$E0				; NB. pick a big enough delay for AppleWin emulator!
+		jsr		WAIT				; WAIT($E0) = delay for 0x1F5DD (128,477) cycles / ~128ms
 
-		jsr		incSubTestNum		; subTest #1,4,7,A
+		jsr		incSubTestNum		; subTest #1,4,7,A,D,10
 		ldy		#SSI_DURPHON
 		lda		(SSI263Base),y
 		and		#REQ_NEW_DATA
 		beq		@errorNot80			; Check D7==1
 
-		jsr		incSubTestNum		; subTest #2,5,8,B
+		jsr		incSubTestNum		; subTest #2,5,8,B,E,11
 		lda		#0
 		sta		isrFlag
 		cli
 		sei
-		lda		@deviceMode
-		beq		@dis
-		lda		isrFlag
-		beq		@errorNot01			; Check that MODE_PHONEME|FRAME_XXX allows IRQ to occur
-		bne		+					; (bra)
-@dis	lda		isrFlag
-		bne		@errorNot00			; Check that MODE_IRQ_DISABLED prevents IRQ from occurring
+		lda		@disableIntsFlag
+		bne		@disInts2
+			lda		isrFlag
+			beq		@errorNot01		; Check that MODE_PHONEME|FRAME_XXX allows IRQ to occur
+			bne		+				; (bra)
+@disInts2	lda		isrFlag
+			bne		@errorNot00		; Check that MODE_IRQ_DISABLED prevents IRQ from occurring
 +
 
+		lda		@disableIntsFlag
+		eor		#1
+		sta		@disableIntsFlag
+		bne		@loop
+
 		lda		@deviceMode
-		beq		@done
 		sec
 		sbc		#$40
+		beq		@done
 		sta		@deviceMode
 		jmp		@loop
 
@@ -696,7 +711,8 @@ T263_2
 	plp
 	rts
 
-@deviceMode	!byte	0
+@deviceMode			!byte	0
+@disableIntsFlag	!byte	0
 
 ;------------------------------------------------------------------------------
 
