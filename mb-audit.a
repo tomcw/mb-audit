@@ -1363,7 +1363,7 @@ isIIc
 	bne		+
 
 	lda		VERSION3
-	cmp		VERSION3_IIC
+	cmp		#VERSION3_IIC
 +	rts
 
 ;------------------------------------------------------------------------------
