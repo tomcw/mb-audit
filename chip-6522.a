@@ -249,15 +249,19 @@ Check6522
 		and		#HAS_6522A
 		beq		@6522_B
 
-@next		inc		testNum				; test #00,03
+@next		inc		testNum				; test #00,04
 			jsr		Check6522Datalines1
 			bcs		@error
 
-			inc		testNum				; test #01,04
+			inc		testNum				; test #01,05
+			jsr		Check6522Datalines2
+			bcs		@error
+
+			inc		testNum				; test #02,06
 			jsr		Check6522Addrlines
 			bcs		@error
 
-			inc		testNum				; test #02,05
+			inc		testNum				; test #03,07
 			jsr		Check6522IRQ
 			bcs		@error
 
@@ -281,10 +285,6 @@ Check6522
 		jsr		Check6522ABDatalines1
 		bcs		@error
 
-		inc		testNum					; test #$11 (mixed test for 6522 A & B)
-		jsr		Check6522ABDatalines2
-		bcs		@error
-
 		jsr		incSoakTestNum
 		bne		@repeat
 
@@ -304,8 +304,7 @@ Check6522
 ;------------------
 
 Check6522Datalines1
-; Pre: zpTmp1 = slotInfo[slot] -- unused
-;	MBBaseL
+; Pre: MBBaseL
 ; Post: C=0(OK), C=1(NG)
 ;	On C=1: X=expected, A=actual
 ; Uses: zpTmp2, zpTmp3
@@ -397,8 +396,73 @@ Check6522Datalines1
 
 ;------------------
 
+Check6522Datalines2
+; Pre: MBBaseL
+; Post: C=0(OK), C=1(NG)
+;	On C=1: X=expected, A=actual
+; Uses: zpTmp2, zpTmp3
+
+	;
+	; Check r/w of all 8 data lines
+	;
+	; loop n = {0,1,...$ff}
+	;   6522:  DDRB = n
+	;   6522:  DDRA = ~n
+	;   check: DDRB = n
+	;   check: DDRA = ~n
+	;
+
+	jsr		resetSubTest					; subTest #0
+	ldy		#SY6522_DDRB
+
+	lda		#0
+	sta		zpTmp2
+
+@6522_w		lda		zpTmp2
+			sta		(MBBase),y
+			iny								; Y=SY6522_DDRA
+			eor		#$ff
+			sta		(MBBase),y
+
+@6522_r		dey								; Y=SY6522_DDRB
+			lda		zpTmp2
+			jsr		@check
+			bne		@6522_err
+			iny								; Y=SY6522_DDRA
+			lda		zpTmp2
+			eor		#$ff
+			jsr		@check
+			bne		@6522_err
+			dey								; Y=SY6522_DDRB
+
+@next	inc		zpTmp2
+		bne		@6522_w
+
+@6522_ok
+	clc
+	rts
+
+@6522_err
+; Pre: zpTmp3 = expected value
+;	A = actual value
+; Post: C=1(NG)
+	ldx		zpTmp3
+	sec
+	rts
+
+;
+
+@check
+	sta		zpTmp3						; expected
+	lda		(MBBase),y					; actual
+	cmp		zpTmp3
+	rts
+
+;------------------
+
 Check6522ABDatalines1
 ; Pre: zpTmp1 = slotInfo[slot]
+;	MBBaseL = 0
 ; Post: C=0(OK), C=1(NG)
 ;	On C=1: X=expected, A=actual
 ; Uses: zpTmp2, zpTmp3
@@ -521,93 +585,8 @@ Check6522ABDatalines1
 
 ;------------------
 
-Check6522ABDatalines2
-; Pre: zpTmp1 = slotInfo[slot]
-; Post: C=0(OK), C=1(NG)
-;	On C=1: X=expected, A=actual
-; Uses: zpTmp2, zpTmp3
-
-	;
-	; Check r/w of all 8 data lines
-	; . NB. Check 6522-A first, then 6522-B (ie. don't interleave - so that it works with a single 6522 mapped at both $00 and $80)
-	;
-	; loop n = {0,1,...$ff}
-	;   6522-A:  DDRB =   n
-	;   6522-A:  DDRA =   ~DDRB
-	;   check A: DDRB =   n
-	;   check A: DDRA =   ~DDRB
-	;   6522-B:  DDRB =   n
-	;   6522-B:  DDRA =   ~DDRB
-	;   check B: DDRB =   n
-	;   check B: DDRA =   ~DDRB
-	;
-
-	jsr		resetSubTest					; subTest #0 (for 6522-A)
-	ldy		#SY6522_A_BASE+SY6522_DDRB
-
-	lda		#0
-	sta		zpTmp2
-
-	lda		zpTmp1
-	and		#HAS_6522A
-	beq		@next6522
-
-@6522_w		lda		zpTmp2
-			sta		(MBBase),y
-			iny								; Y=SY6522_DDRA
-			eor		#$ff
-			sta		(MBBase),y
-
-@6522_r		dey								; Y=SY6522_DDRB
-			lda		zpTmp2
-			jsr		@check
-			bne		@6522_err
-			iny								; Y=SY6522_DDRA
-			lda		zpTmp2
-			eor		#$ff
-			jsr		@check
-			bne		@6522_err
-			dey								; Y=SY6522_DDRB
-
-@next	inc		zpTmp2
-		bne		@6522_w
-
-@next6522
-		tya
-		bmi		@6522_ok
-
-		ldy		#SY6522_B_BASE+SY6522_DDRB
-		jsr		incSubTestNum				; subTest #1 (for 6522-B)
-
-		lda		zpTmp1
-		and		#HAS_6522B
-		bne		@6522_w
-
-@6522_ok
-	clc
-	rts
-
-@6522_err
-; Pre: zpTmp3 = expected value
-;	A = actual value
-; Post: C=1(NG)
-	ldx		zpTmp3
-	sec
-	rts
-
-;
-
-@check
-	sta		zpTmp3						; expected
-	lda		(MBBase),y					; actual
-	cmp		zpTmp3
-	rts
-
-;------------------
-
 Check6522Addrlines
-; Pre: zpTmp1 = slotInfo[slot]
-;	MBBaseL
+; Pre: MBBaseL
 ; Post: C=0(OK), C=1(NG)
 ;	On C=1: X=expected, A=actual
 
@@ -683,8 +662,7 @@ Check6522Addrlines
 ;------------------
 
 Check6522IRQ
-; Pre: zpTmp1 = slotInfo[slot]
-;	MBBaseL
+; Pre: MBBaseL
 ; Post: C=0(OK), C=1(NG)
 ;	On C=1: X=expected, A=actual
 
