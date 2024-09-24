@@ -249,15 +249,15 @@ Check6522
 		and		#HAS_6522A
 		beq		@6522_B
 
-@next		inc		testNum					; test #00,03	
+@next		inc		testNum				; test #00,03
 			jsr		Check6522Datalines1
 			bcs		@error
 
-			inc		testNum					; test #01,04
+			inc		testNum				; test #01,04
 			jsr		Check6522Addrlines
 			bcs		@error
 
-			inc		testNum					; test #02,05
+			inc		testNum				; test #02,05
 			jsr		Check6522IRQ
 			bcs		@error
 
@@ -266,10 +266,10 @@ Check6522
 		beq		@done
 
 		lda		MBBaseL
-		bmi		+
+		bmi		@done
 		lda		#SY6522_B_BASE
 		sta		MBBaseL
-		bne		@next6522				; (bra)
+		bne		@next					; (bra)
 
 		;
 
@@ -661,8 +661,6 @@ Check6522Addrlines
 	sta		(MBBase),y					; IER=0
 
 ;@6522_ok
-	lda		#0
-	sta		MBBaseL
 	clc
 	rts
 
