@@ -238,13 +238,38 @@ Check6522
 
 @repeat	jsr		incSoakDisplayRept		; NB. "00:nn" - just inc's rept#nn
 
+		lda		zpTmp1
+		and		#HAS_6522A
+		beq		@6522_B
+			lda		#4
+			sta		testNum					; test #4
+			lda		#SY6522_A_BASE
+			sta		MBBaseL
+			jsr		Check6522Datalines1
+			bcs		@error
+@6522_B
+		lda		zpTmp1
+		and		#HAS_6522B
+		beq		@6522_after
+			lda		#5
+			sta		testNum					; test #5
+			lda		#SY6522_B_BASE
+			sta		MBBaseL
+			jsr		Check6522Datalines1
+			bcs		@error
+
+@6522_after
+		lda		#SY6522_A_BASE
+
+		;
+
 		lda		#0
-		sta		testNum					; test #00
-		jsr		Check6522Datalines
+		sta		testNum					; test #00 (mixed test for 6522 A & B)
+		jsr		Check6522ABDatalines1
 		bcs		@error
 
-		inc		testNum					; test #01
-		jsr		Check6522Datalines2
+		inc		testNum					; test #01 (mixed test for 6522 A & B)
+		jsr		Check6522ABDatalines2
 		bcs		@error
 
 		inc		testNum					; test #02
@@ -273,7 +298,101 @@ Check6522
 
 ;------------------
 
-Check6522Datalines
+Check6522Datalines1
+; Pre: zpTmp1 = slotInfo[slot] -- unused
+;	MBBaseL
+; Post: C=0(OK), C=1(NG)
+;	On C=1: X=expected, A=actual
+; Uses: zpTmp2, zpTmp3
+
+	;
+	; Check r/w of all 8 data lines
+	;
+	;                 subTest:
+	;                 #0   #1   #2   #3
+	; 6522:  DDRB =   $55  $69  $AA  $96
+	; 6522:  DDRA =   $AA  $96  $55  $69
+	; check: DDRB ==  $55  $69  $AA  $96
+	; check: DDRA ==  $AA  $96  $55  $69
+
+	jsr		resetSubTestMinus1
+
+	lda		#0
+	sta		zpTmp2
+
+@loop	jsr		incSubTestNum			; subTest #0,2
+
+		ldy		#SY6522_DDRB
+		lda		#$55
+		eor		zpTmp2
+		sta		(MBBase),y
+		lda		#$aa
+		eor		zpTmp2
+		iny								; Y=SY6522_DDRA
+		sta		(MBBase),y
+
+		dey								; Y=SY6522_DDRB
+		lda		#$55
+		eor		zpTmp2
+		jsr		@check
+		bne		@6522_err
+		lda		#$aa
+		eor		zpTmp2
+		iny								; Y=SY6522_DDRA
+		jsr		@check
+		bne		@6522_err
+
+		;
+
+		jsr		incSubTestNum			; subTest #1,3
+
+		dey								; Y=SY6522_DDRB
+		lda		#$69
+		eor		zpTmp2
+		sta		(MBBase),y
+		lda		#$96
+		eor		zpTmp2
+		iny								; Y=SY6522_DDRA
+		sta		(MBBase),y
+
+		dey								; Y=SY6522_DDRB
+		lda		#$69
+		eor		zpTmp2
+		jsr		@check
+		bne		@6522_err
+		lda		#$96
+		eor		zpTmp2
+		iny								; Y=SY6522_DDRA
+		jsr		@check
+		bne		@6522_err
+
+		lda		#$ff
+		eor		zpTmp2
+		sta		zpTmp2
+		bne		@loop
+
+	clc									; OK
+	rts
+
+@6522_err
+; Pre: zpTmp3 = expected value
+;	A = actual value
+; Post: C=1(NG)
+	ldx		zpTmp3
+	sec
+	rts
+
+;
+
+@check
+	sta		zpTmp3						; expected
+	lda		(MBBase),y					; actual
+	cmp		zpTmp3
+	rts
+
+;------------------
+
+Check6522ABDatalines1
 ; Pre: zpTmp1 = slotInfo[slot]
 ; Post: C=0(OK), C=1(NG)
 ;	On C=1: X=expected, A=actual
@@ -397,7 +516,7 @@ Check6522Datalines
 
 ;------------------
 
-Check6522Datalines2
+Check6522ABDatalines2
 ; Pre: zpTmp1 = slotInfo[slot]
 ; Post: C=0(OK), C=1(NG)
 ;	On C=1: X=expected, A=actual
@@ -2552,7 +2671,7 @@ T6522_12
 ; . test accessing 6522 at $90 (ie. not $80)
 ;
 
-	lda		MBBaseL					; must be $00 for Check6522Datalines (and because this test uses both 6522s)
+	lda		MBBaseL					; must be $00 for Check6522ABDatalines1 (and because this test uses both 6522s)
 	beq		+
 		clc
 		rts
@@ -2572,7 +2691,7 @@ T6522_12
 
 	lda		has6522
 	sta		zpTmp1
-	jsr		Check6522Datalines		; Post: C
+	jsr		Check6522ABDatalines1	; Post: C
 
 	pla
 	sta		MBBaseL

@@ -174,7 +174,7 @@ entrypoint
 	lda		HIRESOFF
 	jsr		HOME	; perhaps better to clear to $00? ie. for floating-bus reads in GetSlotInfo()
 
-	jsr		GetSlotInfo
+	jsr		GetSlotInfo				; Scan all slots (7->1) for 6522(s) by calling Detect6522()
 	bne		+
 		lda		#<msg_NoMB
 		ldx		#>msg_NoMB
