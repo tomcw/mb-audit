@@ -236,18 +236,29 @@ Check6522
 	jsr		initSoakDisplayTest0
 	jsr		incSoakDisplayTest
 
-@repeat	jsr		incSoakDisplayRept		; NB. "00:nn" - just inc's rept#nn
+	lda		#0
+	sta		@errorFlag
+	tax
+	jsr		SetError6522B				; Post: errorExpected6522B = errorActual6522B = 0
 
-		lda		#SY6522_A_BASE
-		sta		MBBaseL
+@repeat	jsr		incSoakDisplayRept		; NB. "00:nn" - just inc's rept#nn
 
 		lda		#$ff
 		sta		testNum
 
-;@6522_A
+		; Test 6522-B first, then 6522-A
+		; . so that error codes are in the right order for printing!
+
+;@6522_B
 		lda		zpTmp1
-		and		#HAS_6522A
-		beq		@6522_B
+		and		#HAS_6522B
+		beq		@6522_A
+
+		lda		#COMPONENT_6522B		; test component $60
+		sta		testComponentNum
+
+		lda		#SY6522_B_BASE
+		sta		MBBaseL
 
 @next		inc		testNum				; test #00,04
 			jsr		Check6522Datalines1
@@ -265,20 +276,32 @@ Check6522
 			jsr		Check6522IRQ
 			bcs		@error
 
-@6522_B	lda		zpTmp1
-		and		#HAS_6522B
+@6522_A	lda		zpTmp1
+		and		#HAS_6522A
 		beq		@done
 
 		lda		MBBaseL
-		bmi		@done
-		lda		#SY6522_B_BASE
+		bpl		@done
+
+		lda		#COMPONENT_6522A		; test component $50
+		sta		testComponentNum
+
+		lda		#SY6522_A_BASE
 		sta		MBBaseL
-		bne		@next					; (bra)
+		beq		@next					; (bra)
 
 		;
 
 @done	lda		#SY6522_A_BASE
 		sta		MBBaseL
+
+		; if we've had an error from either 6522 then bail
+		lda		@errorFlag
+		bne		@errorDone
+
+		; else: no 6522 errors, so finish with this mixed test
+		lda		#COMPONENT_6522+0		; test component $10
+		sta		testComponentNum
 
 		lda		#$10
 		sta		testNum					; test #$10 (mixed test for 6522 A & B)
@@ -296,10 +319,22 @@ Check6522
 ;	A = actual value
 ; Post: C=1(NG)
 
-	jsr		SetError
+	inc		@errorFlag
 
+	ldy		MBBaseL
+	bpl		+
+
+		; 6522-B failed, save error then test 6522-A
+		jsr		SetError6522B		; for 6522-B
+		jmp		@6522_A
+
++	jsr		SetError				; for 6522-A
+
+@errorDone
 	sec		; C=1(NG)
 	rts
+
+@errorFlag	!byte	0
 
 ;------------------
 

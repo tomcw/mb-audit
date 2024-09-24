@@ -216,9 +216,9 @@ entrypoint
 			sta		has6522
 			jsr		DisplaySlotUpdate
 			ldx		slotUnderTest
-			jsr		Check6522		; Basic 6522 checks
+			jsr		Check6522		; Basic 6522 checks - test both 6522s
 			bcc		++
-				jsr		PrintTestFailedErrBytes
+				jsr		PrintTestFailedErrBytesBoth6522s
 				jmp		exit
 ++			jsr		DetectSubunits	; AY8913 & speech chips
 			jsr		DisplayCardUpdate
@@ -1076,6 +1076,22 @@ SetError
 	sta		errorActual
 	rts
 
+;
+
+SetError6522B
+; Pre: X = expected; A = actual
+
+	stx		errorExpected6522B
+	sta		errorActual6522B
+
+	lda		testComponentNum
+	sta		testComponentNum6522B
+	lda		testNum
+	sta		testNum6522B
+	lda		subTestNum
+	sta		subTestNum6522B
+	rts
+
 ;------------------------------------------------------------------------------
 
 setWarning
@@ -1667,6 +1683,39 @@ PrintTestFailed		; No error bytes
 
 	;
 
+PrintTestFailedErrBytesBoth6522s
+	lda		errorExpected
+	cmp		errorActual
+	beq		+
+		jsr		PrintTestFailedErrBytes	; 6522-A's error msg
++
+		; src
+		lda		#<testComponentNum6522B
+		sta		zpTmpSrcL
+		lda		#>testComponentNum6522B
+		sta		zpTmpSrcH
+
+		; dst
+		lda		#<testComponentNum
+		sta		zpTmpPtr2L
+		lda		#>testComponentNum
+		sta		zpTmpPtr2H
+
+		ldy		#4
+-			lda		(zpTmpSrc),y
+			sta		(zpTmpPtr2),y
+			dey
+			bpl		-
+
+	lda		errorExpected
+	cmp		errorActual
+	bne		+
+	rts
+
++	; fall through for 6522-B's error msg...
+
+	;
+
 PrintTestFailedErrBytes
 	jsr		PrintLineTestFailed
 	; (next line)
@@ -1707,6 +1756,10 @@ PrintLineTestFailed
 	beq		@3		; 3
 	dex
 	beq		@4		; 4
+	dex
+	beq		@5		; 5
+	dex
+	beq		@6		; 6
 	lda		#<msg_componentCard
 	ldx		#>msg_componentCard
 	bne		+
@@ -1721,6 +1774,12 @@ PrintLineTestFailed
 	bne		+
 @4	lda		#<msg_componentSSI263
 	ldx		#>msg_componentSSI263
+	bne		+
+@5	lda		#<msg_component6522A
+	ldx		#>msg_component6522A
+	bne		+
+@6	lda		#<msg_component6522B
+	ldx		#>msg_component6522B
 +	jsr		Print
 ;	jsr		CROUT		; exactly 40 char, so no need for CR
 	rts
@@ -1814,6 +1873,8 @@ COMPONENT_6522		= $10
 COMPONENT_AY8913	= $20
 COMPONENT_SC01		= $30
 COMPONENT_SSI263	= $40
+COMPONENT_6522A		= $50
+COMPONENT_6522B		= $60
 
 !source "chip-6522.a"
 !source "chip-ay8913.a"
@@ -1871,6 +1932,13 @@ testNum			!byte 0
 subTestNum		!byte 0
 errorExpected	!byte 0
 errorActual		!byte 0
+
+; Keep error state of 6522-B, so that both 6522's can be tested
+testComponentNum6522B	!byte 0
+testNum6522B			!byte 0
+subTestNum6522B			!byte 0
+errorExpected6522B		!byte 0
+errorActual6522B		!byte 0
 
 totalTests		!byte 0,0,0
 soakTestNum		!byte 0
@@ -1964,6 +2032,8 @@ msg_component6522	!text " 6522 ",0
 msg_componentAY8913	!text "AY8913",0
 msg_componentSC01	!text " SC01 ",0
 msg_componentSSI263	!text "SSI263",0
+msg_component6522A	!text "6522-A",0
+msg_component6522B	!text "6522-B",0
 
 msg_testNum !text "Test: ",0
 
