@@ -283,6 +283,9 @@ Check6522
 		lda		MBBaseL
 		bpl		@done
 
+		lda		#$04
+		sta		testNum
+
 		lda		#COMPONENT_6522A		; test component $50
 		sta		testComponentNum
 
