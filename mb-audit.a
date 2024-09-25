@@ -23,9 +23,9 @@
 ;
 ;							$00						$80
 ; --------------------------------------------------------------------------
-; Sound I					6522-A/AY8913			n/a
-; Sound/Speech I			6522-A/SC01				6522-B/AY8913
-; Sound II					6522-A/AY8913			6522-B/AY8913
+; Sound I					6522-A/AY8910			n/a
+; Sound/Speech I			6522-A/SC01				6522-B/AY8910
+; Sound II					6522-A/AY8910			6522-B/AY8910
 ; Speech I					6522-A/SC01
 ; MB-C
 ; . MB-C & clones			6522-A/AY8913			6522-B/AY8913 +[1|2x SSI263]
@@ -174,7 +174,7 @@ entrypoint
 	lda		HIRESOFF
 	jsr		HOME	; perhaps better to clear to $00? ie. for floating-bus reads in GetSlotInfo()
 
-	jsr		GetSlotInfo
+	jsr		GetSlotInfo				; Scan all slots (7->1) for 6522(s) by calling Detect6522()
 	bne		+
 		lda		#<msg_NoMB
 		ldx		#>msg_NoMB
@@ -216,9 +216,9 @@ entrypoint
 			sta		has6522
 			jsr		DisplaySlotUpdate
 			ldx		slotUnderTest
-			jsr		Check6522		; Basic 6522 checks
+			jsr		Check6522		; Basic 6522 checks - test both 6522s
 			bcc		++
-				jsr		PrintTestFailedErrBytes
+				jsr		PrintTestFailedErrBytesBoth6522s
 				jmp		exit
 ++			jsr		DetectSubunits	; AY8913 & speech chips
 			jsr		DisplayCardUpdate
@@ -1072,8 +1072,26 @@ incTotalTests
 SetError
 ; Pre: X = expected; A = actual
 
+	inc		errorValid
 	stx		errorExpected
 	sta		errorActual
+	rts
+
+;
+
+SetError6522B
+; Pre: X = expected; A = actual
+
+	inc		errorValid6522B
+	stx		errorExpected6522B
+	sta		errorActual6522B
+
+	lda		testComponentNum
+	sta		testComponentNum6522B
+	lda		testNum
+	sta		testNum6522B
+	lda		subTestNum
+	sta		subTestNum6522B
 	rts
 
 ;------------------------------------------------------------------------------
@@ -1667,6 +1685,27 @@ PrintTestFailed		; No error bytes
 
 	;
 
+PrintTestFailedErrBytesBoth6522s
+	lda		errorValid
+	beq		+
+		jsr		PrintTestFailedErrBytes	; 6522-A's error msg
++
+
+	lda		errorValid6522B
+	bne		+
+	rts
++
+
+	ldy		#4
+-		lda		testComponentNum6522B,y
+		sta		testComponentNum,y
+		dey
+		bpl		-
+
+	; fall through for 6522-B's error msg...
+
+	;
+
 PrintTestFailedErrBytes
 	jsr		PrintLineTestFailed
 	; (next line)
@@ -1707,6 +1746,10 @@ PrintLineTestFailed
 	beq		@3		; 3
 	dex
 	beq		@4		; 4
+	dex
+	beq		@5		; 5
+	dex
+	beq		@6		; 6
 	lda		#<msg_componentCard
 	ldx		#>msg_componentCard
 	bne		+
@@ -1721,6 +1764,12 @@ PrintLineTestFailed
 	bne		+
 @4	lda		#<msg_componentSSI263
 	ldx		#>msg_componentSSI263
+	bne		+
+@5	lda		#<msg_component6522A
+	ldx		#>msg_component6522A
+	bne		+
+@6	lda		#<msg_component6522B
+	ldx		#>msg_component6522B
 +	jsr		Print
 ;	jsr		CROUT		; exactly 40 char, so no need for CR
 	rts
@@ -1814,6 +1863,8 @@ COMPONENT_6522		= $10
 COMPONENT_AY8913	= $20
 COMPONENT_SC01		= $30
 COMPONENT_SSI263	= $40
+COMPONENT_6522A		= $50
+COMPONENT_6522B		= $60
 
 !source "chip-6522.a"
 !source "chip-ay8913.a"
@@ -1865,12 +1916,22 @@ is65C02or65816	!byte 0
 
 slotUnderTest	!byte 0
 
+errorValid		!byte 0
+errorValid6522B	!byte 0
+
 ; NB. Keep these 5 vars consecutive so we can just do a copy to warningtestComponentNum,...,warningActual
 testComponentNum	!byte COMPONENT_CARD
 testNum			!byte 0
 subTestNum		!byte 0
 errorExpected	!byte 0
 errorActual		!byte 0
+
+; Keep error state of 6522-B, so that both 6522's can be tested
+testComponentNum6522B	!byte 0
+testNum6522B			!byte 0
+subTestNum6522B			!byte 0
+errorExpected6522B		!byte 0
+errorActual6522B		!byte 0
 
 totalTests		!byte 0,0,0
 soakTestNum		!byte 0
@@ -1928,7 +1989,7 @@ cfgDoSoakTest	!byte NO_SOAK_TEST
 
 ayRegs			!fill 16,0
 
-msg_mbaudit	!text "mb-audit v1.53,Tom Charlesworth, 2021,24",0xd
+msg_mbaudit	!text "mb-audit v1.54,Tom Charlesworth, 2021,24",0xd
 msg_mbauditEnd !text 0
 
 msg_cpu6502Detected !text "6502 detected",0xd
@@ -1964,6 +2025,8 @@ msg_component6522	!text " 6522 ",0
 msg_componentAY8913	!text "AY8913",0
 msg_componentSC01	!text " SC01 ",0
 msg_componentSSI263	!text "SSI263",0
+msg_component6522A	!text "6522-A",0
+msg_component6522B	!text "6522-B",0
 
 msg_testNum !text "Test: ",0
 
