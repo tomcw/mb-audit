@@ -237,9 +237,9 @@ Check6522
 	jsr		incSoakDisplayTest
 
 	lda		#0
+	sta		errorValid
+	sta		errorValid6522B
 	sta		@errorFlag
-	tax
-	jsr		SetError6522B				; Post: errorExpected6522B = errorActual6522B = 0
 
 @repeat	jsr		incSoakDisplayRept		; NB. "00:nn" - just inc's rept#nn
 
@@ -283,7 +283,7 @@ Check6522
 		lda		MBBaseL
 		bpl		@done
 
-		lda		#$04
+		lda		#$03
 		sta		testNum
 
 		lda		#COMPONENT_6522A		; test component $50

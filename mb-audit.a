@@ -23,9 +23,9 @@
 ;
 ;							$00						$80
 ; --------------------------------------------------------------------------
-; Sound I					6522-A/AY8913			n/a
-; Sound/Speech I			6522-A/SC01				6522-B/AY8913
-; Sound II					6522-A/AY8913			6522-B/AY8913
+; Sound I					6522-A/AY8910			n/a
+; Sound/Speech I			6522-A/SC01				6522-B/AY8910
+; Sound II					6522-A/AY8910			6522-B/AY8910
 ; Speech I					6522-A/SC01
 ; MB-C
 ; . MB-C & clones			6522-A/AY8913			6522-B/AY8913 +[1|2x SSI263]
@@ -1072,6 +1072,7 @@ incTotalTests
 SetError
 ; Pre: X = expected; A = actual
 
+	inc		errorValid
 	stx		errorExpected
 	sta		errorActual
 	rts
@@ -1081,6 +1082,7 @@ SetError
 SetError6522B
 ; Pre: X = expected; A = actual
 
+	inc		errorValid6522B
 	stx		errorExpected6522B
 	sta		errorActual6522B
 
@@ -1684,35 +1686,23 @@ PrintTestFailed		; No error bytes
 	;
 
 PrintTestFailedErrBytesBoth6522s
-	lda		errorExpected
-	cmp		errorActual
+	lda		errorValid
 	beq		+
 		jsr		PrintTestFailedErrBytes	; 6522-A's error msg
 +
-		; src
-		lda		#<testComponentNum6522B
-		sta		zpTmpSrcL
-		lda		#>testComponentNum6522B
-		sta		zpTmpSrcH
 
-		; dst
-		lda		#<testComponentNum
-		sta		zpTmpPtr2L
-		lda		#>testComponentNum
-		sta		zpTmpPtr2H
-
-		ldy		#4
--			lda		(zpTmpSrc),y
-			sta		(zpTmpPtr2),y
-			dey
-			bpl		-
-
-	lda		errorExpected
-	cmp		errorActual
+	lda		errorValid6522B
 	bne		+
 	rts
++
 
-+	; fall through for 6522-B's error msg...
+	ldy		#4
+-		lda		testComponentNum6522B,y
+		sta		testComponentNum,y
+		dey
+		bpl		-
+
+	; fall through for 6522-B's error msg...
 
 	;
 
@@ -1925,6 +1915,9 @@ is65816			!byte 0
 is65C02or65816	!byte 0
 
 slotUnderTest	!byte 0
+
+errorValid		!byte 0
+errorValid6522B	!byte 0
 
 ; NB. Keep these 5 vars consecutive so we can just do a copy to warningtestComponentNum,...,warningActual
 testComponentNum	!byte COMPONENT_CARD
