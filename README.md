@@ -45,7 +45,9 @@ mb-audit v0.1-beta, 2021
 ```
 
 Then for each card found:
-- Do basic 6522 hardware checks (address lines, data lines, and IRQ)
+- Do basic 6522 hardware checks (data lines, address lines and IRQ) for both 6522s:
+   - If 6522-B fails then continue and do tests for 6522-A.
+   - On failure: output the failure results for one or both 6522s (then stop).
 - Detect connected sub-units: SSI263s, SC-01, AY-3-8913s
 - Determine if the card is a Phasor, MEGA Audio, MB4C(*1), Echo+ or SD Music
   - (*1) Untested on real hardware
