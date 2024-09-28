@@ -589,8 +589,16 @@ DumpAYRegs
 
 	;
 
+	lda		#<msg_dollar00
+	ldx		#>msg_dollar00
+	jsr		Print					; "$00:"
+
 	lda		#SY6522_A_PH_BASE		; 6522 A (OK for Mockingboard too)
 	jsr		@ReadRegsAndOutputForAY12
+
+	lda		#<msg_dollar80
+	ldx		#>msg_dollar80
+	jsr		Print					; "$80:"
 
 	lda		#SY6522_B_BASE			; 6522 B
 	jsr		@ReadRegsAndOutputForAY12
@@ -622,8 +630,16 @@ DumpAYRegs
 -		jsr		AYReadRegs			; Post: zpTmpPtr2L,H = &ayRegs
 		jsr		@OutputAYRegs
 
+		lda		#<msg_ayCurr
+		ldx		#>msg_ayCurr
+		jsr		Print				; " (curr)",CR
+
 		jsr		AYSetAndReadRegs	; Post: zpTmpPtr2L,H = &ayRegs
 		jsr		@OutputAYRegs
+
+		lda		#<msg_ayIncr
+		ldx		#>msg_ayIncr
+		jsr		Print				; " (incr)",CR
 
 		asl		zpTmp4
 		bne		-			; $80: branch only to do Phasor's AY2
@@ -634,6 +650,9 @@ DumpAYRegs
 
 @OutputAYRegs
 ; Pre: zpTmpPtr2L,H = &ayRegs
+
+	lda		#4
+	sta		CH				; Start at H pos=4
 
 	lda		#0
 	sta		zpTmp2
@@ -646,7 +665,7 @@ DumpAYRegs
 		cmp		zpTmp2
 		bne		-
 
-	jmp		CROUT
+	rts
 
 ;------------------------------------------------------------------------------
 
@@ -2077,6 +2096,11 @@ msg_ToneKeysPhasorEnd !text 0
 
 msg_PressKeyToReboot !text "Press any key to reboot",0xd
 msg_PressKeyToRebootEnd !text 0
+
+msg_dollar00 !text "$00:",0
+msg_dollar80 !text "$80:",0
+msg_ayCurr !text " (curr)",0xd,0
+msg_ayIncr !text " (incr)",0xd,0
 
 msg_DumpAYRegs !text "AY registers dump:",0xd
 msg_DumpAYRegsEnd !text 0

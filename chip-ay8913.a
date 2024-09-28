@@ -520,12 +520,12 @@ TestAYDatalines
 @mb		jsr		AY_WriteRegValue
 		ldx		#AY_AFINE
 		jsr		AY_ReadRegValue
-		bne		+
+		bne		+				; (bra)
 
 @ph1	jsr		AY1_WriteRegValue
 		ldx		#AY_AFINE
 		jsr		AY1_ReadRegValue
-		bne		+
+		bne		+				; (bra)
 
 @ph2	jsr		AY2_WriteRegValue
 		ldx		#AY_AFINE
