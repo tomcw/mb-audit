@@ -47,6 +47,10 @@ HIRESON = $C057
 DHIRESON = $C05E
 DHIRESOFF = $C05F
 
+BUTTON0 = $C061
+BUTTON1 = $C062
+BUTTON2 = $C063
+
 ;--------------------------------------
 
 ; See Apple //c TRM, Appendix F, "Machine identification"
