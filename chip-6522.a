@@ -1407,6 +1407,12 @@ T6522_4
 +
 !cpu 6502
 
+	lda		#$00
+	ldy		zpTmp2					; y=SY6522_TIMER1|2H_COUNTER
+	ldx		#$8E					; AppleWin-GH#1333 ($8E looks like STX ABS16 - check AppleWin code pick correct opcode!)
+	sta		(MBBase),y
+	jsr		@readT1C				; subTest #A
+
 	clc								; C=0(OK)
 	rts
 
