@@ -31,6 +31,8 @@ DetectSSI263
 @loop	lda		#IER_CLR|IxR_SSI263
 		ldy		#SY6522_IER
 		sta		(MBBase),y				; disable CA1(Speech) IRQ
+		dey								; Y=IFR
+		sta		(MBBase),y				; clear CA1(Speech) IRQ flag
 
 		jsr		KickSSI263
 

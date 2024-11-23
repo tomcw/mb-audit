@@ -17,9 +17,11 @@ DetectSC01
 	and		#HAS_6522A
 	beq		+
 
-	lda		#IxR_VOTRAX
+	lda		#IER_CLR|IxR_VOTRAX
 	ldy		#SY6522_IER
 	sta		(MBBase),y				; disable CB1(Speech) IRQ
+	dey								; Y=IFR
+	sta		(MBBase),y				; clear CB1(Speech) IRQ flag
 
 	jsr		KickSC01
 
