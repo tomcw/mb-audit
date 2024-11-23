@@ -2947,9 +2947,6 @@ SetModeAndInactive
 	rts
 
 ;------------------------------------------------------------------------------
-DBG_SET_INACTIVE = 0	; no effect
-DBG_DESELECT_BOTH = 0	; no effect
-
 ; Phasor (native mode) routines:
 
 AY1_ReadReg
@@ -2988,26 +2985,10 @@ AY1_SelectReg
 ; Pre: Y = SY6522_ORA for chip A or B
 ;	A = reg#
 ; Post: Y = SY6522_ORA for chip A or B
-!if DBG_SET_INACTIVE {
-	dey		; Y = ORB (reg#0)
-	pha
-	lda		#AY_INACTIVE|AY_CS1
-	sta		(MBBase),y
-	pla
-	iny		; Y = ORA (reg#1)
-}
 	sta		(MBBase),y
 	lda		#AY_LATCH|AY_CS1
 	bne		+
 AY2_SelectReg
-!if DBG_SET_INACTIVE {
-	dey		; Y = ORB (reg#0)
-	pha
-	lda		#AY_INACTIVE|AY_CS2
-	sta		(MBBase),y
-	pla
-	iny		; Y = ORA (reg#1)
-}
 	sta		(MBBase),y
 	lda		#AY_LATCH|AY_CS2
 	bne		++
@@ -3018,26 +2999,10 @@ AY1_WriteReg
 ;	A = data
 ; Post: Y = SY6522_ORA for chip A or B
 ;	Z = 0
-!if DBG_SET_INACTIVE {
-	dey		; Y = ORB (reg#0)
-	pha
-	lda		#AY_INACTIVE|AY_CS1
-	sta		(MBBase),y
-	pla
-	iny		; Y = ORA (reg#1)
-}
 	sta		(MBBase),y
 	lda		#AY_WRITE|AY_CS1
 	bne		+
 AY2_WriteReg
-!if DBG_SET_INACTIVE {
-	dey		; Y = ORB (reg#0)
-	pha
-	lda		#AY_INACTIVE|AY_CS2
-	sta		(MBBase),y
-	pla
-	iny		; Y = ORA (reg#1)
-}
 	sta		(MBBase),y
 	lda		#AY_WRITE|AY_CS2
 	bne		++
@@ -3046,10 +3011,6 @@ AY2_WriteReg
 	sta		(MBBase),y
 	lda		#AY_INACTIVE|AY_CS1
 	sta		(MBBase),y
-!if DBG_DESELECT_BOTH {
-	lda		#AY_INACTIVE|AY_NO_CS	; de-select both chips
-	sta		(MBBase),y
-}
 	iny		; Y = ORA (reg#1)
 	rts
 
@@ -3057,10 +3018,6 @@ AY2_WriteReg
 	sta		(MBBase),y
 	lda		#AY_INACTIVE|AY_CS2
 	sta		(MBBase),y
-!if DBG_DESELECT_BOTH {
-	lda		#AY_INACTIVE|AY_NO_CS	; de-select both chips
-	sta		(MBBase),y
-}
 	iny		; Y = ORA (reg#1)
 	rts
 
