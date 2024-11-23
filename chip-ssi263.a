@@ -1621,7 +1621,7 @@ T263_8
 ;   . Switch to MB (1st) & E+ (2nd) modes, and check that 6522.IFR.IxR_SSI263 == 1(MB) or 0(E+)
 ; . KickSSI263 & wait for phoneme complete
 ;   . Switch to PH mode, and check that D7=1 & SSI263 IRQ asserted
-;   . In ISR, switch to MB (1st) & E+ (2nd) modes, which block the SSI263 IRQ to the 6502 (allowing the ISR to return)
+;   . In ISR, switch to MB (1st) & E+ (2nd) modes, which blocks the SSI263 IRQ to the 6502 (allowing the ISR to return)
 
 	lda		isPhasorCard
 	bne		+
@@ -2409,40 +2409,11 @@ SetupPhasorWithSSI263ForReset
 ;	. MBBaseL = SY6522_A_BASE
 ;
 
-	lda		#0
-	sta		phasorWithSSI263ResetFlag
-
-	lda		has6522
-	and		#HAS_BOTH_6522s
-	cmp		#HAS_BOTH_6522s
-	bne		+
-	lda		hasSSI263				; Need at least 1x SSI263
-	bne		++
-+		clc
+	jsr		SetupPhasorWithSSI263ForResetCommon
+	bcc		+
+		clc
 		rts							; OK (skipped)
-++
-
-	;
-
-	inc		phasorWithSSI263ResetFlag
-
-	lda		#COMPONENT_SSI263+3		; test component $43
-	sta		testComponentNum
-
-	jsr		resetSubTestMinus1
-	jsr		incTotalTests
-
-	lda		MBBaseH
-	sta		SSI263BaseH
-	ldx		#SSI_A_BASE				; Prefer SSI263-A ($Cs40)
-	ldy		#SY6522_B_BASE			; (uses 6522-B/$Cs80)
-	lda		hasSSI263
-	and		#HAS_SSI263A
-	bne		+
-		ldx		#SSI_B_BASE			; ...otherwise SSI263-B ($Cs20)
-		ldy		#SY6522_A_PH_BASE	; (uses 6522-A/$Cs10)
-+	stx		SSI263BaseL
-	sty		MBBaseL
++
 
 	lda		#<T263_Reset_ISR
 	ldx		#>T263_Reset_ISR
@@ -2478,7 +2449,7 @@ SetupPhasorWithSSI263ForReset
 	bne		@error					; Error (A=$01, X=$00)
 
 	clc
-	bcc		@done
+	bcc		@done					; (bra)
 
 @error		; Pre: A=actual, X=expected
 	jsr		SetError
@@ -2520,6 +2491,10 @@ SkipPhasorWithSSI263ForReset
 	bne		+
 		rts
 +
+
+	; Needed for SetupPhasorWithSSI263ForReset2
+	lda		#PH_MOCKINGBOARD
+	jsr		SetPhasorMode
 
 	jmp		DisableSSI263
 
@@ -2638,7 +2613,7 @@ T263_Reset_ISR
 
 	;------
 
-!if 1 {		; DEBUG: Indicate code is stuck in IRQ!
+!if 1 {		; DEBUG: Visually indicate code is stuck in IRQ!
 	lda		isrFlag
 	beq		+
 		inc		$400
@@ -2668,6 +2643,224 @@ T263_Reset_ISR
 
 	lda		$45		; for Apple II/II+
 	rti
+
+;------------------------------------------------------------------------------
+
+; Test that direct 6502 IRQ from SSI263 (in Phasor mode) gets de-asserted on CTRL+RESET.
+;
+; Setup:
+; . In Phasor native mode
+; . SSI263 A/!R (IRQ) is asserted
+; . 6502 get IRQ when I flag=0 (ie. CLI)
+;
+; CTRL+RESET
+;
+; 6522's are reset
+; AY's are reset
+; SSI263 is *not* reset
+; GAL is reset
+; - Switch back to MB mode
+; - SSI263 A/!R no longer connected to 6502 (instead routed to 6522)
+;
+; So this will de-assert IRQ to the 6502.
+;
+
+SetupPhasorWithSSI263ForReset2
+; Pre:
+; Post: C=0(OK), C=1(NG)
+
+	jsr		SetupPhasorWithSSI263ForResetCommon
+	bcc		+
+		clc
+		rts							; OK (skipped)
++
+
+	lda		#<T263_Reset2_ISR
+	ldx		#>T263_Reset2_ISR
+	jsr		SetIrqVector
+
+	;
+
+	lda		#$F0					; RATE[7:4]=$F (quickest), INF[3:0]=$0
+	ldy		#SSI_RATEINF
+	sta		(SSI263Base),y
+
+	jsr		KickSSI263_no_PCR
+
+	lda		#PH_PHASOR
+	jsr		SetPhasorMode
+
+	lda		#0
+	sta		isrFlag
+
+	; busy wait for phoneme to complete & Phasor's GAL to assert IRQ to 6502
+	; NB. ISR switches to PH_MOCKINGBOARD mode for GAL to de-assert IRQ
+	cli
+-		lda		isrFlag
+		beq		-
+	sei
+
+	; Switch back to PHASOR mode
+	lda		#PH_PHASOR
+	jsr		SetPhasorMode
+
+	; Check that GAL is again asserting direct IRQ
+	; NB. Again ISR switches back to PH_MOCKINGBOARD mode
+	jsr		PhasorCheckIRQ_1		; subTest #0
+	beq		@error					; Error (A=$00, X=$01)
+
+	; Setup for when CTRL+RESET is pressed
+	lda		#PH_PHASOR
+	jsr		SetPhasorMode
+
+	clc
+	bcc		@done					; (bra)
+
+@error		; Pre: A=actual, X=expected
+	jsr		SetError
+	lda		#PH_MOCKINGBOARD
+	jsr		SetPhasorMode
+	sec
+
+@done
+	php
+
+	lda		#SY6522_A_BASE
+	sta		MBBaseL
+
+	plp
+	rts
+
+;------------------
+
+TestPhasorWithSSI263AfterReset2
+; Pre:
+; Post: C=0(OK), C=1(NG)
+
+	lda		phasorWithSSI263ResetFlag
+	bne		+
+		rts
++
+
+	lda		#COMPONENT_SSI263+3		; test component $43
+	sta		testComponentNum
+
+	jsr		resetSubTestMinus1
+	jsr		incTotalTests
+
+	lda		#<T263_Reset2_ISR
+	ldx		#>T263_Reset2_ISR
+	jsr		SetIrqVector
+
+	;
+
+	; After CTRL+RESET, Phasor is in PH_MOCKINGBOARD mode
+	jsr		PhasorCheckIRQ_0		; subTest #0
+	bne		@error					; Error (A=$01, X=$00)
+
+	lda		#PH_PHASOR
+	jsr		SetPhasorMode
+
+	; Switch back to PH_PHASOR mode, and the SSI263 is still asserting A/!R, which Phasor's GAL converts to IRQ to 6502
+	jsr		PhasorCheckIRQ_0		; subTest #1
+	beq		@error					; Error (A=$00, X=$01)
+
+	clc
+	bcc		@done					; (bra)
+
+@error		; Pre: A=actual, X=expected
+	jsr		SetError
+	sec
+
+@done
+	php
+
+	lda		#PH_MOCKINGBOARD
+	jsr		SetPhasorMode
+
+	jsr		DisableSSI263
+
+	plp
+	rts
+
+;------------------
+
+T263_Reset2_ISR
+
+	txa
+	pha
+	tya
+	pha
+
+	;------
+
+!if 1 {		; DEBUG: Visually indicate code is stuck in IRQ!
+	lda		isrFlag
+	beq		+
+		inc		$400
++
+}
+
+	inc		isrFlag
+
+	; Disable the direct IRQ by switching out of Phasor native mode
+	lda		#PH_MOCKINGBOARD
+	jsr		SetPhasorMode
+
+	;------
+
+	pla
+	tay
+	pla
+	tax
+
+	lda		$45		; for Apple II/II+
+	rti
+
+;------------------------------------------------------------------------------
+
+SetupPhasorWithSSI263ForResetCommon
+; Pre: has6522, isPhasorCard; hasSSI263
+; Post: C=0(OK), C=1(NG)
+; . where NG = doesn't have 2x6522 or at least 1x SSI263
+
+	lda		#0
+	sta		phasorWithSSI263ResetFlag
+
+	lda		has6522
+	and		#HAS_BOTH_6522s
+	cmp		#HAS_BOTH_6522s
+	bne		+
+	lda		hasSSI263				; Need at least 1x SSI263
+	bne		++
++		sec
+		rts
+++
+
+	;
+
+	inc		phasorWithSSI263ResetFlag
+
+	lda		#COMPONENT_SSI263+3		; test component $43
+	sta		testComponentNum
+
+	jsr		resetSubTestMinus1
+	jsr		incTotalTests
+
+	lda		MBBaseH
+	sta		SSI263BaseH
+	ldx		#SSI_A_BASE				; Prefer SSI263-A ($Cs40)
+	ldy		#SY6522_B_BASE			; (uses 6522-B/$Cs80)
+	lda		hasSSI263
+	and		#HAS_SSI263A
+	bne		+
+		ldx		#SSI_B_BASE			; ...otherwise SSI263-B ($Cs20)
+		ldy		#SY6522_A_PH_BASE	; (uses 6522-A/$Cs10)
++	stx		SSI263BaseL
+	sty		MBBaseL
+
+	clc
+	rts
 
 ;------------------
 

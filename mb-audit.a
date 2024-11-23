@@ -331,33 +331,43 @@ TestReset
 
 	lda		#7
 	sta		slotUnderTest
-nextSlot
+TRMainLoop
 		ldx		slotUnderTest
 		lda		slotInfo,x
-		beq		+
-			and		#3
+		bne		+
+		jmp		TRNextSlot
++			and		#3
 			sta		has6522
 			jsr		SetMBBase				; pre: X=slot#
 			jsr		RestoreFromSlotInfo		; pre: X=slot#
+
+			;
+			; 1st CTRL+RESET test for this slot/card
+			;
+
 			lda		#$f0
 			sta		testNum					; test #f0
 			; Setup Phasor/SSI263 before 6522, as we don't want any 6522 timer ints active
 			jsr		SetupPhasorWithSSI263ForReset
-			bcs		TestResetError			; test component $43
-			jsr		Setup6522ForReset
-			bcs		TestResetError			; test component $13
-			jsr		DisplaySlotUpdate
+			bcc		+
+			jmp		TestResetError			; test component $43
++			jsr		Setup6522ForReset
+			bcc		+
+			jmp		TestResetError			; test component $13
++			jsr		DisplaySlotUpdate
 			jsr		PrintSlotNum
 			lda		#<msg_PressReset
 			ldx		#>msg_PressReset
 			jsr		Print
 			tsx
-			jsr		SetupResetVector	; NB. do this after Print, as we save the text screen vars
+			lda		#<TestResetLoop1
+			ldy		#>TestResetLoop1
+			jsr		SetupResetVector		; NB. do this after Print, as we save the text screen vars
 			lda		#0
 			sta		hasBeenReset
-TestResetLoop
+TestResetLoop1
 -				lda		hasBeenReset
-				bne		@test
+				bne		@test1
 				lda		KBD
 				bpl		-
 				bit		KBDSTRB
@@ -365,9 +375,9 @@ TestResetLoop
 				bne		-
 			; ESC pressed - so skip this card
 			jsr		TestResetSkip
-			jmp		+
+			jmp		TRNextSlot
 
-@test		; # of cycles to get here: [Enh//e] 0x1C941 (117,057 = 117ms)
+@test1		; # of cycles to get here: [Enh//e] 0x1C941 (117,057 = 117ms)
 			lda		#$f1
 			cmp		testNum
 			beq		TestResetStuckError
@@ -380,8 +390,58 @@ TestResetLoop
 
 			jsr		PrintWarning	; if there's a warning then print it. Reset warningCount to 0.
 
-+		dec		slotUnderTest
-		bne		nextSlot
+			;
+			; 2nd CTRL+RESET test for this slot/card
+			;
+
+			lda		isPhasorCard
+			beq		TRNextSlot
+
+			lda		#$f2
+			sta		testNum					; test #f2
+			jsr		SetupPhasorWithSSI263ForReset2
+			bcs		TestResetError			; test component $43
+			lda		#<msg_ResetMsg2
+			ldx		#>msg_ResetMsg2
+			jsr		Print
+			lda		#<msg_PressReset
+			ldx		#>msg_PressReset
+			jsr		Print
+			tsx
+			lda		#<TestResetLoop2
+			ldy		#>TestResetLoop2
+			jsr		SetupResetVector		; NB. do this after Print, as we save the text screen vars
+			lda		#0
+			sta		hasBeenReset
+TestResetLoop2
+-				lda		hasBeenReset
+				bne		@test2
+				lda		KBD
+				bpl		-
+				bit		KBDSTRB
+				cmp		#$80+27
+				bne		-
+			; ESC pressed - so skip this card
+			jsr		TestResetSkip
+			jmp		TRNextSlot
+
+@test2		; # of cycles to get here: [Enh//e] 0x1C941 (117,057 = 117ms)
+			lda		#$f3
+			cmp		testNum
+			beq		TestResetStuckError
+			sta		testNum					; test #f3
+			jsr		TestPhasorWithSSI263AfterReset2
+			bcs		TestResetError			; test component $43
+
+;			jsr		PrintWarning	; if there's a warning then print it. Reset warningCount to 0.
+
+			;
+
+TRNextSlot
+		dec		slotUnderTest
+		beq		+
+		jmp		TRMainLoop
++
 
 	lda		#<msg_ResetOK
 	ldx		#>msg_ResetOK
@@ -425,14 +485,19 @@ ResetVector
 	ldx		userlandSP
 	txs
 
-	jmp		TestResetLoop
+ResetVector_smc
+	jmp		TestResetLoop1
 
 ;------------------
 
 SetupResetVector
 ; Pre: X=SP
+;	Y:A = &TestResetLoop1 or &TestResetLoop2
 
 	stx		userlandSP
+
+	sta		ResetVector_smc+1
+	sty		ResetVector_smc+2
 
 	ldx		#0
 -		lda		CH,x
@@ -2060,6 +2125,10 @@ msg_OKEnd !text 0
 
 msg_PressReset !text "Press CTRL+RESET (ESC to skip)",0xd
 msg_PressResetEnd !text 0
+
+                    ;012345678
+msg_ResetMsg2 !text "    (Ph):"		; followed by msg_PressReset
+msg_ResetMsg2End !text 0
 
 msg_ResetOK !text "Reset tests passed",0xd
 msg_ResetOKEnd !text 0
