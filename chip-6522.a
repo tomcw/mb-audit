@@ -1042,7 +1042,7 @@ T6522_0
 ; Pre:
 ; Post: C=0(OK), C=1(NG)
 ;
-; Test#0 (AppleWin-GH#765)
+; Test#0 (AppleWin/GH#765)
 ; . Enable T1 & T2 IRQs in IER
 ; . Wait for T1 underflow
 ; . Check no T1|T2 ints are pending in IFR
@@ -1193,7 +1193,7 @@ T6522_2
 ; Pre:
 ; Post: C=0(OK), C=1(NG)
 ;
-; Test#2 (AppleWin-GH#567)
+; Test#2 (AppleWin/GH#567)
 ; . Setup T1C=0x0202 and ACR=free-running
 ; . Disable T1 IRQ, enable T2 IRQ
 ; . CLI
@@ -1409,7 +1409,7 @@ T6522_4
 
 	lda		#$00
 	ldy		zpTmp2					; y=SY6522_TIMER1|2H_COUNTER
-	ldx		#$8E					; AppleWin-GH#1333 ($8E looks like STX ABS16 - check AppleWin code pick correct opcode!)
+	ldx		#$8E					; AppleWin/GH#1333 ($8E looks like STX ABS16 - check AppleWin code pick correct opcode!)
 	sta		(MBBase),y
 	jsr		@readT1C				; subTest #A
 
@@ -1842,7 +1842,7 @@ T6522_8
 ;	MBBaseL = $00 or $80
 ; Post: C=0(OK), C=1(NG)
 ;
-; Test#7,8 (AppleWin-GH#833)
+; Test#7,8 (AppleWin/GH#833)
 ; . Test reading T1|2C_h when T1|2C_l underflows
 
 	jsr		resetSubTest
@@ -1887,7 +1887,7 @@ T6522_9
 ; Pre: MBBaseL = $00 or $80
 ; Post: C=0(OK), C=1(NG)
 ;
-; Test#9 (AppleWin-GH#833)
+; Test#9 (AppleWin/GH#833)
 ; . Test 4x that T1C in free-running mode (on underflow) gets reloaded with T1C_h=$01
 ; . Test 4x that T1C in one-shot mode (on underflow) gets reloaded with T1C_h=$02
 ; . Test 1x that T2C (on underflow) gets reloaded with T2C_h=$ff
@@ -2061,7 +2061,7 @@ T6522_B
 ; Pre: MBBaseL = $00 or $80
 ; Post: C=0(OK), C=1(NG)
 ;
-; Test#B (AppleWin-GH#652)
+; Test#B (AppleWin/GH#652)
 ; . Check T1's bounds on $ffff underflow, with big gaps between 6522 accesses
 ; EG.
 ;    ]CALL-151
@@ -2512,7 +2512,7 @@ T6522_11
 ;	MBBaseL = $00 or $80
 ; Post: C=0(OK), C=1(NG)
 ;
-; Test#10,11 (generalised from AppleWin-GH#496)
+; Test#10,11 (generalised from AppleWin/GH#496)
 ; Test polling IFR.Timer1 or IFR.Timer2 (NB. with Interrupt Enable off, ie. IER.Timer1=IER.Timer2=0)
 ; - relies on sub-opcode accuracy for reading IFR
 
@@ -3321,8 +3321,8 @@ T6522_17
 ;
 ; Test#17
 ; . Check T1 int re-triggers every opcode when T1L=$0000
-; Specifically check the case when T1C underflows and gets reloaded to $FFFF (GH#1175)
-; NB. 6522 connected to NMI isn't supported
+; Specifically check the case when T1C underflows and gets reloaded to $FFFF (AppleWin/GH#1175)
+; NB. 6522 connected to NMI isn't supported (mb-audit/GH#30)
 ;
 
 	lda		MBBaseL
@@ -3362,7 +3362,7 @@ T6522_17
 
 	; NB. T1 will immediately underflow on next opcode & IFR = TIMER1
 
-	; AppleWin (GH#1175): need an opcode to end on T1C=$FFFF (to check that AppleWin syncEvent gets reloaded with 0x00001, not 0x10001)
+	; AppleWin/GH#1175: need an opcode to end on T1C=$FFFF (to check that AppleWin syncEvent gets reloaded with 0x00001, not 0x10001)
 	lda		0						; 3cy - post: T1C=$FFFF
 	; lda zp: cycle 1: T1C: 0000->FFFF
 	; lda zp: cycle 2: T1C: FFFF->(underflow)->0000
@@ -3425,7 +3425,8 @@ T6522_18
 ; Post: C=0(OK), C=1(NG)
 ;
 ; Test#18
-; . Call multicard test #1, but for a single card using 6522s A & B (AppleWin-GH#1173)
+; . Call multicard test #1, but for a single card using 6522s A & B (AppleWin/GH#1173)
+; . NB. Since "Card #2" (ie. 6522-B here) doesn't generate ints, then OK to use a card where 6522-B is connected to NMI, eg. SMS Sound II. (mb-audit/GH#30)
 
 	; Require MB with 2x 6522s
 	lda		has6522
@@ -3793,9 +3794,10 @@ MCT6522_1
 ;	zpTmp1 = has6522 for card #2
 ; Post: C=0(OK), C=1(NG)
 ;
-; MultiCard Test#1 (AppleWin-GH#1173)
+; MultiCard Test#1 (AppleWin/GH#1173)
 ; . Setup card #1: T1C=T1L=0x0303, One-shot timer, IFR=IER=TIMER1 -- so *does* generate 6502 IRQ
 ; . Setup card #2: T1C=T1L=0x0000, Free-running timer, IFR=TIMER1, IER=0 -- so does *not* generate 6502 IRQ
+; . NB. Since test only uses 6522-A, then OK to use a card where 6522-B is connected to NMI, eg. SMS Sound II. (mb-audit/GH#30)
 ;
 
 	jsr		resetSubTest			; subTest #0
@@ -4319,7 +4321,7 @@ Test6522AfterReset
 	lda		isrFlag
 	bne		@error
 
-	; Test reading DDRB/IRB, checking that DDRB bits set as inputs read back as 1's (AppleWin-GH#1260)
+	; Test reading DDRB/IRB, checking that DDRB bits set as inputs read back as 1's (AppleWin/GH#1260)
 	jsr		incSubTestNum			; subTest #7
 	ldy		#SY6522_DDRB
 	lda		(MBBase),y
