@@ -3316,13 +3316,27 @@ T6522_16
 ;------------------------------------------------------------------------------
 
 T6522_17
-; Pre:
+; Pre: MBBaseL = $00 or $80
 ; Post: C=0(OK), C=1(NG)
 ;
 ; Test#17
 ; . Check T1 int re-triggers every opcode when T1L=$0000
 ; Specifically check the case when T1C underflows and gets reloaded to $FFFF (GH#1175)
+; NB. 6522 connected to NMI isn't supported
+;
 
+	lda		MBBaseL
+	bne		+
+		lda		isrNMIcount_A
+		beq		@doTest
+			clc
+			rts
++		lda		isrNMIcount_B
+		beq		@doTest
+			clc
+			rts
+
+@doTest
 	jsr		resetSubTest			; subTest #0
 	jsr		incTotalTests
 
@@ -4136,6 +4150,7 @@ Setup6522ForReset
 ; 6522 regs that persist across reset: T1L_l ,T1L_h
 ; 6522 state that is cleared on reset: IRQ, DDRB, DDRA, ACR, PCR, IFR, IER
 ; TODO: test 6522-B too; test that for Phasor card its mode reverts to PH_MOCKINGBOARD
+; TODO: account for 6522 connected to NMI
 ;
 
 	sei

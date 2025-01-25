@@ -24,9 +24,9 @@
 ;							$00						$80
 ; --------------------------------------------------------------------------
 ; Sound I					6522-A/AY8910			n/a
-; Sound/Speech I			6522-A/SC01				6522-B/AY8910
-; Sound II					6522-A/AY8910			6522-B/AY8910
-; Speech I					6522-A/SC01
+; Sound/Speech I			6522-A/SC01				6522-B/AY8910 (6522-B uses NMI)
+; Sound II					6522-A/AY8910			6522-B/AY8910 (6522-B uses NMI)
+; Speech I					6522-A/SC01				n/a
 ; MB-C
 ; . MB-C & clones			6522-A/AY8913			6522-B/AY8913 +[1|2x SSI263]
 ; . MB-C (AppleWin)			MB-C +SC01				MB-C +[1|2x SSI263]
