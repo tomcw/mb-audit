@@ -3359,7 +3359,7 @@ T6522_17
 	lda		#IxR_TIMER1
 
 @loop	and		(MBBase),y
-		beq		@error
+		beq		@error1
 		sta		(MBBase),y			; clear T1 int (and it'll immediately get set again)
 		inx
 		bpl		@loop
@@ -3392,7 +3392,7 @@ T6522_17
 	stx		subTestNum
 	jsr		WaitT1OneShotUnderflow	; cleanup
 	ldx		#IxR_TIMER1
-	beq		@error
+	bne		@error					; (bra)
 
 @error2
 	jsr		WaitT1OneShotUnderflow	; cleanup
