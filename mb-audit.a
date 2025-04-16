@@ -174,7 +174,11 @@ entrypoint
 	lda		HIRESOFF
 	jsr		HOME	; perhaps better to clear to $00? ie. for floating-bus reads in GetSlotInfo()
 
+	; //e+: ProDOS enables internal ROM at $C3xx; CTRL+RESET disables it for Enh//e!
+;;	sta		SW_SLOTC3ROM_ENA		; //e+: TODO: Detect a MB in slot3
+	sta		SW_SLOTC3ROM_DIS		; //e+: For now, don't support MB in slot 3
 	jsr		GetSlotInfo				; Scan all slots (7->1) for 6522(s) by calling Detect6522()
+	sta		SW_SLOTC3ROM_DIS		; //e+: Restore internal ROM's IRQ/BRK handler for Enh //e (and //c/IIgs?)
 	bne		+
 		lda		#<msg_NoMB
 		ldx		#>msg_NoMB
@@ -264,6 +268,7 @@ entrypoint
 
 	jsr		TestReset
 	bcs		@error
+	sta		SW_SLOTC3ROM_DIS		; //e+: Restore internal ROM's IRQ/BRK handler for Enh //e (and //c/IIgs?)
 
 	jsr		TestTones
 
