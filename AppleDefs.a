@@ -31,6 +31,9 @@ SW_SLOTC3ROM_DIS = $C00A
 SW_SLOTC3ROM_ENA = $C00B
 SW_SLOTC3ROM_R = $C017	; Active high
 
+RDLCBNK2 = $C011
+RDLCRAM = $C012
+
 ;--------------------------------------
 
 KBD = $C000

@@ -2551,6 +2551,10 @@ ayEna	; 6522 chip A at $Cn00(+$Cn10), 6522 chip B at $Cn80
 ;------------------
 
 PrintPhasorMode
+	php
+	sei
+	+ENA_INTERNAL_ROM
+
 	lda		CV
 	pha								; save CV
 	lda		#7						; line 7
@@ -2585,7 +2589,11 @@ PrintPhasorMode
 	sta		CH
 	pla								; restore CV
 	sta		CV
-	jmp		VTABZ
+	jsr		VTABZ
+
+	+ENA_LC_RAM
+	plp
+	rts
 
 ;------------------------------------------------------------------------------
 

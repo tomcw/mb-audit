@@ -80,6 +80,14 @@ MBBase = $fe		; Mockingboard base
 MBBaseL = MBBase
 MBBaseH = MBBase+1
 
+!macro ENA_INTERNAL_ROM {
+	bit		$c082
+}
+
+!macro ENA_LC_RAM {
+	bit		$c080
+}
+
 ;------------------------------------------------------------------------------
 
 !zone code
@@ -132,6 +140,11 @@ entrypoint
 	lda		PWREDUP
 	sta		savePWREDUP
 
+	lda		RDLCBNK2
+	sta		saveRDLCBNK2
+	lda		RDLCRAM
+	sta		saveRDLCRAM
+
 	;
 
 !cpu 65816
@@ -156,8 +169,14 @@ entrypoint
 	lda		VERSION
 	cmp		#VERSION_IIE_OR_HIGHER
 	bne		+
-		lda		#1
+		lda		#$80		; support `bit hasLowerCase`
 		sta		hasLowerCase
+
+		+ENA_INTERNAL_ROM
+		lda		$fffe
+		sta		saveIRQVectorL
+		lda		$ffff
+		sta		saveIRQVectorH
 +
 
 	jsr		isIIc
@@ -288,6 +307,28 @@ entrypoint
 	;
 
 exit
+
+	bit		hasLowerCase
+	bpl		+
+		; IIe or higher
+		bit		$c083
+		bit		$c083		; write enable
+
+		lda		saveIRQVectorL
+		sta		$fffe
+		lda		saveIRQVectorH
+		sta		$ffff
+
+		ldy		#0			; bank2
+		bit		saveRDLCBNK2
+		bmi		++
+		ldy		#8			; bank1
+
+++		sta		$C080,y		; RAM read, write protect
+		bit		saveRDLCRAM
+		bmi		+
+		sta		$C082,y		; ROM read, write protect
++
 
 	lda		saveRESETL
 	sta		SOFTEV_L
@@ -623,6 +664,7 @@ TestTones
 		jmp		@loop
 
 @done
+	+ENA_INTERNAL_ROM
 	ldy		saveZPTextVars
 	dey
 	tya
@@ -1094,6 +1136,14 @@ NmiReturn
 
 ;------------------------------------------------------------------------------
 
+IRQ_Handler
+; IIe+ uses LC for IRQ/BRK vector, which vectors here
+
+	sta		$45
+	jmp		(IRQL)
+
+;------------------------------------------------------------------------------
+
 SetIrqNmiVectors
 ; Pre: A(l),X(h) = ISR
 
@@ -1121,7 +1171,39 @@ SetIrqVector
 
 	sta		IRQL
 	stx		IRQH
-	rts
+
+	bit		hasLowerCase	; ie. IIe or higher
+	bpl		+
+
+	bit		RDLCBNK2		; status: bank1(b7=0) or bank2(b7=1)
+	php
+
+	+ENA_INTERNAL_ROM
+
+	lda		$fffa	; Get ROM's NMI_vector_L
+	pha
+	lda		$fffb	; Get ROM's NMI_vector_H
+
+	bit		$c083
+	bit		$c083	; write enable
+
+	sta		$fffb	; Set LC's NMI_vector_H
+	pla
+	sta		$fffa	; Set LC's NMI_vector_L
+
+	lda		#<IRQ_Handler
+	sta		$fffe
+	lda		#>IRQ_Handler
+	sta		$ffff
+
+	lda		IRQL
+
+	bit		$c080	; bank2: write protect
+	plp
+	bmi		+
+	bit		$c088	; bank1: write protect
+
++	rts
 
 ;------------------------------------------------------------------------------
 
@@ -1616,6 +1698,8 @@ DisplayCardUpdate
 	; Update cards
 	;
 
+	+ENA_INTERNAL_ROM
+
 	; x = (x-1)*3 + 1 = the position of the slot# (eg. '1')
 	ldx		slotUnderTest
 	dex
@@ -1770,6 +1854,7 @@ DisplayCardUpdate
 ;------------------------------------------------------------------------------
 
 PrintTestFailed		; No error bytes
+	+ENA_INTERNAL_ROM
 	jsr		PrintLineTestFailed
 	; (next line)
 	jmp		PrintLineTestNum
@@ -1777,6 +1862,7 @@ PrintTestFailed		; No error bytes
 	;
 
 PrintTestFailedErrBytesBoth6522s
+	+ENA_INTERNAL_ROM
 	lda		errorValid
 	beq		+
 		jsr		PrintTestFailedErrBytes	; 6522-A's error msg
@@ -1798,6 +1884,7 @@ PrintTestFailedErrBytesBoth6522s
 	;
 
 PrintTestFailedErrBytes
+	+ENA_INTERNAL_ROM
 	jsr		PrintLineTestFailed
 	; (next line)
 	jsr		PrintLineTestNum
@@ -1895,6 +1982,7 @@ PrintLineTestNum
 +	jmp		CROUT
 
 PrintSlotNum
+	+ENA_INTERNAL_ROM
 	lda		#<msg_Slot
 	ldx		#>msg_Slot
 	jsr		Print
@@ -1922,6 +2010,7 @@ slotNumInvert !byte $80
 Print
 ; Pre: A(l),X(h) = msg addr
 
+	+ENA_INTERNAL_ROM
 	sta		StringL
 	stx		StringH
 	ldy		#0
@@ -1954,13 +2043,9 @@ Print
 	pha
 	tya
 	pha
-
-	sta		SW_SLOTC3ROM_ENA	; //e+: Support MB in slot 3
 }
 
 !macro ISR_EXIT {
-	sta		SW_SLOTC3ROM_DIS	; //e+: Restore internal ROM's IRQ/BRK handler for Enh //e (and //c/IIgs?)
-
 	pla
 	tay
 	pla
@@ -2092,6 +2177,12 @@ saveNMI			!byte 0,0,0
 saveRESETL		!byte 0
 saveRESETH		!byte 0
 savePWREDUP		!byte 0
+
+saveRDLCBNK2	!byte 0
+saveRDLCRAM		!byte 0
+
+saveIRQVectorL	!byte 0
+saveIRQVectorH	!byte 0
 
 hasBeenReset	!byte 0
 userlandSP		!byte 0
