@@ -2597,12 +2597,7 @@ AYTonesISR
 ;	zpTmp1 (alias with StringH)
 ;
 
-	txa
-	pha
-	tya
-	pha
-
-	;------
+	+ISR_ENTRY
 
 	lda		isPhasorCard
 	beq		+
@@ -2725,15 +2720,7 @@ AYTonesISR
 
 @done
 
-	;------
-
-	pla
-	tay
-	pla
-	tax
-
-	lda		$45
-	rti
+	+ISR_EXIT
 
 ;------------------------------------------------------------------------------
 

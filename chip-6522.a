@@ -796,15 +796,10 @@ Check6522ISR
 ;	Apple ROM has stored A to $45 (not Apple //e ROM!)
 ;
 
+	+ISR_ENTRY
+
 	lda		zpTmp2
 	sta		isrCopyA
-
-	txa
-	pha
-	tya
-	pha
-
-	;------
 
 	; Cope with the case where a single 6522 is mapped to both $00 and $80
 	; . read IFR from both A & B, *before* clearing IFR
@@ -832,15 +827,7 @@ Check6522ISR
 
 	stx		MBBaseL						; restore MBBaseL
 
-	;------
-
-	pla
-	tay
-	pla
-	tax
-
-	lda		$45		; for Apple II/II+
-	rti
+	+ISR_EXIT
 
 ;------------------------------------------------------------------------------
 ; Notes:
@@ -2790,12 +2777,7 @@ T6522_13_ISR
 ;	Apple ROM has stored A to $45 (not Apple //e ROM!)
 ;
 
-	txa
-	pha
-	tya
-	pha
-
-	;------
+	+ISR_ENTRY
 
 	lda		#PH_MOCKINGBOARD
 	jsr		SetPhasorMode		; Map 6522-A back in
@@ -2805,16 +2787,7 @@ T6522_13_ISR
 	sta		(MBBase),y
 	sta		isrFlag
 
-	;------
-
-	pla
-	tay
-	pla
-	tax
-
-	lda		$45		; for Apple II/II+
-	rti
-
+	+ISR_EXIT
 
 ;------------------------------------------------------------------------------
 
@@ -3895,12 +3868,7 @@ T6522_MultiCard_ISR
 ;	Apple ROM has stored A to $45 (not Apple //e ROM!)
 ; Uses: zpTmp2
 
-	txa
-	pha
-	tya
-	pha
-
-	;------
+	+ISR_ENTRY
 
 	; Handles all combos of:
 	; . chipA: T1 or T2 ints
@@ -3987,15 +3955,7 @@ T6522_MultiCard_ISR
 		jsr		@checkInts
 
 @done
-	;------
-
-	pla
-	tay
-	pla
-	tax
-
-	lda		$45		; for Apple II/II+
-	rti
+	+ISR_EXIT
 
 ;
 
@@ -4105,12 +4065,7 @@ Test6522ISR
 ;	Apple ROM has stored A to $45 (not Apple //e ROM!)
 ;
 
-	txa
-	pha
-	tya
-	pha
-
-	;------
+	+ISR_ENTRY
 
 	ldy		#SY6522_IFR
 	lda		(MBBase),y
@@ -4128,15 +4083,7 @@ Test6522ISR
 
 	inc		isrCount
 
-	;------
-
-	pla
-	tay
-	pla
-	tax
-
-	lda		$45		; for Apple II/II+
-	rti
+	+ISR_EXIT
 
 ;------------------------------------------------------------------------------
 

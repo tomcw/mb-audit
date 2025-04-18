@@ -245,12 +245,7 @@ TestSC01ISR
 ;	SpeechData (incremented)
 ;
 
-	txa
-	pha
-	tya
-	pha
-
-	;------
+	+ISR_ENTRY
 
 	ldy		#SY6522_TIMER1H_COUNTER
 	lda		(MBTimer),y
@@ -336,13 +331,7 @@ TestSC01ISR
 +
 
 @exit
-	pla
-	tay
-	pla
-	tax
-
-	lda		$45		; for Apple II/II+
-	rti
+	+ISR_EXIT
 
 ;------------------------------------------------------------------------------
 

@@ -1130,12 +1130,7 @@ T263_5
 
 @T263_5_ISR
 
-	txa
-	pha
-	tya
-	pha
-
-	;------
+	+ISR_ENTRY
 
 	lda		@regNum
 	and		#7
@@ -1145,15 +1140,7 @@ T263_5
 	sta		(SSI263Base),y		; Try to clear IRQ by writing to an SSI263 reg
 	dec		@regNum
 
-	;------
-
-	pla
-	tay
-	pla
-	tax
-
-	lda		$45		; for Apple II/II+
-	rti
+	+ISR_EXIT
 
 ;------------------
 
@@ -1372,12 +1359,7 @@ T263_6
 
 @T263_6_ISR
 
-	txa
-	pha
-	tya
-	pha
-
-	;------
+	+ISR_ENTRY
 
 	inc		isrFlag
 
@@ -1403,15 +1385,7 @@ T263_6
 
 ++
 
-	;------
-
-	pla
-	tay
-	pla
-	tax
-
-	lda		$45		; for Apple II/II+
-	rti
+	+ISR_EXIT
 
 @skipWriteToReg1	!byte	0
 
@@ -1578,12 +1552,7 @@ T263_7
 
 @T263_7_ISR
 
-	txa
-	pha
-	tya
-	pha
-
-	;------
+	+ISR_ENTRY
 
 	inc		isrFlag
 
@@ -1601,15 +1570,7 @@ T263_7
 	ldy		#SSI_INFLECT			; reg1
 	sta		(SSI263Base),y			; De-assert IRQ by writing to SSI263 reg1
 
-	;------
-
-	pla
-	tay
-	pla
-	tax
-
-	lda		$45		; for Apple II/II+
-	rti
+	+ISR_EXIT
 
 ;------------------------------------------------------------------------------
 
@@ -1772,12 +1733,7 @@ T263_8
 
 @T263_8_ISR
 
-	txa
-	pha
-	tya
-	pha
-
-	;------
+	+ISR_ENTRY
 
 	inc		isrFlag
 
@@ -1807,15 +1763,7 @@ T263_8
 
 @isrDone
 
-	;------
-
-	pla
-	tay
-	pla
-	tax
-
-	lda		$45		; for Apple II/II+
-	rti
+	+ISR_EXIT
 
 @T263_8_mode
 	!byte	0
@@ -2005,12 +1953,7 @@ T263_9
 ; NB. This code is never called (except for the error case) - so never gets exercised & tested!
 @T263_9_ISR
 
-	txa
-	pha
-	tya
-	pha
-
-	;------
+	+ISR_ENTRY
 
 	inc		isrFlag
 
@@ -2018,15 +1961,7 @@ T263_9
 	ldy		#SSI_INFLECT			; reg1
 	sta		(SSI263Base),y			; De-assert IRQ by writing to SSI263 reg1
 
-	;------
-
-	pla
-	tay
-	pla
-	tax
-
-	lda		$45		; for Apple II/II+
-	rti
+	+ISR_EXIT
 
 ;------------------------------------------------------------------------------
 
@@ -2276,12 +2211,7 @@ TestSSI263ISR
 ;  b) false-read from SSI263.reg4 (6502-only) will clear any pending T1 IRQ
 ;
 
-	txa
-	pha
-	tya
-	pha
-
-	;------
+	+ISR_ENTRY
 
 	ldy		#SY6522_TIMER1H_COUNTER
 	lda		(MBTimer),y
@@ -2367,13 +2297,7 @@ TestSSI263ISR
 +
 
 @exit
-	pla
-	tay
-	pla
-	tax
-
-	lda		$45		; for Apple II/II+
-	rti
+	+ISR_EXIT
 
 ;------------------------------------------------------------------------------
 
@@ -2608,12 +2532,7 @@ TestPhasorWithSSI263AfterReset
 
 T263_Reset_ISR
 
-	txa
-	pha
-	tya
-	pha
-
-	;------
+	+ISR_ENTRY
 
 !if 1 {		; DEBUG: Visually indicate code is stuck in IRQ!
 	lda		isrFlag
@@ -2636,15 +2555,7 @@ T263_Reset_ISR
 	ldy		#SSI_INFLECT			; reg1
 	sta		(SSI263Base),y			; De-assert IRQ by writing to SSI263 reg1
 
-	;------
-
-	pla
-	tay
-	pla
-	tax
-
-	lda		$45		; for Apple II/II+
-	rti
+	+ISR_EXIT
 
 ;------------------------------------------------------------------------------
 
@@ -2789,12 +2700,7 @@ TestPhasorWithSSI263AfterReset2
 
 T263_Reset2_ISR
 
-	txa
-	pha
-	tya
-	pha
-
-	;------
+	+ISR_ENTRY
 
 !if 1 {		; DEBUG: Visually indicate code is stuck in IRQ!
 	lda		isrFlag
@@ -2809,15 +2715,7 @@ T263_Reset2_ISR
 	lda		#PH_MOCKINGBOARD
 	jsr		SetPhasorMode
 
-	;------
-
-	pla
-	tay
-	pla
-	tax
-
-	lda		$45		; for Apple II/II+
-	rti
+	+ISR_EXIT
 
 ;------------------------------------------------------------------------------
 

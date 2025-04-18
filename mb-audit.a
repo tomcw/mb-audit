@@ -268,7 +268,6 @@ entrypoint
 
 	jsr		TestReset
 	bcs		@error
-	sta		SW_SLOTC3ROM_DIS		; //e+: Restore internal ROM's IRQ/BRK handler for Enh //e (and //c/IIgs?)
 
 	jsr		TestTones
 
@@ -489,6 +488,8 @@ ResetVector
 
 	ldx		userlandSP
 	txs
+
+	sta		SW_SLOTC3ROM_DIS		; //e+: Restore internal ROM's IRQ/BRK handler for Enh //e (and //c/IIgs?)
 
 ResetVector_smc
 	jmp		TestResetLoop1
@@ -1116,6 +1117,7 @@ SetIrqNmiVectors
 
 SetIrqVector
 ; Pre: A(l),X(h) = ISR
+; Post: A(l),X(h) = ISR
 
 	sta		IRQL
 	stx		IRQH
@@ -1944,6 +1946,29 @@ Print
 		iny
 		bne 	@loop
 +	rts
+
+;------------------------------------------------------------------------------
+
+!macro ISR_ENTRY {
+	txa
+	pha
+	tya
+	pha
+
+	sta		SW_SLOTC3ROM_ENA	; //e+: Support MB in slot 3
+}
+
+!macro ISR_EXIT {
+	sta		SW_SLOTC3ROM_DIS	; //e+: Restore internal ROM's IRQ/BRK handler for Enh //e (and //c/IIgs?)
+
+	pla
+	tay
+	pla
+	tax
+
+	lda		$45		; for Apple II/II+
+	rti
+}
 
 ;------------------------------------------------------------------------------
 
