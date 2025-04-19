@@ -193,11 +193,9 @@ entrypoint
 	lda		HIRESOFF
 	jsr		HOME	; perhaps better to clear to $00? ie. for floating-bus reads in GetSlotInfo()
 
-	; //e+: ProDOS enables internal ROM at $C3xx; CTRL+RESET disables it for Enh//e!
-;;	sta		SW_SLOTC3ROM_ENA		; //e+: TODO: Detect a MB in slot3
-	sta		SW_SLOTC3ROM_DIS		; //e+: For now, don't support MB in slot 3
+	sta		SW_SLOTC3ROM_ENA		; //e+: Support a MB in slot3
+
 	jsr		GetSlotInfo				; Scan all slots (7->1) for 6522(s) by calling Detect6522()
-	sta		SW_SLOTC3ROM_DIS		; //e+: Restore internal ROM's IRQ/BRK handler for Enh //e (and //c/IIgs?)
 	bne		+
 		lda		#<msg_NoMB
 		ldx		#>msg_NoMB
@@ -311,6 +309,8 @@ exit
 	bit		hasLowerCase
 	bpl		+
 		; IIe or higher
+		sta		SW_SLOTC3ROM_DIS		; //e+: Restore internal ROM's 80-col firmware; and IRQ/BRK handler for Enh //e (and //c/IIgs?)
+
 		bit		$c083
 		bit		$c083		; write enable
 
@@ -530,7 +530,7 @@ ResetVector
 	ldx		userlandSP
 	txs
 
-	sta		SW_SLOTC3ROM_DIS		; //e+: Restore internal ROM's IRQ/BRK handler for Enh //e (and //c/IIgs?)
+	sta		SW_SLOTC3ROM_ENA		; //e+: Support a MB in slot3
 
 ResetVector_smc
 	jmp		TestResetLoop1
@@ -1138,6 +1138,10 @@ NmiReturn
 
 IRQ_Handler
 ; IIe+ uses LC for IRQ/BRK vector, which vectors here
+; . Every test that uses interrupts will init by calling SetIrqNmiVectors/SetIrqVector
+; . For IIe+, everytime SetIrqNmiVectors/SetIrqVector is called it re-enables IRQ vector in LC
+. . Prior to every ROM routine call, the macro ENA_INTERNAL_ROM is used
+; NB. For II/II+: these use ROM for IRQ/BRK vector and pre-ISR stuff
 
 	sta		$45
 	jmp		(IRQL)
