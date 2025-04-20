@@ -193,7 +193,7 @@ entrypoint
 	lda		HIRESOFF
 	jsr		HOME	; perhaps better to clear to $00? ie. for floating-bus reads in GetSlotInfo()
 
-	sta		SW_SLOTC3ROM_ENA		; //e+: Support a MB in slot3
+	sta		SW_SLOTC3ROM_ENA		; IIe/IIgs: Support a MB in slot3
 
 	jsr		GetSlotInfo				; Scan all slots (7->1) for 6522(s) by calling Detect6522()
 	bne		+
@@ -309,7 +309,7 @@ exit
 	bit		hasLowerCase
 	bpl		+
 		; IIe or higher
-		sta		SW_SLOTC3ROM_DIS		; //e+: Restore internal ROM's 80-col firmware; and IRQ/BRK handler for Enh //e (and //c/IIgs?)
+		sta		SW_SLOTC3ROM_DIS		; IIe/IIgs: Restore internal ROM's 80-col firmware; and IRQ/BRK handler for Enh //e (and IIgs?)
 
 		bit		$c083
 		bit		$c083		; write enable
@@ -530,7 +530,7 @@ ResetVector
 	ldx		userlandSP
 	txs
 
-	sta		SW_SLOTC3ROM_ENA		; //e+: Support a MB in slot3
+	sta		SW_SLOTC3ROM_ENA		; IIe/IIgs: Support a MB in slot3
 
 ResetVector_smc
 	jmp		TestResetLoop1
