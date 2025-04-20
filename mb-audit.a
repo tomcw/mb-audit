@@ -1139,12 +1139,30 @@ NmiReturn
 IRQ_Handler
 ; IIe+ uses LC for IRQ/BRK vector, which vectors here
 ; . Every test that uses interrupts will init by calling SetIrqNmiVectors/SetIrqVector
-; . For IIe+, everytime SetIrqNmiVectors/SetIrqVector is called it re-enables IRQ vector in LC
-. . Prior to every ROM routine call, the macro ENA_INTERNAL_ROM is used
+; . For IIe+, every time SetIrqNmiVectors/SetIrqVector is called it re-enables IRQ vector in LC
+; . Prior to every ROM routine call, the macro ENA_INTERNAL_ROM is used
 ; NB. For II/II+: these use ROM for IRQ/BRK vector and pre-ISR stuff
 
 	sta		$45
+	txa
+	pha
+	tsx
+	inx
+	inx				; point at P register
+	lda		$100,x
+	and		#$10	; test B flag
+	bne		+
+	pla
+	tax
 	jmp		(IRQL)
+
++	; BRK
+	pla
+	tax
+	lda		$45
+	sta		SW_SLOTC3ROM_DIS	; IIe/IIgs: Restore internal ROM's 80-col firmware; and IRQ/BRK handler for Enh //e (and IIgs?)
+	+ENA_INTERNAL_ROM
+	jmp		($fffe)
 
 ;------------------------------------------------------------------------------
 
