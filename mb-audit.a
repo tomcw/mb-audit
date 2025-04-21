@@ -173,9 +173,9 @@ entrypoint
 		sta		hasLowerCase
 
 		+ENA_INTERNAL_ROM
-		lda		$fffe
+		lda		_6502_INTERRUPT_VECTOR_L
 		sta		saveIRQVectorL
-		lda		$ffff
+		lda		_6502_INTERRUPT_VECTOR_H
 		sta		saveIRQVectorH
 +
 
@@ -315,9 +315,9 @@ exit
 		bit		$c083		; write enable
 
 		lda		saveIRQVectorL
-		sta		$fffe
+		sta		_6502_INTERRUPT_VECTOR_L
 		lda		saveIRQVectorH
-		sta		$ffff
+		sta		_6502_INTERRUPT_VECTOR_H
 
 		ldy		#0			; bank2
 		bit		saveRDLCBNK2
@@ -364,7 +364,7 @@ exit
 		lda		KBDSTRB
 		lda		SOFTEV_H
 		sta		PWREDUP		; force a system reboot (as PWREDUP = SOFTEV_H ^ $A5 to prevent reboot)
-		jmp		($fffc)		; reset vector
+		jmp		(_6502_RESET_VECTOR)		; reset vector
 +
 
 	rts
@@ -516,6 +516,8 @@ TestResetSkip
 ;------------------
 
 ResetVector
+; On RESET, for IIe+, ROM is switched in (LC switched out) and ROM's RESET vector is used.
+; NB. For II/II+, we aren't using LC (whose state is unaffected by RESET).
 
 	lda		#1
 	sta		hasBeenReset
@@ -1157,12 +1159,13 @@ IRQ_Handler
 	jmp		(IRQL)
 
 +	; BRK
+	; Just transfer to the ROM's BRK handler for any unexpected BRKs!
 	pla
 	tax
 	lda		$45
 	sta		SW_SLOTC3ROM_DIS	; IIe/IIgs: Restore internal ROM's 80-col firmware; and IRQ/BRK handler for Enh //e (and IIgs?)
 	+ENA_INTERNAL_ROM
-	jmp		($fffe)
+	jmp		(_6502_INTERRUPT_VECTOR)
 
 ;------------------------------------------------------------------------------
 
@@ -1194,29 +1197,31 @@ SetIrqVector
 	sta		IRQL
 	stx		IRQH
 
-	bit		hasLowerCase	; ie. IIe or higher
+	bit		hasLowerCase		; ie. IIe or higher
 	bpl		+
 
-	bit		RDLCBNK2		; status: bank1(b7=0) or bank2(b7=1)
+	bit		RDLCBNK2			; status: bank1(b7=0) or bank2(b7=1)
 	php
 
 	+ENA_INTERNAL_ROM
 
-	lda		$fffa	; Get ROM's NMI_vector_L
+	lda		_6502_NMI_VECTOR_L	; Get ROM's NMI_vector_L
 	pha
-	lda		$fffb	; Get ROM's NMI_vector_H
+	lda		_6502_NMI_VECTOR_H	; Get ROM's NMI_vector_H
 
 	bit		$c083
-	bit		$c083	; write enable
+	bit		$c083				; write enable
 
-	sta		$fffb	; Set LC's NMI_vector_H
+	sta		_6502_NMI_VECTOR_H	; Set LC's NMI_vector_H
 	pla
-	sta		$fffa	; Set LC's NMI_vector_L
+	sta		_6502_NMI_VECTOR_L	; Set LC's NMI_vector_L
+
+	; NB. Ignore LC's RESET vector, as a RESET will switch the ROM back in (for IIe+)
 
 	lda		#<IRQ_Handler
-	sta		$fffe
+	sta		_6502_INTERRUPT_VECTOR_L
 	lda		#>IRQ_Handler
-	sta		$ffff
+	sta		_6502_INTERRUPT_VECTOR_H
 
 	lda		IRQL
 
