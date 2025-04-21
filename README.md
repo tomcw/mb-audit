@@ -159,6 +159,8 @@ SC-01 tests
 Running on a IIgs
 - enter Control Panel, eg. using Ctrl-Cmd-Esc during boot
   - For MAME on Windows, reboot using Ctrl-L.Alt-F12, then Ctrl-L.Alt-Esc for Control Panel
+    - NB. Windows hooks Alt-Esc before MAME sees it, so (eg) re-define Esc as 'Kbd F3', then use Ctrl-Alt-F3
+  - For KEGS on Windows, Ctrl-F1-F3 for Control Panel
 - then from Control Panel, set:
   - System Speed=Normal
   - Slot-4=Your card
