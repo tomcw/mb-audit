@@ -80,12 +80,23 @@ MBBase = $fe		; Mockingboard base
 MBBaseL = MBBase
 MBBaseH = MBBase+1
 
+;------------------------------------------------------------------------------
+
 !macro ENA_INTERNAL_ROM {
 	bit		$c082
 }
 
-!macro ENA_LC_RAM {
+!macro ENA_LC2_RAM_READONLY {
 	bit		$c080
+}
+
+!macro ENA_LC1_RAM_READONLY {
+	bit		$c088
+}
+
+!macro ENA_LC2_RAM_READWRITE {
+	bit		$c083
+	bit		$c083
 }
 
 ;------------------------------------------------------------------------------
@@ -218,7 +229,7 @@ entrypoint
 			lda		#<msg_cpu65816Detected
 			ldx		#>msg_cpu65816Detected
 +	jsr		Print
-	jsr		CROUT					; Blank line between "65??? detected  Phasor mode=???" and test results
+	jsr		SafeCROUT				; Blank line between "65??? detected  Phasor mode=???" and test results
 
 	lda		#0
 	sta		totalTests+0
@@ -294,13 +305,13 @@ entrypoint
 	ldx		#>msg_OK
 	jsr		Print
 	ldx		totalTests+2
-	jsr		PRNTX
+	jsr		SafePRNTX
 	ldy		totalTests+1
 	ldx		totalTests+0
-	jsr		PRNTYX
+	jsr		SafePRNTYX
 	lda		#$80+')'
-	jsr		COUT
-	jsr		CROUT
+	jsr		SafeCOUT
+	jsr		SafeCROUT
 
 	;
 
@@ -311,8 +322,7 @@ exit
 		; IIe or higher
 		sta		SW_SLOTC3ROM_DIS		; IIe/IIgs: Restore internal ROM's 80-col firmware; and IRQ/BRK handler for Enh //e (and IIgs?)
 
-		bit		$c083
-		bit		$c083		; write enable
+		+ENA_LC2_RAM_READWRITE			; write enable
 
 		lda		saveIRQVectorL
 		sta		_6502_INTERRUPT_VECTOR_L
@@ -582,7 +592,7 @@ TestTones
 		dey
 		bpl		-
 
-	jsr		CROUT
+	jsr		SafeCROUT
 
 	;
 
@@ -622,7 +632,7 @@ TestTones
 				beq		@clreol
 
 				lda		#$80+','
-				jsr		COUT
+				jsr		SafeCOUT
 +
 
 			; "B:456"
@@ -646,12 +656,12 @@ TestTones
 				jsr		Print
 				jmp		+				; NB. No CR, since exactly 40 chars
 
-@clreol		jsr		CLREOL				; clear to EOL
+@clreol		jsr		SafeCLREOL			; clear to EOL
 
 +			; Use same line for all cards; and reset BASL for TestAYTones()
 			lda		saveZPTextVars
 			sta		CV					; update CV, as VTABZ doesn't
-			jsr		VTABZ
+			jsr		SafeVTABZ
 			lda		#0
 			sta		CH
 
@@ -666,15 +676,14 @@ TestTones
 		jmp		@loop
 
 @done
-	+ENA_INTERNAL_ROM
 	ldy		saveZPTextVars
 	dey
 	tya
 	sta		CV							; update CV, as VTABZ doesn't
-	jsr		VTABZ
-	jsr		CLREOL						; erase the "USE KEYS: ..." message
-	jsr		CROUT
-	jmp		CLREOL						; erase the "Slot #? :Tone: A:123..." message
+	jsr		SafeVTABZ
+	jsr		SafeCLREOL					; erase the "USE KEYS: ..." message
+	jsr		SafeCROUT
+	jmp		SafeCLREOL					; erase the "Slot #? :Tone: A:123..." message
 
 ;------------------------------------------------------------------------------
 
@@ -774,7 +783,7 @@ DumpAYRegs
 -		ldy		zpTmp2
 		lda		(zpTmpPtr2),y
 		tax
-		jsr		PRNTX
+		jsr		SafePRNTX
 		inc		zpTmp2
 		lda		#AY_PORTA
 		cmp		zpTmp2
@@ -1197,8 +1206,10 @@ SetIrqVector
 	sta		IRQL
 	stx		IRQH
 
-	bit		hasLowerCase		; ie. IIe or higher
+	bit		hasLowerCase
 	bpl		+
+
+	; IIe or higher
 
 	bit		RDLCBNK2			; status: bank1(b7=0) or bank2(b7=1)
 	php
@@ -1209,8 +1220,7 @@ SetIrqVector
 	pha
 	lda		_6502_NMI_VECTOR_H	; Get ROM's NMI_vector_H
 
-	bit		$c083
-	bit		$c083				; write enable
+	+ENA_LC2_RAM_READWRITE		; write enable
 
 	sta		_6502_NMI_VECTOR_H	; Set LC's NMI_vector_H
 	pla
@@ -1225,10 +1235,10 @@ SetIrqVector
 
 	lda		IRQL
 
-	bit		$c080	; bank2: write protect
+	+ENA_LC2_RAM_READONLY		; bank2 & write protect
 	plp
 	bmi		+
-	bit		$c088	; bank1: write protect
+	+ENA_LC1_RAM_READONLY		; bank1 & write protect
 
 +	rts
 
@@ -1359,9 +1369,9 @@ PrintWarning
 		ldx		warningExpected
 		jsr		PRNTX_SPACE
 		ldx		warningActual
-		jsr		PRNTX
+		jsr		SafePRNTX
 
-		jsr		CROUT
+		jsr		SafeCROUT
 
 +	lda		#0
 	sta		warningCount
@@ -1370,9 +1380,9 @@ PrintWarning
 ;
 
 PRNTX_SPACE
-	jsr		PRNTX
+	jsr		SafePRNTX
 	lda		#$80+' '
-	jmp		COUT
+	jmp		SafeCOUT
 
 ;------------------------------------------------------------------------------
 
@@ -1681,15 +1691,15 @@ Display
 		bne		-
 
 	lda		#$80+$0a
-	jsr		COUT
+	jsr		SafeCOUT
 	lda		#$80+$0a
-	jsr		COUT
+	jsr		SafeCOUT
 	lda		#$80+$0a
-	jsr		COUT
+	jsr		SafeCOUT
 	lda		#$80+$0a
-	jsr		COUT
+	jsr		SafeCOUT
 	lda		#$80+$0a
-	jsr		COUT
+	jsr		SafeCOUT
 
 	rts
 
@@ -1724,8 +1734,6 @@ DisplayCardUpdate
 	;
 	; Update cards
 	;
-
-	+ENA_INTERNAL_ROM
 
 	; x = (x-1)*3 + 1 = the position of the slot# (eg. '1')
 	ldx		slotUnderTest
@@ -1762,11 +1770,11 @@ DisplayCardUpdate
 				lda		#$80+'0'
 				bcc		++
 				adc		#0	; C=1, so this is "INC A"
-++				jsr		COUT
+++				jsr		SafeCOUT
 				pla
 				dec		zpTmp3
 				bne		-
-			jsr		CROUT
+			jsr		SafeCROUT
 			pla
 			tax
 
@@ -1881,7 +1889,6 @@ DisplayCardUpdate
 ;------------------------------------------------------------------------------
 
 PrintTestFailed		; No error bytes
-	+ENA_INTERNAL_ROM
 	jsr		PrintLineTestFailed
 	; (next line)
 	jmp		PrintLineTestNum
@@ -1889,7 +1896,6 @@ PrintTestFailed		; No error bytes
 	;
 
 PrintTestFailedErrBytesBoth6522s
-	+ENA_INTERNAL_ROM
 	lda		errorValid
 	beq		+
 		jsr		PrintTestFailedErrBytes	; 6522-A's error msg
@@ -1911,7 +1917,6 @@ PrintTestFailedErrBytesBoth6522s
 	;
 
 PrintTestFailedErrBytes
-	+ENA_INTERNAL_ROM
 	jsr		PrintLineTestFailed
 	; (next line)
 	jsr		PrintLineTestNum
@@ -1920,13 +1925,13 @@ PrintTestFailedErrBytes
 	ldx		#>msg_Expected
 	jsr		Print
 	ldx		errorExpected
-	jsr		PRNTX
+	jsr		SafePRNTX
 	lda		#<msg_Actual
 	ldx		#>msg_Actual
 	jsr		Print
 	ldx		errorActual
-	jsr		PRNTX
-	jmp		CROUT
+	jsr		SafePRNTX
+	jmp		SafeCROUT
 
 	;
 
@@ -1976,7 +1981,7 @@ PrintLineTestFailed
 @6	lda		#<msg_component6522B
 	ldx		#>msg_component6522B
 +	jsr		Print
-;	jsr		CROUT		; exactly 40 char, so no need for CR
+;	jsr		SafeCROUT		; exactly 40 char, so no need for CR
 	rts
 
 	;
@@ -1986,41 +1991,40 @@ PrintLineTestNum
 	ldx		#>msg_testNum
 	jsr		Print
 	ldx		testComponentNum
-	jsr		PRNTX
+	jsr		SafePRNTX
 	lda		#$80+':'
-	jsr		COUT
+	jsr		SafeCOUT
 	ldx		testNum
-	jsr		PRNTX
+	jsr		SafePRNTX
 	lda		#$80+':'
-	jsr		COUT
+	jsr		SafeCOUT
 	ldx		subTestNum
-	jsr		PRNTX
+	jsr		SafePRNTX
 
 	lda		cfgDoSoakTest
 	cmp		#SOAK_TEST
 	bne		+
 		lda		#$80+'('
-		jsr		COUT
+		jsr		SafeCOUT
 		ldx		soakTestNum
-		jsr		PRNTX
+		jsr		SafePRNTX
 		lda		#$80+')'
-		jsr		COUT
+		jsr		SafeCOUT
 
-+	jmp		CROUT
++	jmp		SafeCROUT
 
 PrintSlotNum
-	+ENA_INTERNAL_ROM
 	lda		#<msg_Slot
 	ldx		#>msg_Slot
 	jsr		Print
 	lda		slotUnderTest
 	ora		#$30
 	ora		slotNumInvert
-	jsr		COUT
+	jsr		SafeCOUT
 	lda		#$80+' '
-	jsr		COUT
+	jsr		SafeCOUT
 	lda		#$80+':'
-	jmp		COUT
+	jmp		SafeCOUT
 
 PrintSlotNumInvert
 	lda		#$00
@@ -2037,7 +2041,6 @@ slotNumInvert !byte $80
 Print
 ; Pre: A(l),X(h) = msg addr
 
-	+ENA_INTERNAL_ROM
 	sta		StringL
 	stx		StringH
 	ldy		#0
@@ -2056,12 +2059,49 @@ Print
 		tya
 		pha
 		txa
-		jsr		COUT
+		jsr		SafeCOUT
 		pla
 		tay
 		iny
 		bne 	@loop
 +	rts
+
+;------------------------------------------------------------------------------
+
+; Must do ENA_INTERNAL_ROM before calling any ROM routines, eg. PRNTYX, COUT
+; NB. Calling SetIrqNmiVectors()/SetIrqVector() does ENA_LC_RAM_RO
+
+SafePRNTYX
+	+ENA_INTERNAL_ROM
+	jmp		PRNTYX
+
+SafePRNTX
+	+ENA_INTERNAL_ROM
+	jmp		PRNTX
+
+;SafeVTAB
+;	+ENA_INTERNAL_ROM
+;	jmp		VTAB
+
+SafeVTABZ
+	+ENA_INTERNAL_ROM
+	jmp		VTABZ
+
+SafeCLREOL
+	+ENA_INTERNAL_ROM
+	jmp		CLREOL
+
+;SafeCLREOLZ
+;	+ENA_INTERNAL_ROM
+;	jmp		CLREOLZ
+
+SafeCROUT
+	+ENA_INTERNAL_ROM
+	jmp		CROUT
+
+SafeCOUT
+	+ENA_INTERNAL_ROM
+	jmp		COUT
 
 ;------------------------------------------------------------------------------
 

@@ -2559,13 +2559,13 @@ PrintPhasorMode
 	pha								; save CV
 	lda		#7						; line 7
 	sta		CV
-	jsr		VTABZ
+	jsr		SafeVTABZ
 	lda		#16
 	sta		CH
 
 	lda		isPhasorCard
 	bne		+
-		jsr		CLREOL
+		jsr		SafeCLREOL
 		jmp		@done
 +
 
@@ -2589,9 +2589,9 @@ PrintPhasorMode
 	sta		CH
 	pla								; restore CV
 	sta		CV
-	jsr		VTABZ
+	jsr		SafeVTABZ
 
-	+ENA_LC_RAM
+	+ENA_LC2_RAM_READONLY			; don't care which bank (restored on program exit)
 	plp
 	rts
 
