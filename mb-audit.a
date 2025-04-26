@@ -542,6 +542,16 @@ ResetVector
 	ldx		userlandSP
 	txs
 
+	; Save the entire 256-byte stack, as IIgs' 65816 sets SP=$1FF-3 on RESET, then the ROM overwrites our return address!
+	php
+	sei
+	ldx		#0
+-		lda		saveStack,x
+		sta		$100,x
+		inx
+		bne		-
+	plp
+
 	sta		SW_SLOTC3ROM_ENA		; IIe/IIgs: Support a MB in slot3
 
 ResetVector_smc
@@ -557,6 +567,15 @@ SetupResetVector
 
 	sta		ResetVector_smc+1
 	sty		ResetVector_smc+2
+
+	php
+	sei
+	ldx		#0
+-		lda		$100,x
+		sta		saveStack,x
+		inx
+		bne		-
+	plp
 
 	ldx		#0
 -		lda		CH,x
@@ -2142,6 +2161,8 @@ COMPONENT_6522B		= $60
 !zone data
 
 !align 15, 0, 0		; align to 16 bytes (pad with 0's)
+
+saveStack		!fill 256,0
 
 saveZP			!fill ($100-ZP_BASE),0
 
