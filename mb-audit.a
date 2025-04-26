@@ -82,6 +82,25 @@ MBBaseH = MBBase+1
 
 ;------------------------------------------------------------------------------
 
+!macro ENA_INTERNAL_ROM {
+	bit		$c082
+}
+
+!macro ENA_LC2_RAM_READONLY {
+	bit		$c080
+}
+
+!macro ENA_LC1_RAM_READONLY {
+	bit		$c088
+}
+
+!macro ENA_LC2_RAM_READWRITE {
+	bit		$c083
+	bit		$c083
+}
+
+;------------------------------------------------------------------------------
+
 !zone code
 
 entrypoint
@@ -132,6 +151,11 @@ entrypoint
 	lda		PWREDUP
 	sta		savePWREDUP
 
+	lda		RDLCBNK2
+	sta		saveRDLCBNK2
+	lda		RDLCRAM
+	sta		saveRDLCRAM
+
 	;
 
 !cpu 65816
@@ -156,8 +180,14 @@ entrypoint
 	lda		VERSION
 	cmp		#VERSION_IIE_OR_HIGHER
 	bne		+
-		lda		#1
+		lda		#$80		; support `bit hasLowerCase`
 		sta		hasLowerCase
+
+		+ENA_INTERNAL_ROM
+		lda		_6502_INTERRUPT_VECTOR_L
+		sta		saveIRQVectorL
+		lda		_6502_INTERRUPT_VECTOR_H
+		sta		saveIRQVectorH
 +
 
 	jsr		isIIc
@@ -174,11 +204,9 @@ entrypoint
 	lda		HIRESOFF
 	jsr		HOME	; perhaps better to clear to $00? ie. for floating-bus reads in GetSlotInfo()
 
-	; //e+: ProDOS enables internal ROM at $C3xx; CTRL+RESET disables it for Enh//e!
-;;	sta		SW_SLOTC3ROM_ENA		; //e+: TODO: Detect a MB in slot3
-	sta		SW_SLOTC3ROM_DIS		; //e+: For now, don't support MB in slot 3
+	sta		SW_SLOTC3ROM_ENA		; IIe/IIgs: Support a MB in slot3
+
 	jsr		GetSlotInfo				; Scan all slots (7->1) for 6522(s) by calling Detect6522()
-	sta		SW_SLOTC3ROM_DIS		; //e+: Restore internal ROM's IRQ/BRK handler for Enh //e (and //c/IIgs?)
 	bne		+
 		lda		#<msg_NoMB
 		ldx		#>msg_NoMB
@@ -201,7 +229,7 @@ entrypoint
 			lda		#<msg_cpu65816Detected
 			ldx		#>msg_cpu65816Detected
 +	jsr		Print
-	jsr		CROUT					; Blank line between "65??? detected  Phasor mode=???" and test results
+	jsr		SafeCROUT				; Blank line between "65??? detected  Phasor mode=???" and test results
 
 	lda		#0
 	sta		totalTests+0
@@ -277,17 +305,40 @@ entrypoint
 	ldx		#>msg_OK
 	jsr		Print
 	ldx		totalTests+2
-	jsr		PRNTX
+	jsr		SafePRNTX
 	ldy		totalTests+1
 	ldx		totalTests+0
-	jsr		PRNTYX
+	jsr		SafePRNTYX
 	lda		#$80+')'
-	jsr		COUT
-	jsr		CROUT
+	jsr		SafeCOUT
+	jsr		SafeCROUT
 
 	;
 
 exit
+
+	bit		hasLowerCase
+	bpl		+
+		; IIe or higher
+		sta		SW_SLOTC3ROM_DIS		; IIe/IIgs: Restore internal ROM's 80-col firmware; and IRQ/BRK handler for Enh //e (and IIgs?)
+
+		+ENA_LC2_RAM_READWRITE			; write enable
+
+		lda		saveIRQVectorL
+		sta		_6502_INTERRUPT_VECTOR_L
+		lda		saveIRQVectorH
+		sta		_6502_INTERRUPT_VECTOR_H
+
+		ldy		#0			; bank2
+		bit		saveRDLCBNK2
+		bmi		++
+		ldy		#8			; bank1
+
+++		sta		$C080,y		; RAM read, write protect
+		bit		saveRDLCRAM
+		bmi		+
+		sta		$C082,y		; ROM read, write protect
++
 
 	lda		saveRESETL
 	sta		SOFTEV_L
@@ -323,7 +374,7 @@ exit
 		lda		KBDSTRB
 		lda		SOFTEV_H
 		sta		PWREDUP		; force a system reboot (as PWREDUP = SOFTEV_H ^ $A5 to prevent reboot)
-		jmp		($fffc)		; reset vector
+		jmp		(_6502_RESET_VECTOR)		; reset vector
 +
 
 	rts
@@ -475,6 +526,8 @@ TestResetSkip
 ;------------------
 
 ResetVector
+; On RESET, for IIe+, ROM is switched in (LC switched out) and ROM's RESET vector is used.
+; NB. For II/II+, we aren't using LC (whose state is unaffected by RESET).
 
 	lda		#1
 	sta		hasBeenReset
@@ -489,7 +542,7 @@ ResetVector
 	ldx		userlandSP
 	txs
 
-	sta		SW_SLOTC3ROM_DIS		; //e+: Restore internal ROM's IRQ/BRK handler for Enh //e (and //c/IIgs?)
+	sta		SW_SLOTC3ROM_ENA		; IIe/IIgs: Support a MB in slot3
 
 ResetVector_smc
 	jmp		TestResetLoop1
@@ -539,7 +592,7 @@ TestTones
 		dey
 		bpl		-
 
-	jsr		CROUT
+	jsr		SafeCROUT
 
 	;
 
@@ -579,7 +632,7 @@ TestTones
 				beq		@clreol
 
 				lda		#$80+','
-				jsr		COUT
+				jsr		SafeCOUT
 +
 
 			; "B:456"
@@ -603,12 +656,12 @@ TestTones
 				jsr		Print
 				jmp		+				; NB. No CR, since exactly 40 chars
 
-@clreol		jsr		CLREOL				; clear to EOL
+@clreol		jsr		SafeCLREOL			; clear to EOL
 
 +			; Use same line for all cards; and reset BASL for TestAYTones()
 			lda		saveZPTextVars
 			sta		CV					; update CV, as VTABZ doesn't
-			jsr		VTABZ
+			jsr		SafeVTABZ
 			lda		#0
 			sta		CH
 
@@ -627,10 +680,10 @@ TestTones
 	dey
 	tya
 	sta		CV							; update CV, as VTABZ doesn't
-	jsr		VTABZ
-	jsr		CLREOL						; erase the "USE KEYS: ..." message
-	jsr		CROUT
-	jmp		CLREOL						; erase the "Slot #? :Tone: A:123..." message
+	jsr		SafeVTABZ
+	jsr		SafeCLREOL					; erase the "USE KEYS: ..." message
+	jsr		SafeCROUT
+	jmp		SafeCLREOL					; erase the "Slot #? :Tone: A:123..." message
 
 ;------------------------------------------------------------------------------
 
@@ -730,7 +783,7 @@ DumpAYRegs
 -		ldy		zpTmp2
 		lda		(zpTmpPtr2),y
 		tax
-		jsr		PRNTX
+		jsr		SafePRNTX
 		inc		zpTmp2
 		lda		#AY_PORTA
 		cmp		zpTmp2
@@ -1094,6 +1147,37 @@ NmiReturn
 
 ;------------------------------------------------------------------------------
 
+IRQ_Handler
+; IIe+ uses LC for IRQ/BRK vector, which vectors here
+; . Every test that uses interrupts will init by calling SetIrqNmiVectors/SetIrqVector
+; . For IIe+, every time SetIrqNmiVectors/SetIrqVector is called it re-enables IRQ vector in LC
+; . Prior to every ROM routine call, the macro ENA_INTERNAL_ROM is used
+; NB. For II/II+: these use ROM for IRQ/BRK vector and pre-ISR stuff
+
+	sta		$45
+	txa
+	pha
+	tsx
+	inx
+	inx				; point at P register
+	lda		$100,x
+	and		#$10	; test B flag
+	bne		+
+	pla
+	tax
+	jmp		(IRQL)
+
++	; BRK
+	; Just transfer to the ROM's BRK handler for any unexpected BRKs!
+	pla
+	tax
+	lda		$45
+	sta		SW_SLOTC3ROM_DIS	; IIe/IIgs: Restore internal ROM's 80-col firmware; and IRQ/BRK handler for Enh //e (and IIgs?)
+	+ENA_INTERNAL_ROM
+	jmp		(_6502_INTERRUPT_VECTOR)
+
+;------------------------------------------------------------------------------
+
 SetIrqNmiVectors
 ; Pre: A(l),X(h) = ISR
 
@@ -1121,7 +1205,42 @@ SetIrqVector
 
 	sta		IRQL
 	stx		IRQH
-	rts
+
+	bit		hasLowerCase
+	bpl		+
+
+	; IIe or higher
+
+	bit		RDLCBNK2			; status: bank1(b7=0) or bank2(b7=1)
+	php
+
+	+ENA_INTERNAL_ROM
+
+	lda		_6502_NMI_VECTOR_L	; Get ROM's NMI_vector_L
+	pha
+	lda		_6502_NMI_VECTOR_H	; Get ROM's NMI_vector_H
+
+	+ENA_LC2_RAM_READWRITE		; write enable
+
+	sta		_6502_NMI_VECTOR_H	; Set LC's NMI_vector_H
+	pla
+	sta		_6502_NMI_VECTOR_L	; Set LC's NMI_vector_L
+
+	; NB. Ignore LC's RESET vector, as a RESET will switch the ROM back in (for IIe+)
+
+	lda		#<IRQ_Handler
+	sta		_6502_INTERRUPT_VECTOR_L
+	lda		#>IRQ_Handler
+	sta		_6502_INTERRUPT_VECTOR_H
+
+	lda		IRQL
+
+	+ENA_LC2_RAM_READONLY		; bank2 & write protect
+	plp
+	bmi		+
+	+ENA_LC1_RAM_READONLY		; bank1 & write protect
+
++	rts
 
 ;------------------------------------------------------------------------------
 
@@ -1250,9 +1369,9 @@ PrintWarning
 		ldx		warningExpected
 		jsr		PRNTX_SPACE
 		ldx		warningActual
-		jsr		PRNTX
+		jsr		SafePRNTX
 
-		jsr		CROUT
+		jsr		SafeCROUT
 
 +	lda		#0
 	sta		warningCount
@@ -1261,9 +1380,9 @@ PrintWarning
 ;
 
 PRNTX_SPACE
-	jsr		PRNTX
+	jsr		SafePRNTX
 	lda		#$80+' '
-	jmp		COUT
+	jmp		SafeCOUT
 
 ;------------------------------------------------------------------------------
 
@@ -1572,15 +1691,15 @@ Display
 		bne		-
 
 	lda		#$80+$0a
-	jsr		COUT
+	jsr		SafeCOUT
 	lda		#$80+$0a
-	jsr		COUT
+	jsr		SafeCOUT
 	lda		#$80+$0a
-	jsr		COUT
+	jsr		SafeCOUT
 	lda		#$80+$0a
-	jsr		COUT
+	jsr		SafeCOUT
 	lda		#$80+$0a
-	jsr		COUT
+	jsr		SafeCOUT
 
 	rts
 
@@ -1651,11 +1770,11 @@ DisplayCardUpdate
 				lda		#$80+'0'
 				bcc		++
 				adc		#0	; C=1, so this is "INC A"
-++				jsr		COUT
+++				jsr		SafeCOUT
 				pla
 				dec		zpTmp3
 				bne		-
-			jsr		CROUT
+			jsr		SafeCROUT
 			pla
 			tax
 
@@ -1806,13 +1925,13 @@ PrintTestFailedErrBytes
 	ldx		#>msg_Expected
 	jsr		Print
 	ldx		errorExpected
-	jsr		PRNTX
+	jsr		SafePRNTX
 	lda		#<msg_Actual
 	ldx		#>msg_Actual
 	jsr		Print
 	ldx		errorActual
-	jsr		PRNTX
-	jmp		CROUT
+	jsr		SafePRNTX
+	jmp		SafeCROUT
 
 	;
 
@@ -1862,7 +1981,7 @@ PrintLineTestFailed
 @6	lda		#<msg_component6522B
 	ldx		#>msg_component6522B
 +	jsr		Print
-;	jsr		CROUT		; exactly 40 char, so no need for CR
+;	jsr		SafeCROUT		; exactly 40 char, so no need for CR
 	rts
 
 	;
@@ -1872,27 +1991,27 @@ PrintLineTestNum
 	ldx		#>msg_testNum
 	jsr		Print
 	ldx		testComponentNum
-	jsr		PRNTX
+	jsr		SafePRNTX
 	lda		#$80+':'
-	jsr		COUT
+	jsr		SafeCOUT
 	ldx		testNum
-	jsr		PRNTX
+	jsr		SafePRNTX
 	lda		#$80+':'
-	jsr		COUT
+	jsr		SafeCOUT
 	ldx		subTestNum
-	jsr		PRNTX
+	jsr		SafePRNTX
 
 	lda		cfgDoSoakTest
 	cmp		#SOAK_TEST
 	bne		+
 		lda		#$80+'('
-		jsr		COUT
+		jsr		SafeCOUT
 		ldx		soakTestNum
-		jsr		PRNTX
+		jsr		SafePRNTX
 		lda		#$80+')'
-		jsr		COUT
+		jsr		SafeCOUT
 
-+	jmp		CROUT
++	jmp		SafeCROUT
 
 PrintSlotNum
 	lda		#<msg_Slot
@@ -1901,11 +2020,11 @@ PrintSlotNum
 	lda		slotUnderTest
 	ora		#$30
 	ora		slotNumInvert
-	jsr		COUT
+	jsr		SafeCOUT
 	lda		#$80+' '
-	jsr		COUT
+	jsr		SafeCOUT
 	lda		#$80+':'
-	jmp		COUT
+	jmp		SafeCOUT
 
 PrintSlotNumInvert
 	lda		#$00
@@ -1940,7 +2059,7 @@ Print
 		tya
 		pha
 		txa
-		jsr		COUT
+		jsr		SafeCOUT
 		pla
 		tay
 		iny
@@ -1949,18 +2068,51 @@ Print
 
 ;------------------------------------------------------------------------------
 
+; Must do ENA_INTERNAL_ROM before calling any ROM routines, eg. PRNTYX, COUT
+; NB. Calling SetIrqNmiVectors()/SetIrqVector() does ENA_LC_RAM_RO
+
+SafePRNTYX
+	+ENA_INTERNAL_ROM
+	jmp		PRNTYX
+
+SafePRNTX
+	+ENA_INTERNAL_ROM
+	jmp		PRNTX
+
+;SafeVTAB
+;	+ENA_INTERNAL_ROM
+;	jmp		VTAB
+
+SafeVTABZ
+	+ENA_INTERNAL_ROM
+	jmp		VTABZ
+
+SafeCLREOL
+	+ENA_INTERNAL_ROM
+	jmp		CLREOL
+
+;SafeCLREOLZ
+;	+ENA_INTERNAL_ROM
+;	jmp		CLREOLZ
+
+SafeCROUT
+	+ENA_INTERNAL_ROM
+	jmp		CROUT
+
+SafeCOUT
+	+ENA_INTERNAL_ROM
+	jmp		COUT
+
+;------------------------------------------------------------------------------
+
 !macro ISR_ENTRY {
 	txa
 	pha
 	tya
 	pha
-
-	sta		SW_SLOTC3ROM_ENA	; //e+: Support MB in slot 3
 }
 
 !macro ISR_EXIT {
-	sta		SW_SLOTC3ROM_DIS	; //e+: Restore internal ROM's IRQ/BRK handler for Enh //e (and //c/IIgs?)
-
 	pla
 	tay
 	pla
@@ -2092,6 +2244,12 @@ saveNMI			!byte 0,0,0
 saveRESETL		!byte 0
 saveRESETH		!byte 0
 savePWREDUP		!byte 0
+
+saveRDLCBNK2	!byte 0
+saveRDLCRAM		!byte 0
+
+saveIRQVectorL	!byte 0
+saveIRQVectorH	!byte 0
 
 hasBeenReset	!byte 0
 userlandSP		!byte 0

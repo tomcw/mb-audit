@@ -37,7 +37,7 @@ DetectSSI263
 		jsr		KickSSI263
 
 		lda		#$FF
-		jsr		WAIT					; delay for 0x28882 (166018) cycles / ~163ms
+		jsr		myWAIT					; delay for 0x28882 (166018) cycles / ~163ms
 
 		ldy		#SY6522_IFR
 		lda		#IxR_SSI263				; check CA1(Speech) IRQ
@@ -360,7 +360,7 @@ T263_0
 
 	ldy		#10	; delay of 0x19555F cycles = 1,660,255 = ~1.623s
 -		lda		#$ff
-		jsr		WAIT
+		jsr		myWAIT
 		lda		doingSpeech			; done? (or user hit ESC to skip)
 		beq		@ok
 		dey
@@ -649,7 +649,7 @@ T263_2
 		bne		@errorNot00			; Check D7==0
 
 		lda		#$E0				; NB. pick a big enough delay for AppleWin emulator!
-		jsr		WAIT				; WAIT($E0) = delay for 0x1F5DD (128,477) cycles / ~128ms
+		jsr		myWAIT				; WAIT($E0) = delay for 0x1F5DD (128,477) cycles / ~128ms
 
 		jsr		incSubTestNum		; subTest #1,4,7,A,D,10
 		ldy		#SSI_DURPHON
@@ -856,7 +856,7 @@ T263_4
 	jsr		KickSSI263
 
 	lda		#$FF
-	jsr		WAIT					; delay for 0x28882 (166018) cycles / ~163ms
+	jsr		myWAIT					; delay for 0x28882 (166018) cycles / ~163ms
 
 	jsr		incSubTestNum			; subTest #2
 

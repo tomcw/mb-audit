@@ -2551,17 +2551,21 @@ ayEna	; 6522 chip A at $Cn00(+$Cn10), 6522 chip B at $Cn80
 ;------------------
 
 PrintPhasorMode
+	php
+	sei
+	+ENA_INTERNAL_ROM
+
 	lda		CV
 	pha								; save CV
 	lda		#7						; line 7
 	sta		CV
-	jsr		VTABZ
+	jsr		SafeVTABZ
 	lda		#16
 	sta		CH
 
 	lda		isPhasorCard
 	bne		+
-		jsr		CLREOL
+		jsr		SafeCLREOL
 		jmp		@done
 +
 
@@ -2585,7 +2589,11 @@ PrintPhasorMode
 	sta		CH
 	pla								; restore CV
 	sta		CV
-	jmp		VTABZ
+	jsr		SafeVTABZ
+
+	+ENA_LC2_RAM_READONLY			; don't care which bank (restored on program exit)
+	plp
+	rts
 
 ;------------------------------------------------------------------------------
 

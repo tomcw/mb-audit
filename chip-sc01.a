@@ -26,7 +26,7 @@ DetectSC01
 	jsr		KickSC01
 
 	lda		#$FF
-	jsr		WAIT					; delay for 0x28882 (166018) cycles / ~163ms
+	jsr		myWAIT					; delay for 0x28882 (166018) cycles / ~163ms
 
 	ldy		#SY6522_IFR
 	lda		#IxR_VOTRAX				; check CB1(Speech) IRQ
@@ -189,7 +189,7 @@ TSC01_0
 
 	ldy		#0						; delay of ~41.95s
 -		lda		#$ff
-		jsr		WAIT
+		jsr		myWAIT
 		lda		doingSpeechSC01		; done? (or user hit ESC to skip)
 		beq		@ok
 		dey
