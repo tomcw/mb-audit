@@ -33,7 +33,8 @@ DetectSC01
 	and		(MBBase),y
 	beq		++
 		sta		(MBBase),y			; clear CB1(Speech) IRQ
-		inc		hasSC01
+		lda		#SI3_SC01_MASK
+		sta		hasSC01
 
 ++	jsr		DisableSC01
 

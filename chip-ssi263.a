@@ -1,5 +1,5 @@
 ;license:MIT
-;(c) 2021-2024 by Tom Charlesworth
+;(c) 2021-2025 by Tom Charlesworth
 ;
 ; SSI263 related
 ;
@@ -21,7 +21,7 @@ DetectSSI263
 	lda		#SY6522_B_BASE
 	sta		MBBaseL
 
-	lda		#1
+	lda		#SSI263A_UNKNOWN
 	sta		zpTmp2						; mask
 
 	lda		zpTmp1
@@ -57,7 +57,8 @@ DetectSSI263
 		sta		SSI263BaseL
 		lda		#SY6522_A_BASE
 		sta		MBBaseL
-		asl		zpTmp2					; mask<<1
+		asl		zpTmp2
+		asl		zpTmp2					; mask<<2 (2 bits per SSI263 type)
 
 		lda		zpTmp1
 		and		#HAS_6522A				; SSI263B is connected to 1st 6522
@@ -180,13 +181,12 @@ PlaySSI263
 ; SSI263Base  $Cs40     $Cs20
 ; MBBase      $Cs80     $Cs10    input for CA1 (SSI263 interrupt) to this 6522's IFR
 ; MBTimer     $Cs80     $Cs80    same for both SSI263s
-; hasSSI263   .b0       .b1
+; hasSSI263   .b1:0     .b3:2
 ;
 
 TestSSI263
 ; Pre: has6522, hasSSI263
 ; Post: C=0(OK), C=1(NG)
-; Uses: zpTmp1 (so don't use in sub-funcs)
 
 	lda		has6522
 	and		#HAS_6522A
@@ -225,9 +225,8 @@ TestSSI263
 	sta		MBTimerL				; NB. MBTimer is used for TIMER1, and so doesn't change for SSI263A/SSI263B
 
 	lda		hasSSI263
-	lsr
-	sta		zpTmp1
-	bcc		@nextSSI263
+	and		#HAS_SSI263A
+	beq		@nextSSI263
 
 @loop	inc		testNum				; test #00, $80
 		jsr		T263_0
@@ -274,6 +273,9 @@ TestSSI263
 		bcs		@error
 
 @nextSSI263
+		bit		testNum
+		bmi		+
+
 		lda		#$7f
 		sta		testNum
 
@@ -282,10 +284,11 @@ TestSSI263
 		lda		#SY6522_A_PH_BASE
 		sta		MBBaseL
 
-		lsr		zpTmp1
-		bcs		@loop
+		lda		hasSSI263
+		and		#HAS_SSI263B
+		bne		@loop
 
-	lda		#SY6522_A_BASE
++	lda		#SY6522_A_BASE
 	sta		MBBaseL
 
 	clc
@@ -2301,6 +2304,16 @@ TestSSI263ISR
 
 ;------------------------------------------------------------------------------
 
+; SSI263P vs SSI263AP
+; -------------------
+; SSI263P: has a reset bug
+; . !RST doesn't set Power Down (PD), so phoneme keeps playing
+; . if DR1:0 != b#00, then ints can be re-enabled on RST - exploited by the 1st test
+; . if IRQ asserted, then direct IRQ (in native mode) will still be assert after RESET - ie. the 2nd test
+;
+; SSI263AP: has the reset bug fixed
+;
+
 ; Test edge-case where RESET will enable SSI263 ints: (GH#175)
 ; . SetPhasorMode(PH_PHASOR)
 ; . DisableSSI263()
@@ -2441,6 +2454,9 @@ TestPhasorWithSSI263AfterReset
 		rts
 +
 
+	lda		#SSI263A_UNKNOWN
+	sta		ssi263Type
+
 	lda		#COMPONENT_SSI263+3		; test component $43
 	sta		testComponentNum
 
@@ -2486,12 +2502,23 @@ TestPhasorWithSSI263AfterReset
 		; Pre: One-shot timer set by RESET
 		jsr		WaitPhonemeDoneCA1WithTimeout
 		beq		+
-			; timeout - only expected for a MB-C
+			; timeout - expected for a MB-C and Phasor w/SSI263AP
 			ldy		isPhasorCard
 			beq		@exitOK			; MB-C
-			bne		@error			; Phasor (in either native or MB mode) (A=$00, X=$02)
 
-+		lda		#IER_SET|IxR_SSI263
+			; Phasor (in either native or MB mode) - must be SSI263A_AP
+			lda		#SSI263A_AP
+			sta		ssi263Type
+			bne		@exitOK			; (bra)
+
++		; got IRQ - only expected for Phasor w/SSI253P
+		ldy		isPhasorCard
+		beq		@error				; MB-C, Error (A=$02, X=$02)
+
+		; Phasor (in either native or MB mode) - must be SSI263A_P
+		lda		#SSI263A_P
+		sta		ssi263Type
+		lda		#IER_SET|IxR_SSI263
 		ldy		#SY6522_IER
 		sta		(MBBase),y			; Enable SSI263 IRQ
 
@@ -2500,6 +2527,7 @@ TestPhasorWithSSI263AfterReset
 	beq		@error					; Error (A=$00, X=$01)
 
 @exitOK
+	jsr		SetSSI263Type
 	clc
 	bcc		@done					; (bra)
 
@@ -2527,6 +2555,35 @@ TestPhasorWithSSI263AfterReset
 
 	plp
 	rts
+
+;------------------
+
+SetSSI263Type
+; Pre: MBBaseL = $80 => socket-A or $10 => socket-B
+; Post: hasSSI263 updated
+
+	lda		ssi263Type				; A = SSI263A_P or SSI263A_AP
+
+	ldx		#!(SSI263A_MASK)
+	bit		MBBaseL
+	bmi		+
+		; socket-B
+		ldx		#!(SSI263B_MASK)
+		asl
+		asl
++	pha
+
+	txa
+	and		hasSSI263
+	sta		hasSSI263
+
+	pla
+	ora		hasSSI263
+	sta		hasSSI263
+
+	rts
+
+ssi263Type	!byte SSI263A_UNKNOWN
 
 ;------------------
 
@@ -2674,10 +2731,23 @@ TestPhasorWithSSI263AfterReset2
 	lda		#PH_PHASOR
 	jsr		SetPhasorMode
 
-	; Switch back to PH_PHASOR mode, and the SSI263 is still asserting A/!R, which Phasor's GAL converts to IRQ to 6502
-	jsr		PhasorCheckIRQ_0		; subTest #1
-	beq		@error					; Error (A=$00, X=$01)
+	lda		ssi263Type
+	cmp		#SSI263A_AP
+	beq		@ssi263ap
 
+;ssi263p
+		; Switch back to PH_PHASOR mode, and the SSI263P is still asserting A/!R, which Phasor's GAL converts to IRQ to 6502
+		jsr		PhasorCheckIRQ_0	; subTest #1
+		beq		@error				; Error (A=$00, X=$00)
+		bne		@ok					; (bra)
+
+@ssi263ap
+		; Switch back to PH_PHASOR mode, and the SSI263AP has de-asserted A/!R
+		jsr		incSubTestNum
+		jsr		PhasorCheckIRQ_0	; subTest #2
+		bne		@error				; Error (A=$01, X=$00)
+
+@ok
 	clc
 	bcc		@done					; (bra)
 

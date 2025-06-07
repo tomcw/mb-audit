@@ -1,5 +1,5 @@
 ;license:MIT
-;(c) 2021-2024 by Tom Charlesworth
+;(c) 2021-2025 by Tom Charlesworth
 ;
 ; mb-audit:
 ; . Verify real h/w is operating correctly, eg. inter-component (addr/data line, IRQ)
@@ -443,7 +443,8 @@ TestResetLoop1
 			jsr		TestPhasorWithSSI263AfterReset
 			bcs		TestResetError			; test component $43
 
-			jsr		PrintWarning	; if there's a warning then print it. Reset warningCount to 0.
+			jsr		PrintWarning			; if there's a warning then print it. Reset warningCount to 0.
+			jsr		DisplayCardUpdate		; for Phasor card: will have identified SSI263 type
 
 			;
 			; 2nd CTRL+RESET test for this slot/card
@@ -1003,8 +1004,6 @@ DetectSubunits
 	;
 
 	lda		hasSC01
-	asl
-	asl
 	ora		hasSSI263
 	sta		slotInfo3,x
 
@@ -1033,8 +1032,6 @@ RestoreFromSlotInfo
 	and		#SI3_SSI263_MASK
 	sta		hasSSI263
 	pla
-	lsr
-	lsr
 	and		#SI3_SC01_MASK
 	sta		hasSC01
 
@@ -1888,21 +1885,46 @@ DisplayCardUpdate
 		sta		LINE4+SLOT1POS+1,x
 
 @SSI263
-	lda		hasSSI263			; bitmap
+	ldy		hasSSI263			; bitmap
 	beq		@done
-		lsr
-		bcc		+
-			pha
-			lda		#$80+'A'	; $Cn40
-			sta		LINE4+SLOT1POS-1,x
-			pla
-+		lsr
-		bcc		+
-			lda		#$80+'B'	; $Cn20
-			sta		LINE4+SLOT1POS,x
+		tya
+		and		#HAS_SSI263A	; $Cn40
+		beq		+
+			dex
+			jsr		@OutputSSI263Type
+			inx
++		tya
+		and		#HAS_SSI263B	; $Cn20
+		beq		+
+			lsr
+			lsr
+			jsr		@OutputSSI263Type
 +
 
 @done
+	rts
+
+;------------------
+
+@OutputSSI263Type
+; Pre: A = type: %01,%10,%11
+;                 U   P   Q
+;	X = x-pos
+;
+
+	cmp		#SSI263A_UNKNOWN
+	bne		@P
+		lda		#$80+'U'
+		bne		+				; (bra)
+
+@P	cmp		#SSI263A_P
+	bne		@AP
+		lda		#$80+'P'
+		bne		+				; (bra)
+
+@AP		lda		#$80+'Q'
+
++	sta		LINE4+SLOT1POS,x
 	rts
 
 ;------------------------------------------------------------------------------
@@ -2187,10 +2209,20 @@ CARDTYPE_UNKNOWN	= 0
 slotInfo2		!fill 8,0	; slot[0..7]
 
 ; slotInfo3 bitfield:
-SI3_SC01_MASK		= %00000100
-SI3_SSI263_MASK		= %00000011
-HAS_SSI263B			= %00000010		; $Cs20
-HAS_SSI263A			= %00000001		; $Cs40
+SI3_SC01_MASK		= %00010000
+SI3_SSI263_MASK		= %00001111
+HAS_SSI263B			= %00001100		; $Cs20
+SSI263B_MASK		= %00001100
+SSI263B_NONE		= %00000000
+SSI263B_UNKNOWN		= %00000100
+SSI263B_P			= %00001000
+SSI263B_AP			= %00001100
+HAS_SSI263A			= %00000011		; $Cs40
+SSI263A_MASK		= %00000011
+SSI263A_NONE		= %00000000
+SSI263A_UNKNOWN		= %00000001
+SSI263A_P			= %00000010
+SSI263A_AP			= %00000011
 slotInfo3		!fill 8,0	; slot[0..7]
 
 numMockingboards		!byte 0
@@ -2240,8 +2272,8 @@ phasorMode		!byte PH_MOCKINGBOARD
 has6522			!byte 0
 hasLowerCase	!byte 0
 hasAY8913		!byte 0
-hasSSI263		!byte 0
-hasSC01			!byte 0
+hasSSI263		!byte 0	; 0 or bitfield of SSI263B_xx & SSI263A_xx
+hasSC01			!byte 0	; 0 or SI3_SC01_MASK
 
 isrIFR_A		!byte 0
 isrIFR_B		!byte 0
@@ -2282,7 +2314,7 @@ cfgDoSoakTest	!byte NO_SOAK_TEST
 
 ayRegs			!fill 16,0
 
-msg_mbaudit	!text "mb-audit v1.57,Tom Charlesworth, 2021,25",0xd
+msg_mbaudit	!text "mb-audit v1.58,Tom Charlesworth, 2021,25",0xd
 msg_mbauditEnd !text 0
 
 msg_cpu6502Detected !text "6502 detected",0xd
