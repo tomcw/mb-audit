@@ -273,13 +273,12 @@ TestSSI263
 		bcs		@error
 
 @nextSSI263
-		bit		testNum
-		bmi		+
-
 		lda		#$7f
 		sta		testNum
 
 		lda		#SSI_B_BASE
+		cmp		SSI263BaseL
+		beq		+
 		sta		SSI263BaseL
 		lda		#SY6522_A_PH_BASE
 		sta		MBBaseL
