@@ -72,8 +72,9 @@ Key:
   - P = Phasor
   - SDM = SD Music (and other clones with a single-6522)
 - For the 'SP' row (Speech chips):
-  - A = SSI263(socket-A)
-  - B = SSI263(socket-B)
+  - U = SSI263(socket-A/B), unknown type
+  - P = SSI263P (only updated after 1st reset test, and only for Phasor cards)
+  - Q = SSI263AP (only updated after 1st reset test, and only for Phasor cards)
   - V = Votrax/SC01
 
 Continuing for each card found:
@@ -150,6 +151,7 @@ SSI263 tests
 - The infamous Willy Byte bug that writes to the SSI263 to inadvertently (via a false-read) clear the 6522 Timer1 interrupt!
   - Code will test different false-reads addressing-modes depending on the CPU type.
 - Test Phasor's native mode which has a different SSI263 interface.
+- Determine if the SSI263 is a "P" or "AP" type.
 
 SC-01 tests
 - Support a single SC-01, and also AppleWin's hybrid Mockingboard-C/Phasor cards with both SC-01 and 2x SSI263.
