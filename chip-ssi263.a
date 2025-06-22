@@ -272,6 +272,10 @@ TestSSI263
 		jsr		T263_A
 		bcs		@error
 
+		inc		testNum				; test #0B, $8B
+		jsr		T263_B
+		bcs		@error
+
 @nextSSI263
 		lda		#$7f
 		sta		testNum
@@ -1798,7 +1802,7 @@ T263_9
 
 	lda		#ACR_ONESHOT
 	ldy		#SY6522_ACR
-	sta		(MBTimer),y				; Oneshot timer
+	sta		(MBTimer),y				; One-shot timer
 
 	; Set phoneme speed to quickest: $1ED8 cycles ~=8ms
 	; . In Phasor mode, timed using: regs[]={$C0, $00, $F0, $00, $00}, ie. reg0.DUR=3, reg2.RATE=$F, time from CTL:1->0 until D7=1
@@ -1986,7 +1990,7 @@ T263_A
 
 	lda		#ACR_ONESHOT
 	ldy		#SY6522_ACR
-	sta		(MBTimer),y				; Oneshot timer
+	sta		(MBTimer),y				; One-shot timer
 
 	; Set phoneme speed to quickest: $1ED8 cycles ~=8ms
 	; . In Phasor mode, timed using: regs[]={$C0, $00, $F0, $00, $00}, ie. reg0.DUR=3, reg2.RATE=$F, time from CTL:1->0 until D7=1
@@ -2080,6 +2084,63 @@ T263_A
 	ldy		#SSI_DURPHON
 	sta		(SSI263Base),y			; Set mode=irq enabled, so that the subsequent CTL 1->0 uses this mode
 	lda		#CONTROL_L
+	rts
+
+;------------------------------------------------------------------------------
+
+T263_B
+; Pre:
+; Post: C=0(OK), C=1(NG)
+;
+; Test#B
+; . Start phoneme playback & immediately set CTL=1(power-down)
+; . Check that there's no phoneme IRQ
+
+	jsr		resetSubTest			; subTest #0
+	jsr		incTotalTests
+
+	sei
+
+	lda		#ACR_ONESHOT
+	ldy		#SY6522_ACR
+	sta		(MBTimer),y				; One-shot timer
+
+	lda		#$F0					; RATE[7:4]=$F (quickest), INF[3:0]=$0
+	ldy		#SSI_RATEINF
+	sta		(SSI263Base),y
+
+	jsr		KickSSI263				; clear CA1 int flag & DR1:DR0=3 (shortest)
+
+	lda		#CONTROL_H
+	ldy		#SSI_CTTRAMP
+	sta		(SSI263Base),y			; immediately power-down
+
+	jsr		WaitPhonemeDoneCA1WithTimeout
+	beq		@error					; Z=1: got a CA1 interrupt => this is an error
+									; Z=0: timeout => OK
+
+@exitOK
+	clc
+	bcc		@exit
+
+@error		; pre: A=actual, X=expected
+	lda		#IxR_SSI263
+	ldx		#0
+	stx		zpTmp2					; expected
+	sec								; C=1(NG)
+
+@exit
+	php
+	pha
+
+	jsr		DisableSSI263			; config chip back to default state
+
+	lda		#IxR_SSI263
+	ldy		#SY6522_IFR
+	sta		(MBBase),y				; clear CA1 int flag
+
+	pla
+	plp
 	rts
 
 ;------------------------------------------------------------------------------
