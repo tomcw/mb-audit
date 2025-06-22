@@ -1185,10 +1185,6 @@ T263_6
 	ldx		#>@T263_6_ISR
 	jsr		SetIrqVector
 
-	lda		#ACR_FREERUNNING
-	ldy		#SY6522_ACR
-	sta		(MBTimer),y				; Free-running timer
-
 	lda		#IER_CLR|IxR_TIMER1
 	ldy		#SY6522_IER
 	sta		(MBTimer),y				; Disable Timer1 IRQ
@@ -1328,12 +1324,18 @@ T263_6
 ; NB. Timeout is 4x 0xFFFF cycles
 
 @WaitPhonemeDoneIrqWithTimeout
-; Pre:
+; Pre:	SY6522_IER.TIMER1=0
 ; Post: Z = 1(OK) / 0(NG)
-;		SEI
+; 	T1 in free-running mode
+;	SEI
+
+	lda		#ACR_FREERUNNING
+	ldy		#SY6522_ACR
+	sta		(MBTimer),y				; Free-running timer
 
 	lda		#0
 	sta		isrFlag
+
 	cli
 	lda		#$ff					; T1C = T1L = $FFFF
 	ldy		#SY6522_TIMER1L_COUNTER
@@ -1416,10 +1418,6 @@ T263_7
 	lda		#<@T263_7_ISR
 	ldx		#>@T263_7_ISR
 	jsr		SetIrqVector
-
-	lda		#ACR_FREERUNNING
-	ldy		#SY6522_ACR
-	sta		(MBTimer),y				; Free-running timer
 
 	lda		#IER_CLR|IxR_TIMER1
 	ldy		#SY6522_IER
@@ -1609,10 +1607,6 @@ T263_8
 	ldx		#>@T263_8_ISR
 	jsr		SetIrqVector
 
-	lda		#ACR_FREERUNNING
-	ldy		#SY6522_ACR
-	sta		(MBTimer),y				; Free-running timer
-
 	lda		#1
 	sta		@T263_8_mode
 
@@ -1800,10 +1794,6 @@ T263_9
 	lda		#PH_PHASOR
 	jsr		SetPhasorMode
 
-	lda		#ACR_ONESHOT
-	ldy		#SY6522_ACR
-	sta		(MBTimer),y				; One-shot timer
-
 	; Set phoneme speed to quickest: $1ED8 cycles ~=8ms
 	; . In Phasor mode, timed using: regs[]={$C0, $00, $F0, $00, $00}, ie. reg0.DUR=3, reg2.RATE=$F, time from CTL:1->0 until D7=1
 	; . In theory this should be: FD = (4096 x (16-RATE)) = 4096; PD = FD x (4-DUR) = 4096 cycles
@@ -1988,10 +1978,6 @@ T263_A
 	ldy		#SY6522_IFR
 	sta		(MBBase),y				; clear CA1 int flag (from previous test)
 
-	lda		#ACR_ONESHOT
-	ldy		#SY6522_ACR
-	sta		(MBTimer),y				; One-shot timer
-
 	; Set phoneme speed to quickest: $1ED8 cycles ~=8ms
 	; . In Phasor mode, timed using: regs[]={$C0, $00, $F0, $00, $00}, ie. reg0.DUR=3, reg2.RATE=$F, time from CTL:1->0 until D7=1
 	; . In theory this should be: FD = (4096 x (16-RATE)) = 4096; PD = FD x (4-DUR) = 4096 cycles
@@ -2101,10 +2087,6 @@ T263_B
 
 	sei
 
-	lda		#ACR_ONESHOT
-	ldy		#SY6522_ACR
-	sta		(MBTimer),y				; One-shot timer
-
 	lda		#$F0					; RATE[7:4]=$F (quickest), INF[3:0]=$0
 	ldy		#SSI_RATEINF
 	sta		(SSI263Base),y
@@ -2151,7 +2133,7 @@ T263_B
 ; NB. Timeout is 1x 0xFFFF cycles
 
 WaitPhonemeDoneCA1WithTimeout
-; Pre: T1 in one-shot mode
+; Pre:
 ; Post: (see below)
 
 	lda		#IxR_SSI263
@@ -2165,11 +2147,12 @@ WaitPhonemeDoneCA1WithTimeout
 ; NB. Timeout is 1x 0xFFFF cycles
 
 WaitPhonemeDoneCA1WithTimeoutEx
-; Pre: T1 in one-shot mode
-;		A = expected result (IxR_SSI263 or $00)
+; Pre:	A = expected result (IxR_SSI263 or $00)
 ; Post:	Z = 1(OK:got expected), 0(NG: not expected)
 ;		A = actual (IxR_SSI263 = phoneme complete / $00 = timeout)
 ;		X = expected result
+; 	T1 in one-shot mode
+;	SEI
 
 	tax
 
@@ -2185,6 +2168,12 @@ WaitPhonemeDoneCA1WithTimeoutEx
 +	; Pre: A=expected, X=clear CA1 mask
 	sta		@waitCA1expectedResult
 	stx		@clearCA1intFlag
+
+	sei
+
+	lda		#ACR_ONESHOT
+	ldy		#SY6522_ACR
+	sta		(MBTimer),y				; One-shot timer
 
 	lda		#$ff					; T1C = T1L = $FFFF
 	ldy		#SY6522_TIMER1L_COUNTER
@@ -2220,8 +2209,16 @@ WaitPhonemeDoneCA1WithTimeoutEx
 ; NB. Timeout is 4x 0xFFFF cycles
 
 WaitPhonemeDoneD7WithTimeout
-; Pre: T1 in free-running mode
+; Pre:
 ; Post: Z = 1(OK) / 0(NG)
+; 	T1 in free-running mode
+;	SEI
+
+	sei
+
+	lda		#ACR_FREERUNNING
+	ldy		#SY6522_ACR
+	sta		(MBTimer),y				; Free-running timer
 
 	lda		#$ff					; T1C = T1L = $FFFF
 	ldy		#SY6522_TIMER1L_COUNTER
@@ -2559,7 +2556,6 @@ TestPhasorWithSSI263AfterReset
 		sta		(SSI263Base),y		; De-assert IRQ by writing to SSI263 reg1
 
 									; subTest #0
-		; Pre: One-shot timer set by RESET
 		jsr		WaitPhonemeDoneCA1WithTimeout
 		beq		+
 			; timeout - expected for a MB-C and Phasor w/SSI263AP
