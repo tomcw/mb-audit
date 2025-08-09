@@ -942,7 +942,7 @@ TestAYMockingboard
 
 	; MB tests for AY RESET (cf. TestAYPhasor5)
 	; Writing a 6522's ORB(PortB).bit2=0 will reset the AY
-	; . basically ORB.b2 is wired directly to both AY's /RESET pin
+	; . basically ORB.b2 is wired directly to the AY's /RESET pin
 	; NB. 6522-A's AY is independent of 6522-B's AY
 
 	jsr		resetSubTestMinus1
