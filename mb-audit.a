@@ -41,6 +41,8 @@
 ; Echo+						6522-A/AY8913			6522-A/AY8913 + TMS5220 (at DEVICE SELECT)	NB. Same 6522 mapped to both $00 & $80
 ; SD Music (Ian Kim)		6522-A/AY8913			6522-A/AY8913		Same 6522 mapped to both $00 & $80
 ; SD Music Deluxe (Ian Kim)	6522-A/AY8913			6522-A/AY8913		Same 6522 mapped to both $00 & $80
+; MB4c & MB4c+ (Ian Kim)	6522-A/AY8913			6522-A/AY8913		Same 6522 mapped to both $00 & $80. For //c & //c+
+; . NB. w/Jeff Mazur's product: C408-C40B can't be read (TIMER2_L, TIMER2_H, SR, ACR)
 
 ;------------------------------------------------------------------------------
 
@@ -2314,7 +2316,7 @@ cfgDoSoakTest	!byte NO_SOAK_TEST
 
 ayRegs			!fill 16,0
 
-msg_mbaudit	!text "mb-audit v1.58,Tom Charlesworth, 2021,25",0xd
+msg_mbaudit	!text "mb-audit v1.58A,Tom Charlesworth,2021-25",0xd
 msg_mbauditEnd !text 0
 
 msg_cpu6502Detected !text "6502 detected",0xd

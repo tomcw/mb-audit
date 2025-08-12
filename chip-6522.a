@@ -12,6 +12,9 @@ Detect6522
 
 	jsr		SetMBBase
 
+	jsr		isIIc			; TODO: Really should check for Jeff Mazur's product (in a //c)
+	beq		@checkT1_A		; Use TIMER1 (as MB4c's TIMER2 not readable when JeffM's product is also installed)
+
 	; 6522's IER.b7 is always 1
 	; . Due to floating bus (and the visible TEXT screen being mainly $A0 values), then empty slots will likely pass this IER.b7 check
 	ldy		#SY6522_A_BASE+SY6522_IER
@@ -22,6 +25,7 @@ Detect6522
 	; Could still be MegaAudio, so use TIMER1 (IER.b7 reads as 0, and TIMER2 isn't supported!)
 	;
 
+@checkT1_A
 	ldy		#SY6522_A_BASE+SY6522_TIMER1L_COUNTER
 	jsr		@Check6522
 	bne		+
@@ -156,7 +160,7 @@ DetectMB4CorEchoPlusorSDM
 ; Post: isMB4C, isEchoPlus, isSDMusic
 ;	Z=1:  no MB4C/EchoPlus/SD Music
 
-	; MB4C/Echo+ only has 1x 6522, but mapped to both $00 and $80
+	; MB4C/Echo+/SDM only have 1x 6522, but mapped to both $00 and $80
 	; . MB4C: assume it'll use the 6522's b7 addr to determine which AY8913 to write to
 	; . Echo+ uses 6522's PORTB (bits 4 & 3) to chip-select each AY8913
 	; . SD Music / SD Music Deluxe: like MB4C for selecting AY8913
@@ -866,7 +870,12 @@ Test6522
 
 	sei
 
-	lda		isMegaAudioCard
+	jsr		isIIc				; TODO: Really should check for Jeff Mazur's product (in a //c)
+	bne		+
+		lda		#<testTbl_MB4c_with_product
+		ldx		#>testTbl_MB4c_with_product
+		bne		++
++	lda		isMegaAudioCard
 	bne		+
 		lda		#<testTbl
 		ldx		#>testTbl
@@ -1016,6 +1025,35 @@ testTbl_MegaAudio
 	!word	T6522_15	; 35
 	!word	T6522_skip	; 36
 	!word	T6522_skip	; 37	; Emulation test error: 11:17:00 / Expected:00 Actual:00 (NB. after supporting T1C=T1L=$0000 as $FFFF)
+	!word	T6522_18	; 38
+	!word	0
+
+testTbl_MB4c_with_product
+	; MBBaseL = $00 and $80
+	!word	T6522_0		; 20
+	!word	T6522_1		; 21
+	!word	T6522_2		; 22
+	!word	T6522_3		; 23
+	!word	T6522_skip	; 24	; Can't read T2C_L
+	!word	T6522_5		; 25
+	!word	T6522_skip	; 26	; Can't read T2C_L
+	!word	T6522_7		; 27
+	!word	T6522_skip	; 28	; Can't read T2C_L
+	!word	T6522_skip	; 29	; Can't read T2C_H
+	!word	T6522_A		; 2A
+	!word	T6522_B		; 2B
+	!word	T6522_C		; 2C
+	!word	T6522_skip	; 2D	; Can't read T2C_L
+	!word	T6522_E		; 2E
+	!word	T6522_F		; 2F
+	!word	T6522_10	; 30
+	!word	T6522_skip	; 31	; Can't read T2C_L
+	!word	T6522_skip	; 32	; 6522's not mirrored across I/O space
+	!word	T6522_13	; 33	; Phasor test - so test just returns 'OK'
+	!word	T6522_14	; 34
+	!word	T6522_15	; 35
+	!word	T6522_16	; 36
+	!word	T6522_17	; 37
 	!word	T6522_18	; 38
 	!word	0
 
@@ -1405,7 +1443,7 @@ T6522_4
 
 	;
 
-@readT1C							; 6cy -> T1|2C=$FFFA
+@readT1C	; or T2C				; 6cy -> T1|2C=$FFFA
 	ldy		zpTmp2					; 3cy -> T1|2C=$FFF7
 	dey								; 2cy -> T1|2C=$FFF5 / y=SY6522_TIMER1|2L_COUNTER
 @8	lda		CARD_BASE,y				; 4cy -> T1|2C=$FFF1
@@ -4044,9 +4082,11 @@ WaitT2OneShotUnderflow
 	rts
 
 WaitT2Underflow
+	jsr		isIIc					; TODO: Really should check for Jeff Mazur's product (in a //c)
+	beq		@wait
 	lda		isMegaAudioCard
 	beq		+
-		lda		#$8					; wait 0x119 cycles - MegaAudio can't read Timer2!
+@wait	lda		#$8					; wait 0x119 cycles - MegaAudio & MB4c(w/JM's product) can't read Timer2!
 		jmp		myWAIT
 +
 
