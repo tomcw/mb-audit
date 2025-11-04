@@ -2316,7 +2316,7 @@ cfgDoSoakTest	!byte NO_SOAK_TEST
 
 ayRegs			!fill 16,0
 
-msg_mbaudit	!text "mb-audit v1.58A,Tom Charlesworth,2021-25",0xd
+msg_mbaudit	!text "mb-audit v1.59,Tom Charlesworth,2021-25",0xd
 msg_mbauditEnd !text 0
 
 msg_cpu6502Detected !text "6502 detected",0xd

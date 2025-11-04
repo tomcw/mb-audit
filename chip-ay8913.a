@@ -940,6 +940,11 @@ TestAYMockingboard
 	lda		isMegaAudioCard					; MegaAudio doesn't support AY reads, so skip this whole test
 	bne		@done
 
+	lda		hasAY8913						; Need a card with AYs on both 6522s (so not Sound/Speech I)
+	and		#3
+	cmp		#3
+	bne		@done
+
 	; MB tests for AY RESET (cf. TestAYPhasor5)
 	; Writing a 6522's ORB(PortB).bit2=0 will reset the AY
 	; . basically ORB.b2 is wired directly to the AY's /RESET pin
