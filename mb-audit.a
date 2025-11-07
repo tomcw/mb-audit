@@ -655,9 +655,14 @@ TestTones
 
 				lda		#$80+','
 				jsr		SafeCOUT
-+
+				jmp		@B
 
-			; "B:456"
++				lda		#<msg_ToneKeysASpaces
+				ldx		#>msg_ToneKeysASpaces
+				jsr		Print
+
+
+@B			; "B:456"
 			lda		hasAY8913
 			and		#2
 			beq		+
@@ -2394,6 +2399,9 @@ msg_ToneHelpEnd !text 0
 
 msg_ToneKeys !text "Tone: "
 msg_ToneKeysEnd !text 0
+
+msg_ToneKeysASpaces !text "      "	; 6 spaces = strlen(msg_ToneKeysA123) + 1 for ','
+msg_ToneKeysASpacesEnd !text 0
 
 msg_ToneKeysA123 !text "A:123"
 msg_ToneKeysA123End !text 0
