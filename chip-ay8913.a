@@ -252,6 +252,8 @@ DetectAY8913
 
 ;------------------------------------------------------------------------------
 
+NUM_YM_REGS = 8
+
 DetectYM2149
 ; Pre: zpTmp1 = 6522 bitmap in b1:0
 ;	hasYM2149 = 0
@@ -293,69 +295,55 @@ DetectYM2149
 		lda		zpTmp3
 		and		#SY6522_B_BASE
 		beq		++
-			lda		#5
+			lda		#NUM_YM_REGS
 ++		sta		zpTmp4			; set YMregs index
-
-		lda		#AY_ACOARSE		; Detect YM2149 by writing $1F to reg-1, and it will read back as $1F
-		ldx		#$1F
-		jsr		AY_WriteRegValue
-
-		lda		#AY_BCOARSE
-		ldx		#$3F
-		jsr		AY_WriteRegValue
-
-		lda		#AY_CCOARSE
-		ldx		#$7F
-		jsr		AY_WriteRegValue
 
 		;
 
-		ldx		#AY_ACOARSE
-		jsr		AY_ReadRegValue
-		ldx		zpTmp4
-		sta		YMregs+0,x
-!if 0 {
+		; Detect YM2149 by writing $1F to reg-1, and it will read back as $1F
+		ldx		#$1F
+		jsr		YMWriteThenReadWithoutSelectReg1
+
+		ldx		#$3F
+		jsr		YMWriteThenReadWithoutSelectReg1
+
+		ldx		#$7F
+		jsr		YMWriteThenReadWithoutSelectReg1
+
+		ldx		#$FF
+		jsr		YMWriteThenReadWithoutSelectReg1
+
+		;
+
+		lda		#AY_BCOARSE
+		ldx		#$1F
+		jsr		YMWriteThenReadWithoutSelect
+
+		lda		#AY_BCOARSE
+		ldx		#$FF
+		jsr		YMWriteThenReadWithoutSelect
+
+		lda		#AY_CCOARSE
+		ldx		#$1F
+		jsr		YMWriteThenReadWithoutSelect
+
+		lda		#AY_CCOARSE
+		ldx		#$FF
+		jsr		YMWriteThenReadWithoutSelect
+
+		;
+
+		lda		zpTmp4
+		sec
+		sbc		#NUM_YM_REGS
+		tax
+		lda		YMregs,x
 		cmp		#$1F
 		bne		+
-
 			lda		hasYM2149
 			ora		zpTmp2
 			sta		hasYM2149
-}
-
-		ldx		#AY_BCOARSE
-		jsr		AY_ReadRegValue	; just read to see what the YM2149 returns
-		ldx		zpTmp4
-		sta		YMregs+1,x
-
-		ldx		#AY_CCOARSE
-		jsr		AY_ReadRegValue	; just read to see what the YM2149 returns
-		ldx		zpTmp4
-		sta		YMregs+2,x
-
 +
-
-		; Try just reg-1
-		jsr		AY_SetPortAOutput	; DDRA=0xFF
-
-		lda		#AY_ACOARSE		; Detect YM2149 by writing $1F to reg-1, and it will read back as $1F
-		ldx		#$1F
-		jsr		AY_WriteRegValue
-		ldx		#AY_ACOARSE
-		jsr		AY_ReadRegValue
-		ldx		zpTmp4
-		sta		YMregs+3,x
-
-		; Try read w/out select
-		jsr		AY_SetPortAOutput	; DDRA=0xFF
-
-		lda		#AY_ACOARSE		; Detect YM2149 by writing $1F to reg-1, and it will read back as $1F
-		ldx		#$1F
-		jsr		AY_WriteRegValue
-		jsr		AY_SetPortAInput
-		jsr		AY_ReadReg
-		ldx		zpTmp4
-		sta		YMregs+4,x
 
 		;
 
@@ -378,9 +366,25 @@ DetectYM2149
 @done
 	rts
 
+;
+
+; Pre: X = Value to write
+YMWriteThenReadWithoutSelectReg1
+	lda		#AY_ACOARSE
+; Pre: A = Reg#
+YMWriteThenReadWithoutSelect
+	jsr		AY_WriteRegValue
+	jsr		AY_SetPortAInput
+	jsr		AY_ReadReg
+	ldx		zpTmp4
+	inc		zpTmp4
+	sta		YMregs,x
+	jsr		AY_SetPortAOutput	; DDRA=0xFF
+	rts
+
 YMregs
-	!byte 0,0,0,0,0		; AY-0
-	!byte 0,0,0,0,0		; AY-1
+	!fill NUM_YM_REGS,0	; AY-0
+	!fill NUM_YM_REGS,0	; AY-1
 
 ;------------------------------------------------------------------------------
 
