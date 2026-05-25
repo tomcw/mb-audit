@@ -1,5 +1,5 @@
 ;license:MIT
-;(c) 2021-2022 by Tom Charlesworth
+;(c) 2021-2026 by Tom Charlesworth
 ;
 ; AY8913 related
 ;
@@ -53,6 +53,7 @@ DetectAY8913
 ; Post:
 ;	hasAY8913 = %0000,%0001,%0010,%0011 - for Mockingboard or Echo+ or MB4C
 ;	hasAY8913 = %0000,%0001,%0010,%0011,%0100,...,%1111 - for Phasor
+;	zpTmp1 = 0
 
 	lda		zpTmp1
 	sta		@smcPh+1
@@ -75,12 +76,14 @@ DetectAY8913
 	lda		isEchoPlus			; Echo+ AY detection
 	beq		@mb
 
+	; Echo+
+
 	lda		#SY6522_A_BASE		; only one 6522, but use zpTmp3 (6522-A or 6522-B) to config chip-select
 	sta		zpTmp3
 	lda		#1					; hasAY8913 mask
 	sta		zpTmp2
 
--		jsr		Init6522ForAY
+-		jsr		Init6522ForAY	; pre: zpTmp3 = SY6522_A_BASE or SY6522_A_PH_BASE or SY6522_B_BASE
 
 		ldy		#AY_AFINE
 		lda		#$AA
@@ -237,7 +240,7 @@ DetectAY8913
 		cmp		zpTmp3
 		beq		+
 		sta		zpTmp3
-		bne		-
+		bne		-				; (bra)
 
 +	lda		#PH_MOCKINGBOARD
 	jsr		SetPhasorMode
@@ -246,6 +249,110 @@ DetectAY8913
 
 @done
 	rts
+
+;------------------------------------------------------------------------------
+
+DetectYM2149
+; Pre: zpTmp1 = 6522 bitmap in b1:0
+;	hasYM2149 = 0
+;	isPhasorCard, isMegaAudioCard, isMB4C, isEchoPlus, isSDMusic
+; Post:
+;	hasYM2149 = %0000,%0001,%0010,%0011 - for Mockingboard or Echo+ or MB4C
+;	hasYM2149 = %0000,%0001,%0010,%0011,%0100,...,%1111 - for Phasor
+;	zpTmp1 = 0
+
+;	lda		zpTmp1
+;	sta		@smcPh+1
+
+	lda		isPhasorCard
+	beq		+
+		lda		#PH_MOCKINGBOARD
+		jsr		SetPhasorMode
++
+
+	lda		isMegaAudioCard
+	ora		isEchoPlus			; AY8913s are soldered directly to the PCB (so can't be YM2149s)
+	ora		isMB4C				; TODO: support MB4C
+	ora		isSDMusic			; TODO: support SD Music
+	beq		+
+		rts
++
+
+	; Mockingboard
+
+	lda		#SY6522_A_BASE
+	sta		zpTmp3
+	lda		#1					; hasYM2149 mask
+	sta		zpTmp2
+
+-		lsr		zpTmp1			; 6522 at this addr?
+		bcc		+
+
+		jsr		Init6522ForAY	; pre: zpTmp3 = SY6522_A_BASE or SY6522_A_PH_BASE or SY6522_B_BASE
+
+		lda		zpTmp3
+		and		#SY6522_B_BASE
+		beq		++
+			lda		#3
+++		sta		zpTmp4			; set YMregs index
+
+		lda		#AY_ACOARSE		; Detect YM2149 by writing $1F to reg-1, and it will read back as $1F
+		ldx		#$1F
+		jsr		AY_WriteRegValue
+
+		lda		#AY_BCOARSE
+		ldx		#$3F
+		jsr		AY_WriteRegValue
+
+		lda		#AY_CCOARSE
+		ldx		#$7F
+		jsr		AY_WriteRegValue
+
+		;
+
+		ldx		#AY_ACOARSE
+		jsr		AY_ReadRegValue
+		ldx		zpTmp4
+		sta		YMregs+0,x
+		cmp		#$1F
+		bne		+
+
+			lda		hasYM2149
+			ora		zpTmp2
+			sta		hasYM2149
+
+		ldx		#AY_BCOARSE
+		jsr		AY_ReadRegValue	; just read to see what the YM2149 returns
+		ldx		zpTmp4
+		sta		YMregs+1,x
+
+		ldx		#AY_CCOARSE
+		jsr		AY_ReadRegValue	; just read to see what the YM2149 returns
+		ldx		zpTmp4
+		sta		YMregs+2,x
+
++		asl		zpTmp2			; AY mask <<= 1
+		lda		zpTmp3
+		eor		#$80
+		sta		zpTmp3
+		bne		-
+
+;	lda		isPhasorCard
+;	beq		@done
+
+	; Phasor: TODO: check any 2nd-ary AYs
+
+;@smcPh	lda		#0
+;	sta		zpTmp1
+
+	;
+
+@done
+	rts
+
+YMregs
+	!byte 0,0,0		; AY-0
+	!byte 0,0,0		; AY-1
 
 ;------------------------------------------------------------------------------
 

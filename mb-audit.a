@@ -1,5 +1,5 @@
 ;license:MIT
-;(c) 2021-2025 by Tom Charlesworth
+;(c) 2021-2026 by Tom Charlesworth
 ;
 ; mb-audit:
 ; . Verify real h/w is operating correctly, eg. inter-component (addr/data line, IRQ)
@@ -888,6 +888,8 @@ DetectSubunits
 	sta		hasSSI263				; ... no SSI263's
 	sta		hasSC01					; ... no SC01
 	sta		hasAY8913				; ... no AY8913's
+	sta		hasAY8910				; ... no AY8910's
+	sta		hasYM2149				; ... no YM2149's
 
 	lda		#PH_MOCKINGBOARD
 	sta		phasorMode
@@ -954,7 +956,12 @@ DetectSubunits
 
 	jsr		DetectSSI263			; pre: zpTmp1
 	jsr		DetectSC01				; pre: zpTmp1
-	jsr		DetectAY8913			; pre: zpTmp1
+	lda		zpTmp1
+	pha
+	jsr		DetectAY8913			; pre: zpTmp1, post: zpTmp1=0
+	pla
+	sta		zpTmp1
+	jsr		DetectYM2149			; pre: zpTmp1, post: zpTmp1=0
 
 	lda		hasAY8913
 	asl
@@ -2278,7 +2285,9 @@ phasorMode		!byte PH_MOCKINGBOARD
 
 has6522			!byte 0
 hasLowerCase	!byte 0
-hasAY8913		!byte 0
+hasAY8913		!byte 0	; bitfield - indicates the card has some kind of AY891x/YM2149 chip
+hasAY8910		!byte 0	; bitfield - indicates the 1-bits in hasAY8913 are AY8910/AY8912 chips
+hasYM2149		!byte 0	; bitfield - indicates the 1-bits in hasAY8913 are YM2149 chips
 hasSSI263		!byte 0	; 0 or bitfield of SSI263B_xx & SSI263A_xx
 hasSC01			!byte 0	; 0 or SI3_SC01_MASK
 
