@@ -12,8 +12,8 @@ Detect6522
 
 	jsr		SetMBBase
 
-	jsr		isIIc			; TODO: Really should check for Jeff Mazur's product (in a //c)
-	beq		@checkT1_A		; Use TIMER1 (as MB4c's TIMER2 not readable when JeffM's product is also installed)
+	jsr		isIIc			; TODO: Really should check for JD Micro's Xdrive2c (in a //c)
+	beq		@checkT1_A		; Use TIMER1 (as MB4c's TIMER2 not readable when Xdrive2c is also installed)
 
 	; 6522's IER.b7 is always 1
 	; . Due to floating bus (and the visible TEXT screen being mainly $A0 values), then empty slots will likely pass this IER.b7 check
@@ -870,10 +870,10 @@ Test6522
 
 	sei
 
-	jsr		isIIc				; TODO: Really should check for Jeff Mazur's product (in a //c)
+	jsr		isIIc				; TODO: Really should check for Xdrive2c (in a //c)
 	bne		+
-		lda		#<testTbl_MB4c_with_product
-		ldx		#>testTbl_MB4c_with_product
+		lda		#<testTbl_MB4c_with_Xdrive2c
+		ldx		#>testTbl_MB4c_with_Xdrive2c
 		bne		++
 +	lda		isMegaAudioCard
 	bne		+
@@ -1028,7 +1028,7 @@ testTbl_MegaAudio
 	!word	T6522_18	; 38
 	!word	0
 
-testTbl_MB4c_with_product
+testTbl_MB4c_with_Xdrive2c
 	; MBBaseL = $00 and $80
 	!word	T6522_0		; 20
 	!word	T6522_1		; 21
@@ -4082,11 +4082,11 @@ WaitT2OneShotUnderflow
 	rts
 
 WaitT2Underflow
-	jsr		isIIc					; TODO: Really should check for Jeff Mazur's product (in a //c)
+	jsr		isIIc					; TODO: Really should check for Xdrive2c (in a //c)
 	beq		@wait
 	lda		isMegaAudioCard
 	beq		+
-@wait	lda		#$8					; wait 0x119 cycles - MegaAudio & MB4c(w/JM's product) can't read Timer2!
+@wait	lda		#$8					; wait 0x119 cycles - MegaAudio & MB4c(w/Xdrive2c) can't read Timer2!
 		jmp		myWAIT
 +
 
