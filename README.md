@@ -71,6 +71,7 @@ Key:
   - C = MB-C (or MB-A or Sound-II)
   - P = Phasor
   - SDM = SD Music (and other clones with a single-6522)
+  - (and a FLASHing 'Y' indicates a YM2149 instead of AY-3-891x was detected)
 - For the 'SP' row (Speech chips):
   - U = SSI263(socket-A/B), unknown type
   - P = SSI263P (only updated after 1st reset test, and only for Phasor cards)
