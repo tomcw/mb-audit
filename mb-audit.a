@@ -32,6 +32,7 @@
 ; . MB-C (AppleWin)			MB-C +SC01				MB-C +[1|2x SSI263]
 ; . MB-C (MAME)				MB-C +SC01				MB-C
 ; . MEGA Audio (a2heaven)	MB-C					MB-C				6522 & AY8913 implemented in FPGA, supports 2x MB-C's
+; . A2FPGA                  MB-C                    MB-C
 ; Phasor
 ; . MB-C					6522-A/AY8913			6522-B/AY8913 +[1|2x SSI263]
 ; . Echo+					6522-B/AY8913			6522-B/AY8913		Same 6522 mapped to both $00 & $80
@@ -1021,6 +1022,18 @@ DetectSubunits
 	ora		hasSSI263
 	sta		slotInfo3,x
 
+	;
+	; set slotInfo4 - YM2149/AY8910 chips
+	;
+
+	lda		hasYM2149
+	asl
+	asl
+	asl
+	asl
+	ora		hasAY8910
+	sta		slotInfo4,x
+
 	rts
 
 ;------------------------------------------------------------------------------
@@ -1038,6 +1051,19 @@ RestoreFromSlotInfo
 
 	lda		#PH_MOCKINGBOARD
 	sta		phasorMode
+
+	;
+
+	lda		slotInfo4,x
+	pha
+	and		#SI4_AY8910_MASK
+	sta		hasAY8910
+	pla
+	lsr
+	lsr
+	lsr
+	lsr
+	sta		hasYM2149
 
 	;
 
@@ -1639,12 +1665,34 @@ LINE3=TEXTLINE4
 LINE4=TEXTLINE5
 SLOT1POS = $13					; pos left of '1'
 
+; Mockingboard types:
+;   ?  = 6522(VIA)
+;   1  = Sound-I(or Speech-I)
+;  S/S = Sound/Speech-I (was 'S/S')
+;   M  = MegaAudio
+;  M4C = MB4C (was 'M4C')
+;   E  = Echo+
+;   C  = MB-C(or MB-A or Sound-II)
+;   P  = Phasor
+;  SDM = SD Music (Deluxe) (was 'SDM')
+;
+; NB. 3rd char may be replaced by FLASHing 'Y' to indicate YM2149 chip (and 1st char for Phasor).
+; . Toying with the idea of just using 2 chars for the MB type, but likely to just impact "M4C" -> "M4Y".
+
+; Speech types:
+;   U  = SSI263(unknown type)
+;   P  = SSI263P
+;   Q  = SSI263AP
+;   V  = Votrax/SC01
+
+
 Display
+; Draw initial display, and populate with '?' wherever there's a 6522:
 ;(blank)
 ;         SLOT: 1  2  3  4  5  6  7
-;          $00: ?     1 S/S C  P       ; ?=6522(VIA), 1=Sound-I(or Speech-I), S/S=Sound/Speech-I, M=MegaAudio, M4C=MB4C, E=Echo+, C=MB-C(or MB-A or Sound-II), P=Phasor, SDM=SD Music (Deluxe)
-;          $80:    ?    S/S C  P
-;           SP:           VABV B       ; A=SSI263(socket-A), B=SSI263(socket-B), V=Votrax/SC01
+;          $00: ?     ?  ?  ?  ?
+;          $80:    ?     ?  ?  ?
+;           SP:
 
 	lda		#$80+'S'
 	sta		LINE1+$0e
@@ -1760,6 +1808,12 @@ DisplaySlotUpdate
 ;--------------------------------------
 
 DisplayCardUpdate
+; For slotUnderTest, populate display with its Mockingboard type & Speech types
+;(blank)
+;         SLOT: 1  2  3  4  5  6  7
+;          $00: ?     1 S/S C  P
+;          $80:    ?    S/S C  P
+;           SP:           V U P
 
 	;
 	; Update cards
@@ -1851,8 +1905,9 @@ DisplayCardUpdate
 
 +	lda		hasAY8913
 	cmp		#%00000011			; 6522/AY8913 at $00 && $80?
-	bcc		@speech				; (branch if A < 3)
-		lda		isMegaAudioCard
+	bcs		+					; (2 or more AYs)
+	jmp		@speech				; (0 or 1 AYs)
++		lda		isMegaAudioCard
 		beq		+
 			lda		#$80+'M'
 			bne		@out
@@ -1867,7 +1922,7 @@ DisplayCardUpdate
 +		lda		isEchoPlus
 		beq		+
 			lda		#$80+'E'
-			bne		@out
+			bne		@out		; (bra)
 +		lda		isSDMusic
 		beq		+
 			lda		#$80+'S'	; 'SDM'
@@ -1875,7 +1930,7 @@ DisplayCardUpdate
 			lda		#$80+'M'
 			sta		zpTmp2
 			lda		#$80+'D'
-			bne		@out
+			bne		@out		; (bra)
 +			lda		#$80+'C'	; MB-C or MB-Sound II (has 2x 6522/AY8913, but no SC01 nor SSI263)
 			bne		@out
 
@@ -1887,6 +1942,40 @@ DisplayCardUpdate
 		lda		zpTmp2
 		sta		LINE2+SLOT1POS+1,x
 		sta		LINE3+SLOT1POS+1,x
+
+	; Overwrite 3rd char with FLASHing 'Y' => YM2149
+	; . " CY" or for M4C: "M4Y"
+	;   " CY"             "M4Y"
+	lda		hasYM2149
+	lsr
+	bcc		+
+		lda		#'Y'			; FLASHing 'Y'
+		sta		LINE2+SLOT1POS+1,x	; overwrite 3rd char
++	lda		hasYM2149
+	lsr
+	lsr
+	bcc		+
+		lda		#'Y'			; FLASHing 'Y'
+		sta		LINE3+SLOT1POS+1,x	; overwrite 3rd char
++
+
+	lda		isPhasorCard
+	beq		+
+		; Phasor only: Overwrite 1st char with FLASHing 'Y' => YM2149
+		; . "YPY"
+		;   "YPY"
+		lda		hasYM2149
+		and		#%00000100
+		beq		++
+			lda		#'Y'		; FLASHing 'Y'
+			sta		LINE2+SLOT1POS-1,x	; overwrite 3rd char
+++
+		lda		hasYM2149
+		and		#%00001000
+		beq		+
+			lda		#'Y'		; FLASHing 'Y'
+			sta		LINE3+SLOT1POS-1,x	; overwrite 3rd char
++
 
 	;
 	; Add info about any speech chips
@@ -2239,6 +2328,11 @@ SSI263A_P			= %00000010
 SSI263A_AP			= %00000011
 slotInfo3		!fill 8,0	; slot[0..7]
 
+; slotInfo4 bitfield:
+									; b7..4: YM2149
+SI4_AY8910_MASK		= %00001111		; b3..0: AY8910
+slotInfo4		!fill 8,0	; slot[0..7]
+
 numMockingboards		!byte 0
 numMockingboardsForMCT	!byte 0		; num of Mockingboards for multi-card tests: need 2x 6522 per card
 numMegaAudioCards		!byte 0
@@ -2285,7 +2379,7 @@ phasorMode		!byte PH_MOCKINGBOARD
 
 has6522			!byte 0
 hasLowerCase	!byte 0
-hasAY8913		!byte 0	; bitfield - indicates the card has some kind of AY891x/YM2149 chip
+hasAY8913		!byte 0	; bitfield - indicates the card has some kind of AY891x/YM2149 chips
 hasAY8910		!byte 0	; bitfield - indicates the 1-bits in hasAY8913 are AY8910/AY8912 chips
 hasYM2149		!byte 0	; bitfield - indicates the 1-bits in hasAY8913 are YM2149 chips
 hasSSI263		!byte 0	; 0 or bitfield of SSI263B_xx & SSI263A_xx
@@ -2330,7 +2424,7 @@ cfgDoSoakTest	!byte NO_SOAK_TEST
 
 ayRegs			!fill 16,0
 
-msg_mbaudit	!text "mb-audit v1.59,Tom Charlesworth,2021-25",0xd
+msg_mbaudit	!text "mb-audit v1.59,Tom Charlesworth,2021-26",0xd
 msg_mbauditEnd !text 0
 
 msg_cpu6502Detected !text "6502 detected",0xd
