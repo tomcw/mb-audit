@@ -388,6 +388,135 @@ YMregs
 
 ;------------------------------------------------------------------------------
 
+NUM_AY_REGS = 3
+
+DetectAY8910
+; Pre: zpTmp1 = 6522 bitmap in b1:0
+;	hasAY8910 = 0
+;	isPhasorCard, isMegaAudioCard, isMB4C, isEchoPlus, isSDMusic
+; Post:
+;	hasAY8910 = %0000,%0001,%0010,%0011 - for Mockingboard or Echo+ or MB4C
+;	hasAY8910 = %0000,%0001,%0010,%0011,%0100,...,%1111 - for Phasor
+;	zpTmp1 = 0
+
+;	lda		zpTmp1
+;	sta		@smcPh+1
+
+	lda		isPhasorCard
+	beq		+
+		lda		#PH_MOCKINGBOARD
+		jsr		SetPhasorMode
++
+
+	lda		isMegaAudioCard
+	ora		isEchoPlus			; AY8913s are soldered directly to the PCB (so can't be AY8910s)
+	ora		isMB4C				; TODO: support MB4C
+	ora		isSDMusic			; TODO: support SD Music
+	beq		+
+		rts
++
+
+	; Mockingboard
+
+	lda		#SY6522_A_BASE
+	sta		zpTmp3
+	lda		#1					; hasYM2149 mask
+	sta		zpTmp2
+
+-		lsr		zpTmp1			; 6522 at this addr?
+		bcc		+
+
+		jsr		Init6522ForAY	; pre: zpTmp3 = SY6522_A_BASE or SY6522_A_PH_BASE or SY6522_B_BASE
+
+		lda		zpTmp3
+		and		#SY6522_B_BASE
+		beq		++
+			lda		#NUM_AY_REGS
+++		sta		zpTmp4			; set AYregs index
+
+		;
+
+		lda		#AY_ENABLE
+		ldx		#%11000000|AY_DIS_A|AY_DIS_B|AY_DIS_C	; Set ports as output. IOB(b7), IOA(b6): IN=0, OUT=1
+		jsr		AY_WriteRegValue
+
+		lda		#AY_PORTA
+		ldx		#$55
+		jsr		AY_WriteRegValue
+
+		lda		#AY_PORTB
+		ldx		#$69
+		jsr		AY_WriteRegValue
+
+		ldx		#AY_ENABLE
+		jsr		AY_ReadRegValue
+		ldx		zpTmp4
+		inc		zpTmp4
+		sta		AYregs,x
+
+		ldx		#AY_PORTA
+		jsr		AY_ReadRegValue
+		ldx		zpTmp4
+		inc		zpTmp4
+		sta		AYregs,x
+
+		ldx		#AY_PORTB
+		jsr		AY_ReadRegValue
+		ldx		zpTmp4
+		inc		zpTmp4
+		sta		AYregs,x
+
+		;
+
+		lda		zpTmp4
+		sec
+		sbc		#NUM_AY_REGS
+		tax
+		lda		AYregs+0,x
+		cmp		#%11000000|AY_DIS_A|AY_DIS_B|AY_DIS_C	; AY8913 returns 0x3F
+		bne		+
+		lda		AYregs+1,x		; AY8913 returns 0x0E
+		cmp		#$55
+		bne		+
+		lda		AYregs+2,x		; AY8913 returns 0x0F
+		cmp		#$69
+		bne		+
+			lda		hasAY8910
+			ora		zpTmp2
+			sta		hasAY8910
++
+
+		;
+
+		asl		zpTmp2			; AY mask <<= 1
+		lda		zpTmp3
+		eor		#$80
+		sta		zpTmp3
+		bne		-
+
+;	lda		isPhasorCard
+;	beq		@done
+
+	; Phasor: TODO: check any 2nd-ary AYs
+
+;@smcPh	lda		#0
+;	sta		zpTmp1
+
+	;
+
+@done
+	; YM2149s will also be detected as AY8910s, so remove these
+	lda		hasAY8910
+	eor		hasYM2149
+	sta		hasAY8910
+	rts
+
+AYregs
+	!fill NUM_AY_REGS,0	; AY-0
+	!fill NUM_AY_REGS,0	; AY-1
+
+;------------------------------------------------------------------------------
+
 ; TODO:
 ; . Set AY reg without setting INACTIVE state (AppleWin-GH#320)
 ; . Write AY reg outside of the 10us spec (AppleWin-GH#742)

@@ -962,7 +962,11 @@ DetectSubunits
 	jsr		DetectAY8913			; pre: zpTmp1, post: zpTmp1=0
 	pla
 	sta		zpTmp1
+	pha
 	jsr		DetectYM2149			; pre: zpTmp1, post: zpTmp1=0
+	pla
+	sta		zpTmp1
+	jsr		DetectAY8910			; pre: zpTmp1, post: zpTmp1=0
 
 	lda		hasAY8913
 	asl
@@ -1943,39 +1947,78 @@ DisplayCardUpdate
 		sta		LINE2+SLOT1POS+1,x
 		sta		LINE3+SLOT1POS+1,x
 
-	; Overwrite 3rd char with FLASHing 'Y' => YM2149
-	; . " CY" or for M4C: "M4Y"
-	;   " CY"             "M4Y"
+	; Overwrite 3rd char with FLASHing 'Y' => YM2149 or FLASHing '0' => AY-3-8910
+	; . " CY" or " C0" or for M4C: "M4Y" or "M40"
+	;   " CY"    " C0"             "M4Y"    "M40"
 	lda		hasYM2149
 	lsr
+	bcs		++
+	lda		hasAY8910
+	lsr
 	bcc		+
-		lda		#'Y'			; FLASHing 'Y'
-		sta		LINE2+SLOT1POS+1,x	; overwrite 3rd char
+		lda		#'0'+$40		; FLASHing '0'
+		bne		+++
+++		lda		#'Y'			; FLASHing 'Y'
++++		sta		LINE2+SLOT1POS+1,x	; overwrite 3rd char
 +	lda		hasYM2149
 	lsr
 	lsr
+	bcs		++
+	lda		hasAY8910
+	lsr
+	lsr
 	bcc		+
-		lda		#'Y'			; FLASHing 'Y'
+		lda		#'0'+$40		; FLASHing '0'
+		bne		+++
+++		lda		#'Y'			; FLASHing 'Y'
++++		sta		LINE3+SLOT1POS+1,x	; overwrite 3rd char
++
+
+	; Overwrite 3rd char with FLASHing '0' => AY-3-8910
+	; . " C0" or for M4C: "M40"
+	;   " C0"             "M40"
+	lda		hasAY8910
+	lsr
+	bcc		+
+		lda		#'0'+$40		; FLASHing '0'
+		sta		LINE2+SLOT1POS+1,x	; overwrite 3rd char
++	lda		hasAY8910
+	lsr
+	lsr
+	bcc		+
+		lda		#'0'+$40		; FLASHing '0'
 		sta		LINE3+SLOT1POS+1,x	; overwrite 3rd char
 +
 
 	lda		isPhasorCard
-	beq		+
-		; Phasor only: Overwrite 1st char with FLASHing 'Y' => YM2149
-		; . "YPY"
-		;   "YPY"
+	beq		@donePhasor
+		; Phasor only: Overwrite 1st char with FLASHing 'Y' => YM2149 or FLASHing '0' => AY-3-8910
+		; . "YPY" or "0P0"
+		;   "YPY"    "0P0"
 		lda		hasYM2149
 		and		#%00000100
-		beq		++
-			lda		#'Y'		; FLASHing 'Y'
-			sta		LINE2+SLOT1POS-1,x	; overwrite 3rd char
-++
+		bne		++
+		lda		hasAY8910
+		and		#%00000100
+		beq		+
+			lda		#'0'+$40	; FLASHing '0'
+			bne		+++
+++			lda		#'Y'		; FLASHing 'Y'
++++			sta		LINE2+SLOT1POS-1,x	; overwrite 3rd char
++
 		lda		hasYM2149
 		and		#%00001000
+		bne		++
 		beq		+
-			lda		#'Y'		; FLASHing 'Y'
-			sta		LINE3+SLOT1POS-1,x	; overwrite 3rd char
+		lda		hasAY8910
+		and		#%00001000
+		beq		+
+			lda		#'0'+$40	; FLASHing '0'
+			bne		+++
+++			lda		#'Y'		; FLASHing 'Y'
++++			sta		LINE3+SLOT1POS-1,x	; overwrite 3rd char
 +
+@donePhasor
 
 	;
 	; Add info about any speech chips
