@@ -254,7 +254,13 @@ DetectAY8913
 
 ;------------------------------------------------------------------------------
 
+DO_EXTRA_YM2149_READS = 1
+
+!if DO_EXTRA_YM2149_READS {
 NUM_YM_REGS = 8
+} else {
+NUM_YM_REGS = 1
+}
 
 DetectYM2149
 ; Pre: zpTmp1 = 6522 bitmap in b1:0
@@ -309,7 +315,7 @@ DetectYM2149
 		ldx		#$1F
 		jsr		YMWriteThenReadWithoutSelectReg1	; YM2149 returns $1F
 
-!if 1 {	; Extra test code - could use these results for extra confidence in determining chip is a YM2149
+!if DO_EXTRA_YM2149_READS {	; Extra test code - could use these results for extra confidence in determining chip is a YM2149
 		ldx		#$3F
 		jsr		YMWriteThenReadWithoutSelectReg1	; YM2149 returns $3F
 
@@ -433,7 +439,13 @@ YMregs
 
 ;------------------------------------------------------------------------------
 
+DO_EXTRA_PORTB_CHECK = 1
+
+!if DO_EXTRA_PORTB_CHECK {
 NUM_AY_REGS = 3
+} else {
+NUM_AY_REGS = 2
+}
 
 DetectAY8910
 ; Pre: zpTmp1 = 6522 bitmap in b1:0
@@ -510,11 +522,13 @@ DetectAY8910
 		inc		zpTmp4
 		sta		AYregs,x
 
+!if DO_EXTRA_PORTB_CHECK {	; do extra PORTB check
 		ldx		#AY_PORTB
 		jsr		AY_ReadRegValue
 		ldx		zpTmp4
 		inc		zpTmp4
 		sta		AYregs,x
+}
 
 		;
 
@@ -522,18 +536,33 @@ DetectAY8910
 		sec
 		sbc		#NUM_AY_REGS
 		tax
-		lda		AYregs+0,x
-		cmp		#%11000000|AY_DIS_A|AY_DIS_B|AY_DIS_C	; AY8913 ENABLE returns 0x3F
-		bne		+
 		lda		AYregs+1,x		; AY8913 PORTA returns 0x0E
 		cmp		#$55
 		bne		+
+
+		; PORTA is supported => AY8910/YM2149 or AY8912
+
+		lda		AYregs+0,x
+		cmp		#%01000000|AY_DIS_A|AY_DIS_B|AY_DIS_C	; AY8912 ENABLE returns 0x7F
+		beq		++
+		cmp		#%11000000|AY_DIS_A|AY_DIS_B|AY_DIS_C	; AY8910 ENABLE returns 0xFF
+		bne		+
+
+!if DO_EXTRA_PORTB_CHECK {
 		lda		AYregs+2,x		; AY8913 (& AY8912) PORTB returns 0x0F
 		cmp		#$69
 		bne		+
+}
+
 			lda		hasAY8910
 			ora		zpTmp2
 			sta		hasAY8910
+			bne		+			; (bra)
+
+++			lda		hasAY8912
+			ora		zpTmp2
+			sta		hasAY8912
+
 +
 
 		;
@@ -542,7 +571,9 @@ DetectAY8910
 		lda		zpTmp3
 		eor		#$80
 		sta		zpTmp3
-		bne		@loop
+		beq		+
+		jmp		@loop
++
 
 	lda		isPhasorCard
 	beq		@done
@@ -575,18 +606,29 @@ DetectAY8910
 		ldx		#$55
 		jsr		AY_WriteRegValue
 
-		ldx		#AY_ENABLE
-		jsr		AY_ReadRegValue
-		cmp		#%11000000|AY_DIS_A|AY_DIS_B|AY_DIS_C
-		bne		+
-
 		ldx		#AY_PORTA
 		jsr		AY_ReadRegValue
 		cmp		#$55
 		bne		+
+
+		; PORTA is supported => AY8910/YM2149 or AY8912
+
+		ldx		#AY_ENABLE
+		jsr		AY_ReadRegValue
+		cmp		#%01000000|AY_DIS_A|AY_DIS_B|AY_DIS_C	; AY8912 ENABLE returns 0x7F
+		beq		++
+		cmp		#%11000000|AY_DIS_A|AY_DIS_B|AY_DIS_C	; AY8912 ENABLE returns 0xFF
+		bne		+
+
 			lda		hasAY8910
 			ora		zpTmp2
 			sta		hasAY8910
+			bne		+			; (bra)
+
+++			lda		hasAY8912
+			ora		zpTmp2
+			sta		hasAY8912
+
 +
 
 		;

@@ -889,6 +889,7 @@ DetectSubunits
 	sta		hasSSI263				; ... no SSI263's
 	sta		hasSC01					; ... no SC01
 	sta		hasAY8913				; ... no AY8913's
+	sta		hasAY8912				; ... no AY8912's
 	sta		hasAY8910				; ... no AY8910's
 	sta		hasYM2149				; ... no YM2149's
 
@@ -1027,16 +1028,51 @@ DetectSubunits
 	sta		slotInfo3,x
 
 	;
-	; set slotInfo4 - YM2149/AY8910 chips
+	; set slotInfo4 - YM2149/AY8910/AY8912 chips
 	;
 
-	lda		hasYM2149
-	asl
-	asl
-	asl
-	asl
-	ora		hasAY8910
-	sta		slotInfo4,x
+	; Pre: X=slot#
+
+	lda		#0
+	sta		slotInfo4,x		; default: all AY8913
+	sta		zpTmp1			; position
+
+	lda		#1
+	sta		zpTmp2			; mask
+
+@loop	lda		hasYM2149
+		and		zpTmp2
+		beq		+
+			lda		#SI4_YM2149
+			bne		++		; (bra)
++		lda		hasAY8910
+		and		zpTmp2
+		beq		+
+			lda		#SI4_AY8910
+			bne		++		; (bra)
++		lda		hasAY8912
+		and		zpTmp2
+		beq		+
+			lda		#SI4_AY8912
+			bne		++		; (bra)
+
++		lda		#SI4_AY8913
+
+++		ldy		zpTmp1
+		beq		+
+-			asl
+			asl
+			dey
+			bne		-
+
++		ora		slotInfo4,x
+		sta		slotInfo4,x
+
+	inc		zpTmp1
+	asl		zpTmp2
+	lda		#$10			; OK to iterate over 4x AY, even for cards with less
+	cmp		zpTmp2
+	bne		@loop
 
 	rts
 
@@ -1058,16 +1094,47 @@ RestoreFromSlotInfo
 
 	;
 
-	lda		slotInfo4,x
-	pha
-	and		#SI4_AY8910_MASK
+	lda		#0
+	sta		hasAY8912
 	sta		hasAY8910
-	pla
-	lsr
-	lsr
-	lsr
-	lsr
 	sta		hasYM2149
+	sta		zpTmp1			; position
+
+	lda		#1
+	sta		zpTmp2			; mask
+
+@loop	lda		slotInfo4,x
+
+		ldy		zpTmp1
+		beq		+
+-			lsr
+			lsr
+			dey
+			bne		-
+
++		and		#SI4_AY_MASK
+		beq		@next		; Skip SI4_AY8913
+
+		cmp		#SI4_YM2149
+		bne		+
+			ldy		#OFFSET_HASYM2149
+			bne		++		; (bra)
++		cmp		#SI4_AY8910
+		bne		+
+			ldy		#OFFSET_HASAY8910
+			bne		++		; (bra)
++		; SI4_AY8912
+			ldy		#OFFSET_HASAY8912
+
+++		lda		zpTmp2
+		ora		hasAY8912,y
+		sta		hasAY8912,y
+
+@next	inc		zpTmp1
+		asl		zpTmp2
+		lda		#$10		; OK to iterate over 4x AY, even for cards with less
+		cmp		zpTmp2
+		bne		@loop
 
 	;
 
@@ -1947,75 +2014,81 @@ DisplayCardUpdate
 		sta		LINE2+SLOT1POS+1,x
 		sta		LINE3+SLOT1POS+1,x
 
-	; Overwrite 3rd char with FLASHing 'Y' => YM2149 or FLASHing '0' => AY-3-8910
-	; . " CY" or " C0" or for M4C: "M4Y" or "M40"
-	;   " CY"    " C0"             "M4Y"    "M40"
+	; Overwrite 3rd char with FLASHing 'Y' => YM2149 or FLASHing '0'/'2' => AY-3-8910/2
+	; . " CY" or " C0" or " C2" or for M4C: "M4Y" or "M40" or "M42"
+	;   " CY"    " C0" or " C2"             "M4Y"    "M40" or "M42"
 	lda		hasYM2149
 	lsr
-	bcs		++
+	bcs		@YA
+	lda		hasAY8912
+	lsr
+	bcs		@2A
 	lda		hasAY8910
 	lsr
 	bcc		+
 		lda		#'0'+$40		; FLASHing '0'
-		bne		+++
-++		lda		#'Y'			; FLASHing 'Y'
-+++		sta		LINE2+SLOT1POS+1,x	; overwrite 3rd char
-+	lda		hasYM2149
-	lsr
-	lsr
-	bcs		++
-	lda		hasAY8910
-	lsr
-	lsr
-	bcc		+
-		lda		#'0'+$40		; FLASHing '0'
-		bne		+++
-++		lda		#'Y'			; FLASHing 'Y'
-+++		sta		LINE3+SLOT1POS+1,x	; overwrite 3rd char
+		bne		++
+@2A		lda		#'2'+$40		; FLASHing '2'
+		bne		++
+@YA		lda		#'Y'			; FLASHing 'Y'
+++		sta		LINE2+SLOT1POS+1,x	; overwrite 3rd char
 +
-
-	; Overwrite 3rd char with FLASHing '0' => AY-3-8910
-	; . " C0" or for M4C: "M40"
-	;   " C0"             "M40"
+	lda		hasYM2149
+	lsr
+	lsr
+	bcs		@YB
+	lda		hasAY8912
+	lsr
+	lsr
+	bcs		@2B
 	lda		hasAY8910
 	lsr
-	bcc		+
-		lda		#'0'+$40		; FLASHing '0'
-		sta		LINE2+SLOT1POS+1,x	; overwrite 3rd char
-+	lda		hasAY8910
-	lsr
 	lsr
 	bcc		+
 		lda		#'0'+$40		; FLASHing '0'
-		sta		LINE3+SLOT1POS+1,x	; overwrite 3rd char
+		bne		++
+@2B		lda		#'2'+$40		; FLASHing '2'
+		bne		++
+@YB		lda		#'Y'			; FLASHing 'Y'
+++		sta		LINE3+SLOT1POS+1,x	; overwrite 3rd char
 +
 
 	lda		isPhasorCard
 	beq		@donePhasor
-		; Phasor only: Overwrite 1st char with FLASHing 'Y' => YM2149 or FLASHing '0' => AY-3-8910
-		; . "YPY" or "0P0"
-		;   "YPY"    "0P0"
+		; Phasor only: Overwrite 1st char with FLASHing 'Y' => YM2149 or FLASHing '0'/'2' => AY-3-8910/2
+		; . "YPY" or "0P0" or "2P2"
+		;   "YPY"    "0P0"    "2P2"
 		lda		hasYM2149
 		and		#%00000100
-		bne		++
+		bne		@YC
+		lda		hasAY8912
+		and		#%00000100
+		bne		@2C
 		lda		hasAY8910
 		and		#%00000100
 		beq		+
 			lda		#'0'+$40	; FLASHing '0'
-			bne		+++
-++			lda		#'Y'		; FLASHing 'Y'
-+++			sta		LINE2+SLOT1POS-1,x	; overwrite 3rd char
+			bne		++
+@2C			lda		#'2'+$40	; FLASHing '2'
+			bne		++
+@YC			lda		#'Y'		; FLASHing 'Y'
+++			sta		LINE2+SLOT1POS-1,x	; overwrite 3rd char
 +
 		lda		hasYM2149
 		and		#%00001000
-		bne		++
+		bne		@YD
+		lda		hasAY8912
+		and		#%00001000
+		bne		@2D
 		lda		hasAY8910
 		and		#%00001000
 		beq		+
 			lda		#'0'+$40	; FLASHing '0'
-			bne		+++
-++			lda		#'Y'		; FLASHing 'Y'
-+++			sta		LINE3+SLOT1POS-1,x	; overwrite 3rd char
+			bne		++
+@2D			lda		#'2'+$40	; FLASHing '2'
+			bne		++
+@YD			lda		#'Y'		; FLASHing 'Y'
+++			sta		LINE3+SLOT1POS-1,x	; overwrite 3rd char
 +
 @donePhasor
 
@@ -2371,8 +2444,15 @@ SSI263A_AP			= %00000011
 slotInfo3		!fill 8,0	; slot[0..7]
 
 ; slotInfo4 bitfield:
-									; b7..4: YM2149
-SI4_AY8910_MASK		= %00001111		; b3..0: AY8910
+; b7-6 | b5-4 | b3-2 | b1-0			; 2 bits per chip
+; Chip types: %00=AY8913, %01=AY8912, %10=AY8910, %11=YM2149
+SI4_AY_MASK			= %00000011
+SI4_AY8913			= %00000000
+SI4_AY8912			= %00000001
+SI4_AY8910			= %00000010
+SI4_YM2149			= %00000011
+									; OLD: b7..4: YM2149
+;SI4_AY8910_MASK		= %00001111		; OLD: b3..0: AY8910
 slotInfo4		!fill 8,0	; slot[0..7]
 
 numMockingboards		!byte 0
@@ -2421,9 +2501,17 @@ phasorMode		!byte PH_MOCKINGBOARD
 
 has6522			!byte 0
 hasLowerCase	!byte 0
+
 hasAY8913		!byte 0	; bitfield - indicates the card has some kind of AY891x/YM2149 chips
-hasAY8910		!byte 0	; bitfield - indicates the 1-bits in hasAY8913 are AY8910/AY8912 chips
+;;; Don't change the order:
+OFFSET_HASAY8912 = 0
+OFFSET_HASAY8910 = 1
+OFFSET_HASYM2149 = 2
+hasAY8912		!byte 0	; bitfield - indicates the 1-bits in hasAY8913 are AY8912 chips
+hasAY8910		!byte 0	; bitfield - indicates the 1-bits in hasAY8913 are AY8910 chips
 hasYM2149		!byte 0	; bitfield - indicates the 1-bits in hasAY8913 are YM2149 chips
+;;; Don't change the order (end)
+
 hasSSI263		!byte 0	; 0 or bitfield of SSI263B_xx & SSI263A_xx
 hasSC01			!byte 0	; 0 or SI3_SC01_MASK
 
@@ -2466,7 +2554,7 @@ cfgDoSoakTest	!byte NO_SOAK_TEST
 
 ayRegs			!fill 16,0
 
-msg_mbaudit	!text "mb-audit v1.59,Tom Charlesworth,2021-26",0xd
+msg_mbaudit	!text "mb-audit v1.60,Tom Charlesworth,2021-26",0xd
 msg_mbauditEnd !text 0
 
 msg_cpu6502Detected !text "6502 detected",0xd
@@ -2490,7 +2578,7 @@ msg_SlotEnd !text 0
 
             ;0123456789
             ;Slot #? :9012345678901234567890123456789
-msg_TestFailed !text "Mockingboard failed test:"	; [Card|6522|AY8913|SC01|SSI263]
+msg_TestFailed !text "Mockingboard failed test:"	; [Card|6522|AY891x|SC01|SSI263]
 msg_TestFailedEnd !text 0
 
 msg_TestWarning !text "Test warning:"
@@ -2499,7 +2587,7 @@ msg_TestWarningEnd !text 0
 ; NB. These sub-strings must be exactly 6 chars
 msg_componentCard	!text " Card ",0
 msg_component6522	!text " 6522 ",0
-msg_componentAY8913	!text "AY8913",0
+msg_componentAY8913	!text "AY891x",0
 msg_componentSC01	!text " SC01 ",0
 msg_componentSSI263	!text "SSI263",0
 msg_component6522A	!text "6522-A",0
