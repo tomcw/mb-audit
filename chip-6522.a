@@ -2738,10 +2738,13 @@ T6522_13
 	lda		#PH_ECHOPLUS
 	jsr		SetPhasorMode
 
+	; NB. if either of the 6522B's AYs are missing then DetectMB4CorEchoPlusorSDM() returns with isSDMusic=1
+	; because IsEchoPlus() has failed.
+	; TODO: If ((hasAY8913 & %1010) != %1010) then output a warning for this test.
 	jsr		DetectMB4CorEchoPlusorSDM
 	lda		isMB4C
 	ora		isSDMusic
-	bne		@error					; can't happen (sanity check)
+	bne		@error					; can only happen if there are missing AYs (see above)
 	lda		isEchoPlus
 	beq		@error					; if no Echo+, then bug in an emulator's Phasor support
 
