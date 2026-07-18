@@ -51,7 +51,7 @@ DetectAY8913
 ;	hasAY8913 = 0
 ;	isPhasorCard, isMegaAudioCard, isMB4C, isEchoPlus, isSDMusic
 ; Post:
-;	hasAY8913 = %0000,%0001,%0010,%0011 - for Mockingboard or Echo+ or MB4C
+;	hasAY8913 = %0000,%0001,%0010,%0011 - for Mockingboard or Echo+ or MB4c
 ;	hasAY8913 = %0000,%0001,%0010,%0011,%0100,...,%1111 - for Phasor
 ;	zpTmp1 = 0
 
@@ -65,7 +65,6 @@ DetectAY8913
 +
 
 	lda		isMegaAudioCard		; Doesn't support AY register reads
-	ora		isMB4C				; TODO: support MB4C (just like a regular Mockingboard?)
 	ora		isSDMusic			; TODO: support SD Music (just like a regular Mockingboard?)
 	beq		+
 		lda		#%00000011
@@ -128,15 +127,18 @@ DetectAY8913
 
 		;------------------------------
 
-@mb	; Mockingboard
+@mb	; Mockingboard (or Phasor or MB4c)
 
 	lda		#SY6522_A_BASE
 	sta		zpTmp3
 	lda		#1					; hasAY8913 mask
 	sta		zpTmp2
 
--		lsr		zpTmp1			; 6522 at this addr?
-		bcc		+
+@loop	lda		isMB4C
+		bne		+				; MB4c: ignore the 6522 mask in zpTmp1 (just a single 6522 for AYs at offset $00 & $80)
+		lsr		zpTmp1			; 6522 at this addr?
+		bcc		@next
++
 
 		jsr		Init6522ForAY
 
@@ -157,27 +159,27 @@ DetectAY8913
 		ldx		#AY_AFINE
 		jsr		AY_ReadRegValue
 		cmp		#$AA
-		bne		+
+		bne		@next
 
 		ldx		#AY_BFINE
 		jsr		AY_ReadRegValue
 		cmp		#$55
-		bne		+
+		bne		@next
 
 		ldx		#AY_CFINE
 		jsr		AY_ReadRegValue
 		cmp		#$69
-		bne		+
+		bne		@next
 
 			lda		hasAY8913
 			ora		zpTmp2
 			sta		hasAY8913
 
-+		asl		zpTmp2			; AY mask <<= 1
+@next	asl		zpTmp2			; AY mask <<= 1
 		lda		zpTmp3
 		eor		#$80
 		sta		zpTmp3
-		bne		-
+		bne		@loop
 
 	lda		isPhasorCard
 	beq		@done
@@ -259,12 +261,12 @@ DetectYM2149
 ;	hasYM2149 = 0
 ;	isPhasorCard, isMegaAudioCard, isMB4C, isEchoPlus, isSDMusic
 ; Post:
-;	hasYM2149 = %0000,%0001,%0010,%0011 - for Mockingboard or Echo+ or MB4C
+;	hasYM2149 = %0000,%0001,%0010,%0011 - for Mockingboard or Echo+ or MB4c
 ;	hasYM2149 = %0000,%0001,%0010,%0011,%0100,...,%1111 - for Phasor
 ;	zpTmp1 = 0
 
-;	lda		zpTmp1
-;	sta		@smcPh+1
+	lda		zpTmp1
+	sta		@smcPh+1
 
 	lda		isPhasorCard
 	beq		+
@@ -274,62 +276,67 @@ DetectYM2149
 
 	lda		isMegaAudioCard
 	ora		isEchoPlus			; AY8913s are soldered directly to the PCB (so can't be YM2149s)
-	ora		isMB4C				; TODO: support MB4C
 	ora		isSDMusic			; TODO: support SD Music
 	beq		+
 		rts
 +
 
-	; Mockingboard
+	; Mockingboard (or Phasor or MB4c)
 
 	lda		#SY6522_A_BASE
 	sta		zpTmp3
 	lda		#1					; hasYM2149 mask
 	sta		zpTmp2
 
--		lsr		zpTmp1			; 6522 at this addr?
-		bcc		+
+@loop	lda		isMB4C
+		bne		+				; MB4c: ignore the 6522 mask in zpTmp1 (just a single 6522 for AYs at offset $00 & $80)
+		lsr		zpTmp1			; 6522 at this addr?
+		bcc		@next
++
 
 		jsr		Init6522ForAY	; pre: zpTmp3 = SY6522_A_BASE or SY6522_A_PH_BASE or SY6522_B_BASE
 
 		lda		zpTmp3
 		and		#SY6522_B_BASE
-		beq		++
+		beq		+
 			lda		#NUM_YM_REGS
-++		sta		zpTmp4			; set YMregs index
++		sta		zpTmp4			; set YMregs index
 
 		;
-
 		; Detect YM2149 by writing $1F to reg-1, and it will read back as $1F
-		ldx		#$1F
-		jsr		YMWriteThenReadWithoutSelectReg1
+		;
 
+		ldx		#$1F
+		jsr		YMWriteThenReadWithoutSelectReg1	; YM2149 returns $1F
+
+!if 1 {	; Extra test code - could use these results for extra confidence in determining chip is a YM2149
 		ldx		#$3F
-		jsr		YMWriteThenReadWithoutSelectReg1
+		jsr		YMWriteThenReadWithoutSelectReg1	; YM2149 returns $3F
 
 		ldx		#$7F
-		jsr		YMWriteThenReadWithoutSelectReg1
+		jsr		YMWriteThenReadWithoutSelectReg1	; YM2149 returns $7F
 
 		ldx		#$FF
-		jsr		YMWriteThenReadWithoutSelectReg1
+		jsr		YMWriteThenReadWithoutSelectReg1	; YM2149 returns $FF
 
 		;
 
 		lda		#AY_BCOARSE
 		ldx		#$1F
-		jsr		YMWriteThenReadWithoutSelect
+		jsr		YMWriteThenReadWithoutSelect		; YM2149 returns $1F
 
 		lda		#AY_BCOARSE
 		ldx		#$FF
-		jsr		YMWriteThenReadWithoutSelect
+		jsr		YMWriteThenReadWithoutSelect		; YM2149 returns $FF
 
 		lda		#AY_CCOARSE
 		ldx		#$1F
-		jsr		YMWriteThenReadWithoutSelect
+		jsr		YMWriteThenReadWithoutSelect		; YM2149 returns $1F
 
 		lda		#AY_CCOARSE
 		ldx		#$FF
-		jsr		YMWriteThenReadWithoutSelect
+		jsr		YMWriteThenReadWithoutSelect		; YM2149 returns $FF
+}
 
 		;
 
@@ -347,19 +354,57 @@ DetectYM2149
 
 		;
 
-		asl		zpTmp2			; AY mask <<= 1
+@next	asl		zpTmp2			; AY mask <<= 1
 		lda		zpTmp3
 		eor		#$80
 		sta		zpTmp3
-		bne		-
+		bne		@loop
 
-;	lda		isPhasorCard
-;	beq		@done
+	lda		isPhasorCard
+	beq		@done
 
-	; Phasor: TODO: check any 2nd-ary AYs
+	; Phasor: check any 2nd-ary AYs
 
-;@smcPh	lda		#0
-;	sta		zpTmp1
+@smcPh	lda		#0
+	sta		zpTmp1
+
+	lda		#PH_PHASOR
+	jsr		SetPhasorMode
+
+	lda		#SY6522_A_PH_BASE
+	sta		zpTmp3				; 6522-A base addr *for Phasor*
+	lda		#%00000100			; hasAY8913 mask
+	sta		zpTmp2
+
+@loop2	lsr		zpTmp1			; 6522 at this addr?
+		bcc		@next2
+
+		jsr		Init6522ForAY
+
+		; Detect YM2149 by writing $1F to reg-1, and it will read back as $1F
+		ldx		#$1F
+		lda		#AY_ACOARSE
+		jsr		AY_WriteRegValue
+		jsr		AY_SetPortAInput
+		jsr		AY_ReadReg
+		cmp		#$1F
+		bne		+
+			lda		hasYM2149
+			ora		zpTmp2
+			sta		hasYM2149
++
+
+		;
+
+@next2	asl		zpTmp2			; AY mask <<= 1
+		lda		#SY6522_B_BASE
+		cmp		zpTmp3
+		beq		+
+		sta		zpTmp3
+		bne		@loop2			; (bra)
+
++	lda		#PH_MOCKINGBOARD
+	jsr		SetPhasorMode
 
 	;
 
@@ -395,12 +440,12 @@ DetectAY8910
 ;	hasAY8910 = 0
 ;	isPhasorCard, isMegaAudioCard, isMB4C, isEchoPlus, isSDMusic
 ; Post:
-;	hasAY8910 = %0000,%0001,%0010,%0011 - for Mockingboard or Echo+ or MB4C
+;	hasAY8910 = %0000,%0001,%0010,%0011 - for Mockingboard or Echo+ or MB4c
 ;	hasAY8910 = %0000,%0001,%0010,%0011,%0100,...,%1111 - for Phasor
 ;	zpTmp1 = 0
 
-;	lda		zpTmp1
-;	sta		@smcPh+1
+	lda		zpTmp1
+	sta		@smcPh+1
 
 	lda		isPhasorCard
 	beq		+
@@ -410,21 +455,23 @@ DetectAY8910
 
 	lda		isMegaAudioCard
 	ora		isEchoPlus			; AY8913s are soldered directly to the PCB (so can't be AY8910s)
-	ora		isMB4C				; TODO: support MB4C
 	ora		isSDMusic			; TODO: support SD Music
 	beq		+
 		rts
 +
 
-	; Mockingboard
+	; Mockingboard (or Phasor or MB4c)
 
 	lda		#SY6522_A_BASE
 	sta		zpTmp3
 	lda		#1					; hasYM2149 mask
 	sta		zpTmp2
 
--		lsr		zpTmp1			; 6522 at this addr?
-		bcc		+
+@loop	lda		isMB4C
+		bne		+				; MB4c: ignore the 6522 mask in zpTmp1 (just a single 6522 for AYs at offset $00 & $80)
+		lsr		zpTmp1			; 6522 at this addr?
+		bcc		@next
++
 
 		jsr		Init6522ForAY	; pre: zpTmp3 = SY6522_A_BASE or SY6522_A_PH_BASE or SY6522_B_BASE
 
@@ -434,6 +481,9 @@ DetectAY8910
 			lda		#NUM_AY_REGS
 ++		sta		zpTmp4			; set AYregs index
 
+		;
+		; Detect AY8910 by writing $FF to reg-7, and it will read back as $FF (or $7F for AY8912 or $3F for AY8913)
+		; + check that PORTA & PORTB are write/readable
 		;
 
 		lda		#AY_ENABLE
@@ -473,12 +523,12 @@ DetectAY8910
 		sbc		#NUM_AY_REGS
 		tax
 		lda		AYregs+0,x
-		cmp		#%11000000|AY_DIS_A|AY_DIS_B|AY_DIS_C	; AY8913 returns 0x3F
+		cmp		#%11000000|AY_DIS_A|AY_DIS_B|AY_DIS_C	; AY8913 ENABLE returns 0x3F
 		bne		+
-		lda		AYregs+1,x		; AY8913 returns 0x0E
+		lda		AYregs+1,x		; AY8913 PORTA returns 0x0E
 		cmp		#$55
 		bne		+
-		lda		AYregs+2,x		; AY8913 returns 0x0F
+		lda		AYregs+2,x		; AY8913 (& AY8912) PORTB returns 0x0F
 		cmp		#$69
 		bne		+
 			lda		hasAY8910
@@ -488,19 +538,68 @@ DetectAY8910
 
 		;
 
-		asl		zpTmp2			; AY mask <<= 1
+@next	asl		zpTmp2			; AY mask <<= 1
 		lda		zpTmp3
 		eor		#$80
 		sta		zpTmp3
-		bne		-
+		bne		@loop
 
-;	lda		isPhasorCard
-;	beq		@done
+	lda		isPhasorCard
+	beq		@done
 
-	; Phasor: TODO: check any 2nd-ary AYs
+	; Phasor: check any 2nd-ary AYs
 
-;@smcPh	lda		#0
-;	sta		zpTmp1
+@smcPh	lda		#0
+	sta		zpTmp1
+
+	lda		#PH_PHASOR
+	jsr		SetPhasorMode
+
+	lda		#SY6522_A_PH_BASE
+	sta		zpTmp3				; 6522-A base addr *for Phasor*
+	lda		#%00000100			; hasAY8913 mask
+	sta		zpTmp2
+
+@loop2	lsr		zpTmp1			; 6522 at this addr?
+		bcc		@next2
+
+		jsr		Init6522ForAY
+
+		; Detect AY8910 by writing $FF to reg-7, and it will read back as $FF (or $7F for AY8912 or $3F for AY8913)
+		; + check that PORTA is write/readable
+		lda		#AY_ENABLE
+		ldx		#%11000000|AY_DIS_A|AY_DIS_B|AY_DIS_C	; Set ports as output. IOB(b7), IOA(b6): IN=0, OUT=1
+		jsr		AY_WriteRegValue
+
+		lda		#AY_PORTA		; PORTA (IOA) only exists for AY8910 & AY8912
+		ldx		#$55
+		jsr		AY_WriteRegValue
+
+		ldx		#AY_ENABLE
+		jsr		AY_ReadRegValue
+		cmp		#%11000000|AY_DIS_A|AY_DIS_B|AY_DIS_C
+		bne		+
+
+		ldx		#AY_PORTA
+		jsr		AY_ReadRegValue
+		cmp		#$55
+		bne		+
+			lda		hasAY8910
+			ora		zpTmp2
+			sta		hasAY8910
++
+
+		;
+
+@next2	asl		zpTmp2			; AY mask <<= 1
+		lda		#SY6522_B_BASE
+		cmp		zpTmp3
+		beq		+
+		sta		zpTmp3
+		bne		@loop2			; (bra)
+
++	lda		#PH_MOCKINGBOARD
+	jsr		SetPhasorMode
 
 	;
 
@@ -580,7 +679,7 @@ TestAY8913
 			bcc		@soak
 			bcs		@error
 
-@TestMB	; Mockingboard or Phasor(in PH_MOCKINGBOARD) or MB4C(assume we can read AY regs) or MegaAudio or SD Music
+@TestMB	; Mockingboard or Phasor(in PH_MOCKINGBOARD) or MB4c(assume we can read AY regs) or MegaAudio or SD Music
 
 			lda		#$C
 			sta		testNum			; test #0C
@@ -644,7 +743,7 @@ TestAY8913
 NUM_AY_TESTS = 5
 HiZ_TEST = 4
 
-; 1) Test #10,... Called for Mockingboard or Phasor(phasorMode = PH_MOCKINGBOARD) or MB4C or MegaAudio or SD Music
+; 1) Test #10,... Called for Mockingboard or Phasor(phasorMode = PH_MOCKINGBOARD) or MB4c or MegaAudio or SD Music
 ;		test AY: data lines, addr lines, etc
 ; 2) Test #30,... Called for Phasor(phasorMode = PH_PHASOR)
 ;		test AY1: data lines, addr lines, etc

@@ -42,7 +42,7 @@
 ; Echo+						6522-A/AY8913			6522-A/AY8913 + TMS5220 (at DEVICE SELECT)	NB. Same 6522 mapped to both $00 & $80
 ; SD Music (Ian Kim)		6522-A/AY8913			6522-A/AY8913		Same 6522 mapped to both $00 & $80
 ; SD Music Deluxe (Ian Kim)	6522-A/AY8913			6522-A/AY8913		Same 6522 mapped to both $00 & $80
-; MB4c & MB4c+ (Ian Kim)	6522-A/AY8913			6522-A/AY8913		Same 6522 mapped to both $00 & $80. For //c & //c+
+; MB4c & MB4c+ (Ian Kim)	6522-A/AY8912/3			6522-A/AY8912/3		Same 6522 mapped to both $00 & $80. For //c & //c+
 ; . NB. w/JD Micro's (Jeff Mazur) Xdrive2c: C408-C40B can't be read (TIMER2_L, TIMER2_H, SR, ACR)
 
 ;------------------------------------------------------------------------------
@@ -2009,7 +2009,6 @@ DisplayCardUpdate
 		lda		hasYM2149
 		and		#%00001000
 		bne		++
-		beq		+
 		lda		hasAY8910
 		and		#%00001000
 		beq		+
