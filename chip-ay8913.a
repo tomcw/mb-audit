@@ -440,9 +440,14 @@ YMregs
 ;------------------------------------------------------------------------------
 
 DO_EXTRA_PORTB_CHECK = 1
+DO_EXTRA_PORT_INPUT_CHECK = 1
 
 !if DO_EXTRA_PORTB_CHECK {
+  !if DO_EXTRA_PORTB_CHECK {
+NUM_AY_REGS = 3+2+2
+  } else {
 NUM_AY_REGS = 3
+  }
 } else {
 NUM_AY_REGS = 2
 }
@@ -482,7 +487,8 @@ DetectAY8910
 @loop	lda		isMB4C
 		bne		+				; MB4c: ignore the 6522 mask in zpTmp1 (just a single 6522 for AYs at offset $00 & $80)
 		lsr		zpTmp1			; 6522 at this addr?
-		bcc		@next
+		bcs		+
+		jmp		@next
 +
 
 		jsr		Init6522ForAY	; pre: zpTmp3 = SY6522_A_BASE or SY6522_A_PH_BASE or SY6522_B_BASE
@@ -528,6 +534,47 @@ DetectAY8910
 		ldx		zpTmp4
 		inc		zpTmp4
 		sta		AYregs,x
+
+		;
+  !if DO_EXTRA_PORT_INPUT_CHECK {
+		jsr		AY_SetPortAOutput	; DDRA=0xFF
+
+		lda		#AY_ENABLE
+		ldx		#AY_DIS_A|AY_DIS_B|AY_DIS_C				; Set ports as input. IOB(b7), IOA(b6): IN=0, OUT=1
+		jsr		AY_WriteRegValue
+
+		ldx		#AY_PORTA
+		jsr		AY_ReadRegValue
+		ldx		zpTmp4
+		inc		zpTmp4
+		sta		AYregs,x
+
+		ldx		#AY_PORTB
+		jsr		AY_ReadRegValue
+		ldx		zpTmp4
+		inc		zpTmp4
+		sta		AYregs,x
+
+		;
+
+		jsr		AY_SetPortAOutput	; DDRA=0xFF
+
+		lda		#AY_ENABLE
+		ldx		#%11000000|AY_DIS_A|AY_DIS_B|AY_DIS_C	; Set ports as output. IOB(b7), IOA(b6): IN=0, OUT=1
+		jsr		AY_WriteRegValue
+
+		ldx		#AY_PORTA
+		jsr		AY_ReadRegValue
+		ldx		zpTmp4
+		inc		zpTmp4
+		sta		AYregs,x
+
+		ldx		#AY_PORTB
+		jsr		AY_ReadRegValue
+		ldx		zpTmp4
+		inc		zpTmp4
+		sta		AYregs,x
+  }
 }
 
 		;
