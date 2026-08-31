@@ -1831,18 +1831,7 @@ T263_9
 	; Pre: Phasor mode=PH_PHASOR, SSI263 device mode=MODE_IRQ_DISABLED, D7=1, A/!R=high (so IRQ de-asserted)
 	; Check that SSI263 IRQ is de-asserted
 	jsr		incSubTestNum			; subTest# = $10
-	lda		#<@T263_9_ISR
-	ldx		#>@T263_9_ISR
-	jsr		SetIrqVector
-	lda		#0
-	sta		isrFlag
-	cli
-	sei
-	lda		#<TestSSI263ISR
-	ldx		#>TestSSI263ISR
-	jsr		SetIrqVector
-	ldx		#0
-	lda		isrFlag
+	jsr		CheckPhasorIrqNotAsserted
 	bne		@error
 
 	clc
@@ -1946,8 +1935,28 @@ T263_9
 
 ;------------------
 
+CheckPhasorIrqNotAsserted			; For Phasor's direct IRQ
+; Called by: T263_9, T263_B
+; Pre: Phasor mode=PH_PHASOR
+; Post: Z=1/EQ(No IRQ), Z=0/NE(IRQ)
+;	X=0
+;	A=isrFlag
+	lda		#<@T263_ISR
+	ldx		#>@T263_ISR
+	jsr		SetIrqVector
+	lda		#0
+	sta		isrFlag
+	cli
+	sei
+	lda		#<TestSSI263ISR
+	ldx		#>TestSSI263ISR
+	jsr		SetIrqVector
+	ldx		#0						; expected
+	lda		isrFlag					; actual
+	rts
+
 ; NB. This code is never called (except for the error case) - so never gets exercised & tested!
-@T263_9_ISR
+@T263_ISR
 
 	+ISR_ENTRY
 
@@ -2014,7 +2023,7 @@ T263_A
 
 @exitOK
 	clc
-	bcc		@exit
+	bcc		@exit					; (bra)
 
 @error		; pre: A=actual, X=expected
 	stx		zpTmp2					; expected
@@ -2098,16 +2107,35 @@ T263_B
 	sta		(SSI263Base),y			; immediately power-down
 
 	jsr		WaitPhonemeDoneCA1WithTimeout
-	beq		@error					; Z=1: got a CA1 interrupt => this is an error
+	beq		@error0					; Z=1: got a CA1 interrupt => this is an error
 									; Z=0: timeout => OK
+
+	lda		isPhasorCard
+	beq		@exitOK
+
+	; Phasor-specific tests
+	lda		#PH_PHASOR
+	jsr		SetPhasorMode
+
+	jsr		incSubTestNum			; subTest #1
+	ldy		#0
+	lda		(SSI263Base),y
+	ldx		#0
+	and		#CONTROL_MASK
+	bne		@error
+
+	jsr		incSubTestNum			; subTest #2
+	jsr		CheckPhasorIrqNotAsserted
+	bne		@error
 
 @exitOK
 	clc
-	bcc		@exit
+	bcc		@exit					; (bra)
 
-@error		; pre: A=actual, X=expected
+@error0
 	lda		#IxR_SSI263
 	ldx		#0
+@error		; pre: A=actual, X=expected
 	stx		zpTmp2					; expected
 	sec								; C=1(NG)
 
@@ -2120,6 +2148,12 @@ T263_B
 	lda		#IxR_SSI263
 	ldy		#SY6522_IFR
 	sta		(MBBase),y				; clear CA1 int flag
+
+	lda		isPhasorCard
+	beq		+
+		lda		#PH_MOCKINGBOARD
+		jsr		SetPhasorMode
++
 
 	pla
 	plp
