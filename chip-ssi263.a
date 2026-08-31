@@ -2542,6 +2542,7 @@ TestPhasorWithSSI263AfterReset
 
 	lda		phasorWithSSI263ResetFlag
 	bne		+
+		clc
 		rts
 +
 
@@ -2799,6 +2800,7 @@ TestPhasorWithSSI263AfterReset2
 
 	lda		phasorWithSSI263ResetFlag
 	bne		+
+		clc
 		rts
 +
 
@@ -2892,6 +2894,7 @@ SetupPhasorWithSSI263ForResetCommon
 	cmp		#HAS_BOTH_6522s
 	bne		+
 	lda		hasSSI263				; Need at least 1x SSI263
+	and		#HAS_SSI263A|HAS_SSI263B
 	bne		++
 +		sec
 		rts
